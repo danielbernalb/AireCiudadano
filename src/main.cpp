@@ -38,7 +38,7 @@
 
 // Solo para versión Bluetooth: escoger modelo de pantalla (pasar de false a true) o si no hay escoger ninguna (todas false):
 #define Tdisplaydisp false
-#define OLED66display true
+#define OLED66display false
 #define OLED96display false
 
 // Fin definiciones de Bluetooth
@@ -1848,7 +1848,7 @@ void Read_Sensor()
     {
       ret = sps30.GetValues(&val);
       // data might not have been ready
-      if (ret == ERR_DATALENGTH)
+      if (ret == SPS30_ERR_DATALENGTH)
       {
         if (error_cnt++ > 3)
         {
@@ -1858,12 +1858,12 @@ void Read_Sensor()
         delay(1000);
       }
       // if other error
-      else if (ret != ERR_OK)
+      else if (ret != SPS30_ERR_OK)
       {
         ErrtoMess((char *)"Error during reading values: ", ret);
         // return(false);
       }
-    } while (ret != ERR_OK);
+    } while (ret != SPS30_ERR_OK);
 
     PM25_value = val.MassPM2;
 
@@ -1953,7 +1953,7 @@ void GetDeviceInfo()
   SPS30_version v;
   // try to read serial number
   ret = sps30.GetSerialNumber(buf, 32);
-  if (ret == ERR_OK)
+  if (ret == SPS30_ERR_OK)
   {
     Serial.print("Serial number : ");
     if (strlen(buf) > 0)
@@ -1965,7 +1965,7 @@ void GetDeviceInfo()
     ErrtoMess((char *)"could not get serial number. ", ret);
   // try to get product name
   ret = sps30.GetProductName(buf, 32);
-  if (ret == ERR_OK)
+  if (ret == SPS30_ERR_OK)
   {
     Serial.print("Product name  : "); //     !!!!!!!!!!!!!!!!!!debe compararse con “00080000”
 
@@ -1994,7 +1994,7 @@ void GetDeviceInfo()
     ErrtoMess((char *)"could not get product name. ", ret);
   // try to get version info
   ret = sps30.GetVersion(&v);
-  if (ret != ERR_OK)
+  if (ret != SPS30_ERR_OK)
   {
     Serial.println("Can not read version info.");
     return;
