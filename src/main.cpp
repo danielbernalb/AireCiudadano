@@ -675,7 +675,7 @@ void setup()
 #endif
 
   // Initialize and warm up PM25 sensor
-//  Setup_Sensor();
+  //  Setup_Sensor();
 
   // Init control loops
   measurements_loop_start = millis();
@@ -751,8 +751,8 @@ void loop()
     measurements_loop_start = millis();
 
     // Read sensors
-//    Read_Sensor();
-     
+    //    Read_Sensor();
+
     PM25_value = 10;
     RSSI = WiFi.RSSI();
     RSSItotal = RSSItotal + RSSI;
@@ -763,7 +763,6 @@ void loop()
     Serial.print(RSSItotal);
     Serial.println(" dBm");
 
-  
     if (NoSensor == false)
     {
       if (PM25_value >= 0)
@@ -1492,7 +1491,11 @@ void Start_Captive_Portal()
 
   // Captive portal parameters
 
+#if !ESP8266
   WiFiManagerParameter custom_id_name("CustomName", "Set Station Name (29 characters max):", eepromConfig.aireciudadano_device_name, 29);
+#else
+  WiFiManagerParameter custom_id_name("CustomName", "Set Station Name (25 characters max):", eepromConfig.aireciudadano_device_name, 25);
+#endif
   char Ptime[5];
   itoa(eepromConfig.PublicTime, Ptime, 10);
   WiFiManagerParameter custom_public_time("Ptime", "Set Publication Time in minutes:", Ptime, 4);
@@ -1837,32 +1840,31 @@ void Send_Message_Cloud_App_MQTT()
   // Print info
   float pm25f;
   float pm25fori;
-  //int8_t RSSI;
+  // int8_t RSSI;
   int8_t inout;
 
   Serial.print("Sending MQTT message to the send topic: ");
   Serial.println(MQTT_send_topic);
   ///// DEBUG Samples
-//  Serial.println(PM25_accumulated);
-//  Serial.println(PM25_samples);
+  //  Serial.println(PM25_accumulated);
+  //  Serial.println(PM25_samples);
   pm25f = PM25_accumulated / PM25_samples;
   pm25int = round(pm25f);
   pm25fori = PM25_accumulated_ori / PM25_samples;
   pm25intori = round(pm25fori);
-//  Serial.println(pm25int);
-//  Serial.println(pm25intori);
+  //  Serial.println(pm25int);
+  //  Serial.println(pm25intori);
   ///// END DEBUG Samples
   ReadHyT();
 
-//  RSSI = WiFi.RSSI();
+  //  RSSI = WiFi.RSSI();
 
-  RSSI = round (RSSItotal/60);
+  RSSI = round(RSSItotal / 60);
 
   Serial.print("Signal strength (RSSI):");
   Serial.print(RSSI);
   Serial.println(" dBm");
   RSSItotal = 0;
-
 
   if (AmbInOutdoors)
     inout = 1;
