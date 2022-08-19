@@ -465,6 +465,9 @@ bool updating = false;
 bool InCaptivePortal = false;
 bool Calibrating = false;
 
+int16_t RSSI;
+int16_t RSSItotal;
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // SETUP
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -672,7 +675,7 @@ void setup()
 #endif
 
   // Initialize and warm up PM25 sensor
-  Setup_Sensor();
+//  Setup_Sensor();
 
   // Init control loops
   measurements_loop_start = millis();
@@ -748,8 +751,19 @@ void loop()
     measurements_loop_start = millis();
 
     // Read sensors
-    Read_Sensor();
+//    Read_Sensor();
+     
+    PM25_value = 10;
+    RSSI = WiFi.RSSI();
+    RSSItotal = RSSItotal + RSSI;
+    Serial.print("Signal strength (RSSI):");
+    Serial.print(RSSI);
+    Serial.println(" dBm");
+    Serial.print("Total:");
+    Serial.print(RSSItotal);
+    Serial.println(" dBm");
 
+  
     if (NoSensor == false)
     {
       if (PM25_value >= 0)
@@ -1823,7 +1837,7 @@ void Send_Message_Cloud_App_MQTT()
   // Print info
   float pm25f;
   float pm25fori;
-  int8_t RSSI;
+  //int8_t RSSI;
   int8_t inout;
 
   Serial.print("Sending MQTT message to the send topic: ");
@@ -1840,11 +1854,15 @@ void Send_Message_Cloud_App_MQTT()
   ///// END DEBUG Samples
   ReadHyT();
 
-  RSSI = WiFi.RSSI();
+//  RSSI = WiFi.RSSI();
+
+  RSSI = round (RSSItotal/60);
 
   Serial.print("Signal strength (RSSI):");
   Serial.print(RSSI);
   Serial.println(" dBm");
+  RSSItotal = 0;
+
 
   if (AmbInOutdoors)
     inout = 1;
