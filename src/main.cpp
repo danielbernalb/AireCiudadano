@@ -58,7 +58,7 @@
 
 // Escoger modelo de pantalla (pasar de false a true) o si no hay escoger ninguna (todas false):
 #define OLED66display false
-#define OLED96display true
+#define OLED96display false
 #if !ESP8266
 #define Tdisplaydisp false
 #define TTGO_TQ false
