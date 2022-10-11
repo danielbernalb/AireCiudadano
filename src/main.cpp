@@ -58,6 +58,7 @@
 #define Bluetooth false   // Set to true in case Bluetooth is desired, Wifi off and SDyRTCsave optional
 #define SDyRTC false      // Set to true in case SD card and RTC (Real Time clock) is desires, Wifi and Bluetooth off
 #define SaveSDyRTC false  // Set to true in case SD card and RTC (Real Time clock) is desires to save data in Wifi or Bluetooth mode
+#define TwoSensors true   // Set to true to connect 2 sensors
 
 // Escoger modelo de pantalla (pasar de false a true) o si no hay escoger ninguna (todas false):
 #define Tdisplaydisp false
@@ -337,10 +338,14 @@ PMS::DATA data;
 #else
 #include <SoftwareSerial.h>
 
-#define PMS_TX 14 // PMS TX pin
-#define PMS_RX 12 // PMS RX pin
+#define PMS_TX 14  // PMS TX pin
+#define PMS_RX 12  // PMS RX pin
+#define PMS2_TX 13 // PMS TX pin
+#define PMS2_RX 15 // PMS RX pin
+
 
 SoftwareSerial pmsSerial(PMS_TX, PMS_RX); // SoftwareSerial(rxPin, txPin)
+SoftwareSerial pmsSerial2(PMS2_TX, PMS2_RX); // SoftwareSerial(rxPin, txPin)
 
 PMS pms(pmsSerial);
 PMS::DATA data;
