@@ -70,8 +70,8 @@
 
 // Definiciones opcionales para version Wifi
 #define BrownoutOFF false   // Colocar en true en boards con problemas de RESET por Brownout o bajo voltaje
-#define WPA2 true           // Colocar en true para redes con WPA2
-#define ESP8266SH false     // Colocar para PMS en pin 0 - Hardware Serial
+#define WPA2 false           // Colocar en true para redes con WPA2
+#define ESP8266SH false      // Colocar para PMS en pin 0 - Hardware Serial
 #define PreProgSensor false // Variables de sensor preprogramadas:
                             // Latitude: char sensor_lat[10] = "xx.xxxx";
                             // Longitude: char sensor_lon[10] = "xx.xxxx";
@@ -119,7 +119,9 @@ struct MyConfigStruct
 #if !PreProgSensor
   char sensor_lat[10] = "0.0";                       // Sensor latitude  GPS
   char sensor_lon[10] = "0.0";                       // Sensor longitude GPS
-  char ConfigValues[10] = "000000000";
+//  char ConfigValues[10] = "000000000";
+  char ConfigValues[10] = "000010004";
+
   char aireciudadano_device_name[30]; // Device name; default to aireciudadano_device_id
 #else
   char sensor_lat[10] = "4.69375";   // Aquí colocar la Latitud del sensor
@@ -1828,15 +1830,15 @@ void Start_Captive_Portal()
   WiFiManagerParameter custom_sensor_html("<p></p>"); // only custom html
   WiFiManagerParameter custom_sensor_latitude("Latitude", "Latitude sensor (5-4 dec digits are enough)", eepromConfig.sensor_lat, 10);
   WiFiManagerParameter custom_sensor_longitude("Longitude", "Longitude sensor", eepromConfig.sensor_lon, 10);
-  WiFiManagerParameter custom_sensorPM_type;
-  WiFiManagerParameter custom_sensorHYT_type;
-  WiFiManagerParameter custom_display_type;
-  WiFiManagerParameter custom_board_type;
-  WiFiManagerParameter custom_outin_type;
-  WiFiManagerParameter custom_endhtml("<p></p>"); // only custom html
+//  WiFiManagerParameter custom_sensorPM_type;
+//  WiFiManagerParameter custom_sensorHYT_type;
+//  WiFiManagerParameter custom_display_type;
+//  WiFiManagerParameter custom_board_type;
+//  WiFiManagerParameter custom_outin_type;
+//  WiFiManagerParameter custom_endhtml("<p></p>"); // only custom html
 
   // Sensor PM menu
-
+/*
   if (eepromConfig.ConfigValues[8] == '0')
   {
     const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM model:</label><br/><input type='radio' name='customSenPM' value='0' checked> None<br><input type='radio' name='customSenPM' value='1'> Sensirion SPS30<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> Plantower PMS raw NOT recommended<br><input type='radio' name='customSenPM' value='4'> Plantower PMS adjust RECOMMENDED";
@@ -1929,7 +1931,7 @@ void Start_Captive_Portal()
     const char *custom_outin_str = "<br/><br/><label for='customOutIn'>IMPORTANT:</label><br/><input type='radio' name='customOutIn' value='0'> Outdoors - sensor measures outdoors air<br><input type='radio' name='customOutIn' value='1' checked> Indoors - sensor measures indoors air";
     new (&custom_outin_type) WiFiManagerParameter(custom_outin_str);
   }
-
+*/
   // Add parameters
 
 #if WPA2
@@ -1947,12 +1949,12 @@ void Start_Captive_Portal()
   wifiManager.addParameter(&custom_sensor_html);
   wifiManager.addParameter(&custom_sensor_latitude);
   wifiManager.addParameter(&custom_sensor_longitude);
-  wifiManager.addParameter(&custom_sensorPM_type);
-  wifiManager.addParameter(&custom_sensorHYT_type);
-  wifiManager.addParameter(&custom_display_type);
-  wifiManager.addParameter(&custom_board_type);
-  wifiManager.addParameter(&custom_outin_type);
-  wifiManager.addParameter(&custom_endhtml);
+//  wifiManager.addParameter(&custom_sensorPM_type);
+//  wifiManager.addParameter(&custom_sensorHYT_type);
+//  wifiManager.addParameter(&custom_display_type);
+//  wifiManager.addParameter(&custom_board_type);
+//  wifiManager.addParameter(&custom_outin_type);
+//  wifiManager.addParameter(&custom_endhtml);
 
   wifiManager.setSaveParamsCallback(saveParamCallback);
 
@@ -2071,6 +2073,8 @@ void Start_Captive_Portal()
     longitudef = atof(eepromConfig.sensor_lon); // Cambiar de string a float
   }
 
+  /*
+
   CustomValTotalString[9] = {0};
   sprintf(CustomValTotalString, "%9d", CustomValtotal);
   if (CustomValTotalString[0] == ' ')
@@ -2111,6 +2115,7 @@ void Start_Captive_Portal()
       Serial.println(eepromConfig.ConfigValues);
     }
   }
+  */
 
   if (write_eeprom)
   {
