@@ -53,11 +53,11 @@
 // Obligatorio para version Bluetooth:
 
 #if !ESP8266
-#define Bluetooth false // Set to true in case Bluetooth is desired
+#define Bluetooth true // Set to true in case Bluetooth is desired
 #endif
 
 // Escoger modelo de pantalla (pasar de false a true) o si no hay escoger ninguna (todas false):
-#define OLED66display false
+#define OLED66display true
 #define OLED96display false
 #if !ESP8266
 #define Tdisplaydisp false
@@ -359,9 +359,13 @@ bool AM2320flag = false;
 
 // Bluetooth in TTGO T-Display
 #if Bluetooth
-#include "Sensirion_GadgetBle_Lib.h" // to connect to Sensirion MyAmbience Android App available on Google Play
+#include "Sensirion_Gadget_BLE.h" // to connect to Sensirion MyAmbience Android App available on Google Play
 // GadgetBle gadgetBle = GadgetBle(GadgetBle::DataType::T_RH_CO2_ALT);
-GadgetBle gadgetBle = GadgetBle(GadgetBle::DataType::T_RH_VOC_PM25_V2);
+//GadgetBle gadgetBle = GadgetBle(GadgetBle::DataType::T_RH_VOC_PM25_V2);
+
+NimBLELibraryWrapper lib;
+DataProvider provider(lib, DataType::DataType::PM10_PM25_PM40_PM100);
+
 // bool bluetooth_active = false;
 #endif
 
@@ -568,7 +572,7 @@ void setup()
 
 #if Bluetooth
   Bluetooth_loop_time = eepromConfig.BluetoothTime;
-  gadgetBle.setSampleIntervalMs(Bluetooth_loop_time * 1000); // Valor de muestreo de APP y de Sensor
+  provider.setSampleIntervalMs(Bluetooth_loop_time * 1000); // Valor de muestreo de APP y de Sensor
 #endif
 
 #if Tdisplaydisp
@@ -658,11 +662,11 @@ void setup()
   latitudef = atof(eepromConfig.sensor_lat);
   longitudef = atof(eepromConfig.sensor_lon);
 
-// Initialize the GadgetBle Library for Bluetooth
+// Initialize the Provider Library for Bluetooth
 #else
-  gadgetBle.begin();
-  Serial.print("Sensirion GadgetBle Lib initialized with deviceId = ");
-  Serial.println(gadgetBle.getDeviceIdString());
+  provider.begin();
+  Serial.print("Sensirion Provider Lib initialized with deviceId = ");
+  Serial.println(provider.getDeviceIdString());
 #endif
 
 #if !Bluetooth
@@ -975,7 +979,7 @@ void loop()
 
 // Process Bluetooth events
 #if Bluetooth
-  gadgetBle.handleEvents();
+  provider.handleDownload();
   delay(3);
 #endif
 
@@ -3030,7 +3034,7 @@ void TimeConfig()
 
 void FlashBluetoothTime()
 {
-  gadgetBle.setSampleIntervalMs(Bluetooth_loop_time * 1000); // Rutina para configurar el tiempo de muestreo del sensor y la app
+  provider.setSampleIntervalMs(Bluetooth_loop_time * 1000); // Rutina para configurar el tiempo de muestreo del sensor y la app
 
   if (eepromConfig.BluetoothTime != Bluetooth_loop_time)
   {
@@ -3853,13 +3857,13 @@ void Write_Bluetooth()
 
   uint32_t ValSampleIntervals;
 
-  gadgetBle.writePM2p5(pm25int);
-  gadgetBle.writeTemperature(temp);
-  gadgetBle.writeHumidity(humi);
+  provider.writeValueToCurrentSample(pm25int, Unit::PM2P5);
+  provider.writeValueToCurrentSample(temp, Unit::T);
+  provider.writeValueToCurrentSample(humi, Unit::RH);
+  provider.commitSample();
   Serial.println("Bluetooth frame: PM25, humidity and temperature");
-  gadgetBle.commit();
-
-  ValSampleIntervals = gadgetBle.getSampleInterval();
+  
+  ValSampleIntervals = provider.getSampleInterval();
   //  Serial.print("ValSampleIntervals: ");
   //  Serial.println(ValSampleIntervals);
 
