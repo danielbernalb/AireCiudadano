@@ -57,10 +57,10 @@
 #endif
 
 // Escoger modelo de pantalla (pasar de false a true) o si no hay escoger ninguna (todas false):
-#define OLED66display true
+#define OLED66display false
 #define OLED96display false
 #if !ESP8266
-#define Tdisplaydisp false
+#define Tdisplaydisp true
 #define TTGO_TQ false
 #endif
 // Fin definiciones de Bluetooth
@@ -241,7 +241,7 @@ U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE, 5, 4);
 #include "ArimoBoldFont16.h"
 #include "ArimoBoldFont20.h"
 #define GFXFF 1
-//#define FF90 &ArchivoNarrow_Regular10pt7b
+// #define FF90 &ArchivoNarrow_Regular10pt7b
 #define FF90 &ArimoBoldFont16
 #define FF92 &ArimoBoldFont20
 #define FF95 &ArchivoNarrow_Regular50pt7b
@@ -359,11 +359,11 @@ bool AM2320flag = false;
 
 // Bluetooth in TTGO T-Display
 #if Bluetooth
-#include <Sensirion_Gadget_BLE.h>   // to connect to Sensirion MyAmbience Android App available on Google Play
+#include <Sensirion_Gadget_BLE.h> // to connect to Sensirion MyAmbience Android App available on Google Play
 #include <BLE2902.h>
-//#include <BLEDevice.h>
-//#include <BLEServer.h>
-//#include <BLEUtils.h>
+// #include <BLEDevice.h>
+// #include <BLEServer.h>
+// #include <BLEUtils.h>
 NimBLELibraryWrapper lib;
 DataProvider provider(lib, DataType::T_RH_VOC_PM25);
 #endif
@@ -853,7 +853,7 @@ void loop()
           u8g2.print("Medidor No");
           u8g2.setCursor(5, (dh / 2 + 7));
           u8g2.print("configurado");
-#if !ESP8266          
+#if !ESP8266
         }
 #endif
         pageEnd();
@@ -1129,11 +1129,11 @@ void Print_WiFi_Status_ESP8266()
   // wifi_rssi_dbm = WiFi.RSSI();
   Serial.print("Signal strength (RSSI):");
 
-  //#if !ESP8266
+  // #if !ESP8266
   Serial.print(WiFi.RSSI());
-  //#else
-  //  Serial.print(WiFi.RSSI());
-  //#endif
+  // #else
+  //   Serial.print(WiFi.RSSI());
+  // #endif
 
   Serial.println(" dBm");
 }
@@ -1277,11 +1277,11 @@ void Print_WiFi_Status()
   // Print the received signal strength:
   Serial.print("Signal strength (RSSI): ");
 
-  //#if !ESP8266
+  // #if !ESP8266
   Serial.print(WiFi.RSSI());
-  //#else
-  //  Serial.print(WiFi.RSSI());
-  //#endif
+  // #else
+  //   Serial.print(WiFi.RSSI());
+  // #endif
 
   Serial.println(" dBm");
 }
@@ -1335,11 +1335,11 @@ void Check_WiFi_Server()
             client.print(WiFi.macAddress());
             client.println("<br>");
             client.print("RSSI: ");
-            //#if !ESP8266
+            // #if !ESP8266
             client.print(WiFi.RSSI());
-            //#else
-            //            client.print(WiFi.RSSI());
-            //#endif
+            // #else
+            //             client.print(WiFi.RSSI());
+            // #endif
 
             client.println("<br>");
             client.println("------");
@@ -1489,9 +1489,9 @@ void Start_Captive_Portal()
   wifiManager.setDebugOutput(true);
   wifiManager.disconnect();
 
-  //#if ESP8266
-  //  wifiManager.setMinimumSignalQuality(50);
-  //#endif
+  // #if ESP8266
+  //   wifiManager.setMinimumSignalQuality(50);
+  // #endif
 
   WiFi.mode(WIFI_AP); // explicitly set mode, esp defaults to STA+AP
 
@@ -1633,11 +1633,11 @@ void Start_Captive_Portal()
   // If not specified device will remain in configuration mode until
   // switched off via webserver or device is restarted.
 
-  //#if ESP8266
-  //  wifiManager.setSaveConnectTimeout(connectiontimeout);
-  //  Serial.print("setSaveConnectTimeout ");
-  //  Serial.println(connectiontimeout);
-  //#endif
+  // #if ESP8266
+  //   wifiManager.setSaveConnectTimeout(connectiontimeout);
+  //   Serial.print("setSaveConnectTimeout ");
+  //   Serial.println(connectiontimeout);
+  // #endif
 
   // wifiManager.setScanDispPerc(true);
 
@@ -1859,11 +1859,11 @@ void Send_Message_Cloud_App_MQTT()
   ///// END DEBUG Samples
   ReadHyT();
 
-  //#if !ESP8266
+  // #if !ESP8266
   RSSI = WiFi.RSSI();
-  //#else
-  //  RSSI = WiFi.RSSI();
-  //#endif
+  // #else
+  //   RSSI = WiFi.RSSI();
+  // #endif
 
   Serial.print("Signal strength (RSSI):");
   Serial.print(RSSI);
@@ -2333,13 +2333,14 @@ if (PMSsen == true)
     {
       Serial.println("OK");
       SHT31sen = true;
+
+      Serial.print("Heater Enabled State: ");
+      if (sht31.isHeaterEnabled())
+        Serial.println("ENABLED");
+      else
+        Serial.println("DISABLED");
     }
 
-    Serial.print("Heater Enabled State: ");
-    if (sht31.isHeaterEnabled())
-      Serial.println("ENABLED");
-    else
-      Serial.println("DISABLED");
 #if !Bluetooth
   }
 
@@ -2940,11 +2941,11 @@ void UpdateOLED()
   displaySensorAverage(pm25int);
 #if !Bluetooth
 
-  //#if !ESP8266
+  // #if !ESP8266
   displaySensorData(round(PM25_value), humi, temp, WiFi.RSSI());
-  //#else
-  //  displaySensorData(round(PM25_value), humi, temp, WiFi.RSSI());
-  //#endif
+  // #else
+  //   displaySensorData(round(PM25_value), humi, temp, WiFi.RSSI());
+  // #endif
 
   if (FlagDATAicon == true)
   {
@@ -3033,7 +3034,7 @@ void TimeConfig()
 
 void FlashBluetoothTime()
 {
-//  provider.setSampleIntervalMs(Bluetooth_loop_time * 1000); // Rutina para configurar el tiempo de muestreo del sensor y la app
+  //  provider.setSampleIntervalMs(Bluetooth_loop_time * 1000); // Rutina para configurar el tiempo de muestreo del sensor y la app
 
   if (eepromConfig.BluetoothTime != Bluetooth_loop_time)
   {
@@ -3431,8 +3432,8 @@ void Suspend_Device()
 
     if (TDisplay == true)
     {
-      //#if !ESP8266
-      // int r = digitalRead(TFT_BL);
+      // #if !ESP8266
+      //  int r = digitalRead(TFT_BL);
       tft.fillScreen(TFT_BLACK);
       tft.setTextColor(TFT_GREEN, TFT_BLACK);
       tft.setTextDatum(MC_DATUM);
@@ -3442,7 +3443,7 @@ void Suspend_Device()
       // digitalWrite(TFT_BL, !r);
       tft.writecommand(TFT_DISPOFF);
       tft.writecommand(TFT_SLPIN);
-      //#endif
+      // #endif
     }
 #else
     espDelay(3000);
@@ -3854,24 +3855,24 @@ void pageEnd()
 void Write_Bluetooth()
 { // Write measurements to Bluetooth
 
-//  uint32_t ValSampleIntervals;
+  //  uint32_t ValSampleIntervals;
 
   provider.writeValueToCurrentSample(pm25int, Unit::PM2P5);
   provider.writeValueToCurrentSample(temp, Unit::T);
   provider.writeValueToCurrentSample(humi, Unit::RH);
   provider.commitSample();
   Serial.println("Bluetooth frame: PM25, humidity and temperature");
-  
-//  ValSampleIntervals = provider.getSampleInterval();
+
+  //  ValSampleIntervals = provider.getSampleInterval();
   //  Serial.print("ValSampleIntervals: ");
   //  Serial.println(ValSampleIntervals);
 
   //  Serial.print("Bluetooth_loop_time: ");
   //  Serial.println(Bluetooth_loop_time);
 
-//  Bluetooth_loop_time = ValSampleIntervals;
+  //  Bluetooth_loop_time = ValSampleIntervals;
 
-//  if (eepromConfig.BluetoothTime != Bluetooth_loop_time)
-//    FlashBluetoothTime();
+  //  if (eepromConfig.BluetoothTime != Bluetooth_loop_time)
+  //    FlashBluetoothTime();
 }
 #endif
