@@ -95,7 +95,7 @@ char CustomValTotalString[9] = "00000000";
 uint32_t IDn = 0;
 
 // device id, automatically filled by concatenating the last three fields of the wifi mac address, removing the ":" in betweeen, in HEX format. Example: ChipId (HEX) = 85e646, ChipId (DEC) = 8775238, macaddress = E0:98:06:85:E6:46
-String sw_version = "1.7";
+String sw_version = "1.8";
 String aireciudadano_device_id;
 uint8_t Swver;
 
@@ -359,14 +359,13 @@ bool AM2320flag = false;
 
 // Bluetooth in TTGO T-Display
 #if Bluetooth
-#include "Sensirion_Gadget_BLE.h" // to connect to Sensirion MyAmbience Android App available on Google Play
-// GadgetBle gadgetBle = GadgetBle(GadgetBle::DataType::T_RH_CO2_ALT);
-//GadgetBle gadgetBle = GadgetBle(GadgetBle::DataType::T_RH_VOC_PM25_V2);
-
+#include <Sensirion_Gadget_BLE.h>   // to connect to Sensirion MyAmbience Android App available on Google Play
+#include <BLE2902.h>
+//#include <BLEDevice.h>
+//#include <BLEServer.h>
+//#include <BLEUtils.h>
 NimBLELibraryWrapper lib;
-DataProvider provider(lib, DataType::DataType::PM10_PM25_PM40_PM100);
-
-// bool bluetooth_active = false;
+DataProvider provider(lib, DataType::T_RH_VOC_PM25);
 #endif
 
 #if !ESP8266
@@ -572,7 +571,7 @@ void setup()
 
 #if Bluetooth
   Bluetooth_loop_time = eepromConfig.BluetoothTime;
-  provider.setSampleIntervalMs(Bluetooth_loop_time * 1000); // Valor de muestreo de APP y de Sensor
+//  provider.setSampleIntervalMs(Bluetooth_loop_time * 1000); // Valor de muestreo de APP y de Sensor
 #endif
 
 #if Tdisplaydisp
@@ -3034,7 +3033,7 @@ void TimeConfig()
 
 void FlashBluetoothTime()
 {
-  provider.setSampleIntervalMs(Bluetooth_loop_time * 1000); // Rutina para configurar el tiempo de muestreo del sensor y la app
+//  provider.setSampleIntervalMs(Bluetooth_loop_time * 1000); // Rutina para configurar el tiempo de muestreo del sensor y la app
 
   if (eepromConfig.BluetoothTime != Bluetooth_loop_time)
   {
@@ -3855,7 +3854,7 @@ void pageEnd()
 void Write_Bluetooth()
 { // Write measurements to Bluetooth
 
-  uint32_t ValSampleIntervals;
+//  uint32_t ValSampleIntervals;
 
   provider.writeValueToCurrentSample(pm25int, Unit::PM2P5);
   provider.writeValueToCurrentSample(temp, Unit::T);
@@ -3863,16 +3862,16 @@ void Write_Bluetooth()
   provider.commitSample();
   Serial.println("Bluetooth frame: PM25, humidity and temperature");
   
-  ValSampleIntervals = provider.getSampleInterval();
+//  ValSampleIntervals = provider.getSampleInterval();
   //  Serial.print("ValSampleIntervals: ");
   //  Serial.println(ValSampleIntervals);
 
   //  Serial.print("Bluetooth_loop_time: ");
   //  Serial.println(Bluetooth_loop_time);
 
-  Bluetooth_loop_time = ValSampleIntervals;
+//  Bluetooth_loop_time = ValSampleIntervals;
 
-  if (eepromConfig.BluetoothTime != Bluetooth_loop_time)
-    FlashBluetoothTime();
+//  if (eepromConfig.BluetoothTime != Bluetooth_loop_time)
+//    FlashBluetoothTime();
 }
 #endif
