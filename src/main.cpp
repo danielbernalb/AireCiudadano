@@ -70,8 +70,8 @@
 
 // Definiciones opcionales para version Wifi
 #define BrownoutOFF false   // Colocar en true en boards con problemas de RESET por Brownout o bajo voltaje
-#define WPA2 false           // Colocar en true para redes con WPA2
-#define ESP8266SH false      // Colocar para PMS en pin 0 - Hardware Serial
+#define WPA2 true           // Colocar en true para redes con WPA2
+#define ESP8266SH false     // Colocar para PMS en pin 0 - Hardware Serial
 #define PreProgSensor false // Variables de sensor preprogramadas:
                             // Latitude: char sensor_lat[10] = "xx.xxxx";
                             // Longitude: char sensor_lon[10] = "xx.xxxx";
@@ -117,12 +117,15 @@ struct MyConfigStruct
 //  uint16_t MQTT_port = 80;                           // MQTT port; Default Port on 80
 //  char MQTT_server[30] = "sensor.aireciudadano.com"; // MQTT server url or public IP address.
 #if !PreProgSensor
-  char sensor_lat[10] = "0.0";                       // Sensor latitude  GPS
-  char sensor_lon[10] = "0.0";                       // Sensor longitude GPS
-//  char ConfigValues[10] = "000000000";
+  //  char sensor_lat[10] = "0.0";                       // Sensor latitude  GPS
+  char sensor_lat[10] = "4.6973";   // Sensor latitude  GPS
+  //  char sensor_lon[10] = "0.0";                       // Sensor longitude GPS
+  char sensor_lon[10] = "-74.0938"; // Sensor longitude GPS
+  //  char ConfigValues[10] = "000000000";
   char ConfigValues[10] = "000010004";
 
-  char aireciudadano_device_name[30]; // Device name; default to aireciudadano_device_id
+  //  char aireciudadano_device_name[30]; // Device name; default to aireciudadano_device_id
+  char aireciudadano_device_name[30] = "AireCiudadano_Test_11"; // Device name; default to aireciudadano_device_id
 #else
   char sensor_lat[10] = "4.69375";   // Aquí colocar la Latitud del sensor
   char sensor_lon[10] = "-74.09382"; // Colocar la Longitud del sensor
@@ -131,11 +134,16 @@ struct MyConfigStruct
 #endif
 #endif
 #if WPA2
-  char wifi_user[24];     // WiFi user to be used on WPA Enterprise. Default to null (not used)
-  char wifi_password[24]; // WiFi password to be used on WPA Enterprise. Default to null (not used)
+  //  char wifi_user[24];     // WiFi user to be used on WPA Enterprise. Default to null (not used)
+  char wifi_user[24] = "prueba1";        // WiFi user to be used on WPA Enterprise. Default to null (not used)
+  //  char wifi_password[24]; // WiFi password to be used on WPA Enterprise. Default to null (not used)
+  char wifi_password[24] = "daniel2022"; // WiFi password to be used on WPA Enterprise. Default to null (not used)
 #endif
 } eepromConfig;
 
+//
+const char *ssid = "dd-wrt";
+//
 #if PreProgSensor
 // const char *ssid = "Techotyva";
 // const char *password = "Layuyux31";
@@ -364,7 +372,7 @@ PMS pms(pmsSerial);
 PMS::DATA data;
 // bool PMSflag = false;
 
-#else                                     // ESP8266 Hardware Serial 
+#else // ESP8266 Hardware Serial
 
 PMS pms(Serial);
 PMS::DATA data;
@@ -424,9 +432,9 @@ WiFiManager wifiManager;
 #else
 #if Wifi
 
-#include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
+// #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
 
-WiFiManager wifiManager;
+// WiFiManager wifiManager;
 
 // WiFi
 #include <ESP8266WiFi.h> // Wifi ESP8266
@@ -468,7 +476,7 @@ char received_payload[384];
 String MQTT_send_topic;
 String MQTT_receive_topic;
 
-//#define MQTT_VERSION MQTT_VERSION_3_1
+// #define MQTT_VERSION MQTT_VERSION_3_1
 
 // JSON
 #include <ArduinoJson.h>
@@ -611,7 +619,6 @@ void setup()
   Serial.print(F("ESP.getMaxFreeBlockSize 0: "));
   Serial.println(ESP.getMaxFreeBlockSize());
 #endif
-  
 
 #if !ESP8266
   // init preferences to handle persitent config data
@@ -764,11 +771,13 @@ void setup()
   // Start Captive Portal for 60 seconds
   if (ResetFlag == true)
   {
-    Start_Captive_Portal();
+    //    Start_Captive_Portal();
     delay(100);
   }
 
   // Attempt to connect to WiFi network:
+
+  Serial.println("Connect_wifi Start");
   Connect_WiFi();
 
   // Attempt to connect to MQTT broker
@@ -777,17 +786,16 @@ void setup()
     Init_MQTT();
 
 #if ESP8266
-      Serial.print(F("ESP.getFreeHeap 3: "));
-  Serial.println(ESP.getFreeHeap());
+    Serial.print(F("ESP.getFreeHeap 3: "));
+    Serial.println(ESP.getFreeHeap());
 
     Serial.print(F("ESP.getHeapFragmentation 3: "));
-  Serial.println(ESP.getHeapFragmentation());
+    Serial.println(ESP.getHeapFragmentation());
 
-  Serial.print(F("ESP.getMaxFreeBlockSize 3: "));
-  Serial.println(ESP.getMaxFreeBlockSize());
+    Serial.print(F("ESP.getMaxFreeBlockSize 3: "));
+    Serial.println(ESP.getMaxFreeBlockSize());
 
 #endif
-
 
 #if ESP8285
     digitalWrite(LEDPIN, LOW); // turn the LED off by making the voltage LOW
@@ -877,7 +885,7 @@ void setup()
   else
     Serial.println(F("ds1307 is running, no changes"));
 
-    //  rtc.adjust(DateTime(2022, 8, 20, 15, 18, 0));
+  //  rtc.adjust(DateTime(2022, 8, 20, 15, 18, 0));
 
 #endif
 
@@ -1102,7 +1110,7 @@ void loop()
 
 #else
   // MQTT loop
-//  if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 60000))
+  //  if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 60000))
   if ((millis() - MQTT_loop_start) >= (1 * 60000))
   {
 
@@ -1355,9 +1363,15 @@ void Connect_WiFi()
 { // Connect to WiFi
 
   WiFi.disconnect(true); // disconnect from wifi to set new wifi connection
-  WiFi.mode(WIFI_STA);   // init wifi mode
+  delay(1);
+  WiFi.mode(WIFI_STA); // init wifi mode
 
-#if !ESP8266
+#if ESP8266
+
+  Serial.print("Attempting to connect to Network named: ");
+  Serial.println(WiFi.SSID()); // print the network name (SSID);
+
+#else // ESP32
 
   WiFi.onEvent(WiFiEvent);
 
@@ -1372,37 +1386,20 @@ void Connect_WiFi()
 
 #if !WPA2
 
-#if ESP8266
 #if !PreProgSensor
   WiFi.begin();
 #else
   WiFi.begin(ssid, password);
 #endif
-#endif
 
 #else
-  // #if WPA2
   //  If there are not wifi user and wifi password defined, proceed to traight forward configuration
-
   if ((strlen(eepromConfig.wifi_user) == 0) && (strlen(eepromConfig.wifi_password) == 0))
-  {
-    Serial.println(F("Attempting to authenticate..."));
-
-#if ESP8266
-
-#if !PreProgSensor
-    WiFi.begin();
-#else
-    WiFi.begin(ssid, password);
-#endif
-
-#endif
-  }
+    Serial.println(F("ERROR: WPA2 enterprise user and password are empty"));
   else
   {
-#if WPA2
     // set up wpa2 enterprise
-#if !ESP8266
+#if !ESP8266 // ESP32
     Serial.println(F("Attempting to authenticate using WPA2 Enterprise..."));
     Serial.print(F("User: "));
     Serial.println(eepromConfig.wifi_user);
@@ -1413,9 +1410,12 @@ void Connect_WiFi()
     esp_wifi_sta_wpa2_ent_set_password((uint8_t *)eepromConfig.wifi_password, strlen(eepromConfig.wifi_password)); // provide password
     esp_wifi_sta_wpa2_ent_enable();
 
+    WiFi.begin(); // Nuevo orden!!!!!!!!!!!!!!!!!
+
 #else
 
-    String wifi_ssid = WiFi.SSID(); // your network SSID (name)
+//    String wifi_ssid = WiFi.SSID(); // your network SSID (name)
+    String wifi_ssid = "dd-wrt"; // your network SSID (name)
     // String wifi_password = WiFi.psk()); // your network psk password
     Serial.print(F("Attempting to authenticate with WPA2 Enterprise "));
     Serial.print(F("User: "));
@@ -1447,25 +1447,19 @@ void Connect_WiFi()
 
     // Set up authentication
     wifi_station_set_enterprise_identity((uint8 *)eepromConfig.wifi_user, strlen(eepromConfig.wifi_user));
+    Serial.print("eepromConfig.wifi_ssid: ");
+    Serial.println(WiFi.SSID());
+    Serial.print("eepromConfig.wifi_user: ");
+    Serial.println(eepromConfig.wifi_user);
+    Serial.print("eepromConfig.wifi_password: ");
+    Serial.println(eepromConfig.wifi_password);
     wifi_station_set_enterprise_username((uint8 *)eepromConfig.wifi_user, strlen(eepromConfig.wifi_user));
     wifi_station_set_enterprise_password((uint8 *)eepromConfig.wifi_password, strlen((char *)eepromConfig.wifi_password));
-
+    Serial.println("test0");
     wifi_station_connect();
-#endif
-
+    Serial.println("test1");
 #endif
   }
-  // #endif
-#endif
-
-#if ESP32
-
-#if !PreProgSensor
-  WiFi.begin();
-#else
-  WiFi.begin(ssid, password);
-#endif
-
 #endif
 
   // Timestamp for connection timeout
@@ -1599,9 +1593,9 @@ void Check_WiFi_Server()
 {                                              // Wifi server
   WiFiClient client = wifi_server.available(); // listen for incoming clients
   if (client)
-  {                               // if you get a client,
+  {                                  // if you get a client,
     Serial.println(F("new client")); // print a message out the serial port
-    String currentLine = "";      // make a String to hold incoming data from the client
+    String currentLine = "";         // make a String to hold incoming data from the client
     while (client.connected())
     { // loop while the client's connected
       if (client.available())
@@ -1653,14 +1647,14 @@ void Check_WiFi_Server()
             client.println("<br>");
             client.println("------");
             client.println("<br>");
-//            client.print("Publication Time: ");
-//            client.print(eepromConfig.PublicTime);
-//            client.print("MQTT Server: ");
-//            client.print(eepromConfig.MQTT_server);
-//            client.println("<br>");
-//            client.print("MQTT Port: ");
-//            client.print(eepromConfig.MQTT_port);
-//            client.println("<br>");
+            //            client.print("Publication Time: ");
+            //            client.print(eepromConfig.PublicTime);
+            //            client.print("MQTT Server: ");
+            //            client.print(eepromConfig.MQTT_server);
+            //            client.println("<br>");
+            //            client.print("MQTT Port: ");
+            //            client.print(eepromConfig.MQTT_port);
+            //            client.println("<br>");
             client.print("Sensor latitude: ");
             client.print(eepromConfig.sensor_lat);
             client.println("<br>");
@@ -1715,8 +1709,8 @@ void Check_WiFi_Server()
         // Check to see if the client request was "GET /3" to launch captive portal:
         if (currentLine.endsWith("GET /3"))
         {
-          PortalFlag = true;
-          Start_Captive_Portal();
+          //          PortalFlag = true;
+          //          Start_Captive_Portal();
         }
 #if !ESP8266
         // Check to see if the client request was "GET /4" to suspend the device:
@@ -1739,6 +1733,8 @@ void Check_WiFi_Server()
     Serial.println(F("client disconnected"));
   }
 }
+
+/*
 
 void Start_Captive_Portal()
 { // Run a captive portal to configure WiFi and MQTT
@@ -1932,8 +1928,9 @@ void Start_Captive_Portal()
     new (&custom_outin_type) WiFiManagerParameter(custom_outin_str);
   }
 */
-  // Add parameters
+// Add parameters
 
+/*
 #if WPA2
   wifiManager.addParameter(&custom_wifi_html);
   wifiManager.addParameter(&custom_wifi_user);
@@ -2117,36 +2114,42 @@ void Start_Captive_Portal()
   }
   */
 
-  if (write_eeprom)
-  {
-    Write_EEPROM();
-    Serial.println(F("write_eeprom = true Final"));
-    ESP.restart();
-  }
+/*
 
-  InCaptivePortal = false;
+ if (write_eeprom)
+ {
+   Write_EEPROM();
+   Serial.println(F("write_eeprom = true Final"));
+   ESP.restart();
+ }
+
+ InCaptivePortal = false;
 }
+
+
 
 String getParam(String name)
 {
-  // read parameter from server, for custom hmtl input
-  String value;
+ // read parameter from server, for custom hmtl input
+ String value;
 
-  if (wifiManager.server->hasArg(name))
-  {
-    value = wifiManager.server->arg(name);
-  }
-  CustomValue = atoi(value.c_str());
-  return value;
+ if (wifiManager.server->hasArg(name))
+ {
+   value = wifiManager.server->arg(name);
+ }
+ CustomValue = atoi(value.c_str());
+ return value;
 }
+
+*/
 
 void Init_MQTT()
 { // MQTT Init function
   Serial.print(F("Attempting to connect to the MQTT broker "));
-//  Serial.print(eepromConfig.MQTT_server);
+  //  Serial.print(eepromConfig.MQTT_server);
   Serial.print(F("sensor.aireciudadano.com"));
   Serial.print(F(":"));
-//  Serial.println(eepromConfig.MQTT_port);
+  //  Serial.println(eepromConfig.MQTT_port);
   Serial.println(F("80"));
 
 #if ESP8266
@@ -2154,7 +2157,7 @@ void Init_MQTT()
   Serial.print(F("ESP.getFreeHeap 2: "));
   Serial.println(ESP.getFreeHeap());
 
-    Serial.print(F("ESP.getHeapFragmentation 2: "));
+  Serial.print(F("ESP.getHeapFragmentation 2: "));
   Serial.println(ESP.getHeapFragmentation());
 
   Serial.print(F("ESP.getMaxFreeBlockSize 2: "));
@@ -2162,9 +2165,10 @@ void Init_MQTT()
 
 #endif
 
+  //  MQTT_client.setBufferSize(512); // to receive messages up to 512 bytes length (default is 256)
   MQTT_client.setBufferSize(512); // to receive messages up to 512 bytes length (default is 256)
   Serial.println(F("Paso1"));
-//  MQTT_client.setServer(eepromConfig.MQTT_server, eepromConfig.MQTT_port);
+  //  MQTT_client.setServer(eepromConfig.MQTT_server, eepromConfig.MQTT_port);
   MQTT_client.setServer("sensor.aireciudadano.com", 80);
   Serial.println(F("Paso2"));
   MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
@@ -2176,6 +2180,39 @@ void Init_MQTT()
   {
     err_MQTT = true;
     MQTT_Reconnect();
+    delay(2000);
+
+    if (!MQTT_client.connected())
+    {
+      err_MQTT = true;
+      MQTT_Reconnect();
+      delay(2000);
+
+      if (!MQTT_client.connected())
+      {
+        err_MQTT = true;
+        MQTT_Reconnect();
+        delay(2000);
+      }
+      else
+      {
+        err_MQTT = false;
+        lastReconnectAttempt = 0;
+        // Once connected resubscribe
+        MQTT_client.subscribe(MQTT_receive_topic.c_str());
+        Serial.print(F("MQTT connected - Receive topic: "));
+        Serial.println(MQTT_receive_topic);
+      }
+    }
+    else
+    {
+      err_MQTT = false;
+      lastReconnectAttempt = 0;
+      // Once connected resubscribe
+      MQTT_client.subscribe(MQTT_receive_topic.c_str());
+      Serial.print(F("MQTT connected - Receive topic: "));
+      Serial.println(MQTT_receive_topic);
+    }
   }
   else
   {
@@ -2192,7 +2229,8 @@ void MQTT_Reconnect()
 { // MQTT reconnect function
   // Try to reconnect only if it has been more than 5 sec since last attemp
   unsigned long now = millis();
-  if (now - lastReconnectAttempt > 5000)
+  //  if (now - lastReconnectAttempt > 5000)
+  if (now - lastReconnectAttempt > 2000)
   {
     lastReconnectAttempt = now;
     Serial.print(F("Attempting MQTT connection..."));
@@ -2303,14 +2341,14 @@ void Send_Message_Cloud_App_MQTT()
   if (OLED66 == true || OLED96 == true || TDisplay == true)
     FlagDATAicon = true;
 
-  // send message, the Print interface can be used to set the message contents
+    // send message, the Print interface can be used to set the message contents
 
 #if ESP8266
 
   Serial.print(F("ESP.getFreeHeap 5: "));
   Serial.println(ESP.getFreeHeap());
 
-    Serial.print(F("ESP.getHeapFragmentation 5: "));
+  Serial.print(F("ESP.getHeapFragmentation 5: "));
   Serial.println(ESP.getHeapFragmentation());
 
   Serial.print(F("ESP.getMaxFreeBlockSize 5: "));
@@ -2324,14 +2362,13 @@ void Send_Message_Cloud_App_MQTT()
   Serial.print(F("ESP.getFreeHeap 6: "));
   Serial.println(ESP.getFreeHeap());
 
-    Serial.print(F("ESP.getHeapFragmentation 6: "));
+  Serial.print(F("ESP.getHeapFragmentation 6: "));
   Serial.println(ESP.getHeapFragmentation());
 
   Serial.print(F("ESP.getMaxFreeBlockSize 6: "));
   Serial.println(ESP.getMaxFreeBlockSize());
 
 #endif
-
 }
 
 void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int length)
@@ -2363,41 +2400,41 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
   }
 
   // Check MQTT server
-//  if ((jsonBuffer["MQTT_server"]) && (eepromConfig.MQTT_server != jsonBuffer["MQTT_server"]))
-//  {
-//    strncpy(eepromConfig.MQTT_server, jsonBuffer["MQTT_server"], sizeof(eepromConfig.MQTT_server));
-//    eepromConfig.MQTT_server[sizeof(eepromConfig.MQTT_server) - 1] = '\0';
-//    Serial.print(F("MQTT Server: "));
-//    Serial.println(eepromConfig.MQTT_server);
-//    write_eeprom = true;
+  //  if ((jsonBuffer["MQTT_server"]) && (eepromConfig.MQTT_server != jsonBuffer["MQTT_server"]))
+  //  {
+  //    strncpy(eepromConfig.MQTT_server, jsonBuffer["MQTT_server"], sizeof(eepromConfig.MQTT_server));
+  //    eepromConfig.MQTT_server[sizeof(eepromConfig.MQTT_server) - 1] = '\0';
+  //    Serial.print(F("MQTT Server: "));
+  //    Serial.println(eepromConfig.MQTT_server);
+  //    write_eeprom = true;
 
-    // Attempt to connect to MQTT broker
-//    if (!err_wifi)
-//    {
-//      Init_MQTT();
-//    }
-//  }
+  // Attempt to connect to MQTT broker
+  //    if (!err_wifi)
+  //    {
+  //      Init_MQTT();
+  //    }
+  //  }
 
   // Check MQTT port
-//  if ((jsonBuffer["MQTT_port"]) && (eepromConfig.MQTT_port != int(jsonBuffer["MQTT_port"])))
-//  {
-//    eepromConfig.MQTT_port = int(jsonBuffer["MQTT_port"]);
-    // strncpy(eepromConfig.MQTT_port, jsonBuffer["MQTT_port"], sizeof(eepromConfig.MQTT_port));
-    // eepromConfig.MQTT_port[sizeof(eepromConfig.MQTT_port) - 1] = '\0';
-//    Serial.print(F("MQTT Port: "));
-//    Serial.println(eepromConfig.MQTT_port);
-//    write_eeprom = true;
+  //  if ((jsonBuffer["MQTT_port"]) && (eepromConfig.MQTT_port != int(jsonBuffer["MQTT_port"])))
+  //  {
+  //    eepromConfig.MQTT_port = int(jsonBuffer["MQTT_port"]);
+  // strncpy(eepromConfig.MQTT_port, jsonBuffer["MQTT_port"], sizeof(eepromConfig.MQTT_port));
+  // eepromConfig.MQTT_port[sizeof(eepromConfig.MQTT_port) - 1] = '\0';
+  //    Serial.print(F("MQTT Port: "));
+  //    Serial.println(eepromConfig.MQTT_port);
+  //    write_eeprom = true;
 
-    // Attempt to connect to MQTT broker
-//    if (!err_wifi)
-//    {
-//      Init_MQTT();
-//    }
-//  }
+  // Attempt to connect to MQTT broker
+  //    if (!err_wifi)
+  //    {
+  //      Init_MQTT();
+  //    }
+  //  }
 
   // print info
-//  Serial.println(F("MQTT update - message processed"));
-//  Print_Config();
+  //  Serial.println(F("MQTT update - message processed"));
+  //  Print_Config();
 
   // If factory reset has been enabled, just do it
   if ((jsonBuffer["factory_reset"]) && (jsonBuffer["factory_reset"] == "ON"))
@@ -2620,7 +2657,7 @@ void Setup_Sensor()
 #if Wifi
 
 #if ESP8266
-     Serial.print(F("ESP.getFreeHeap 4: "));
+  Serial.print(F("ESP.getFreeHeap 4: "));
   Serial.println(ESP.getFreeHeap());
 
   Serial.print(F("ESP.getHeapFragmentation 4: "));
@@ -2750,7 +2787,7 @@ if (PMSsen == true)
 #endif
 
     delay(1000);
-  Serial.println(F("Test6"));
+    Serial.println(F("Test6"));
 
     if (pms.readUntil(data))
     {
@@ -3213,12 +3250,12 @@ void Print_Config()
   Serial.print(F("SDyRTC Time: "));
   Serial.println(SDyRTCtime);
 #elif Wifi
-//  Serial.print(F("Publication Time: "));
-//  Serial.println(eepromConfig.PublicTime);
-//  Serial.print(F("MQTT server: "));
-//  Serial.println(eepromConfig.MQTT_server);
-//  Serial.print(F("MQTT Port: "));
-//  Serial.println(eepromConfig.MQTT_port);
+  //  Serial.print(F("Publication Time: "));
+  //  Serial.println(eepromConfig.PublicTime);
+  //  Serial.print(F("MQTT server: "));
+  //  Serial.println(eepromConfig.MQTT_server);
+  //  Serial.print(F("MQTT Port: "));
+  //  Serial.println(eepromConfig.MQTT_port);
   Serial.print(F("Sensor latitude: "));
   Serial.println(eepromConfig.sensor_lat);
   Serial.print(F("Sensor longitude: "));
@@ -3272,7 +3309,7 @@ void Button_Init()
     tft.setTextDatum(TL_DATUM); // top left
     tft.setTextSize(1);
     tft.setFreeFont(FF90);
-    tft.drawString("ID " + aireciudadano_device_id, 8, 5);         //!!!Arreglar por nuevo tamaño String
+    tft.drawString("ID " + aireciudadano_device_id, 8, 5); //!!!Arreglar por nuevo tamaño String
     tft.drawString("SW " + sw_version, 8, 22);
 #if Bluetooth
     tft.drawString("Bluetooth ver", 8, 39);
@@ -3334,25 +3371,25 @@ void Button_Init()
 
                                               while (digitalRead(BUTTON_BOTTOM) == false)
                                               {
-                                                if (Bluetooth_loop_time == 2)
-                                                  Bluetooth_loop_time = 10;
-                                                else if (Bluetooth_loop_time == 10)
-                                                  Bluetooth_loop_time = 60;
-                                                else if (Bluetooth_loop_time == 60)
-                                                  Bluetooth_loop_time = 120;
-                                                else if (Bluetooth_loop_time == 120)
-                                                  Bluetooth_loop_time = 300;
-                                                else if (Bluetooth_loop_time == 300)
-                                                  Bluetooth_loop_time = 600;
-                                                else if (Bluetooth_loop_time == 600)
-                                                  Bluetooth_loop_time = 3600;
-                                                else if (Bluetooth_loop_time == 3600)
-                                                  Bluetooth_loop_time = 10800;
-                                                else
-                                                  Bluetooth_loop_time = 2;
-                                                tft.drawString("                    ", tft.width() / 2, tft.height() / 2 + 15);
-                                                tft.drawString(String(Bluetooth_loop_time) + " seg", tft.width() / 2, tft.height() / 2 + 15);
-                                                delay(1000);
+      if (Bluetooth_loop_time == 2)
+        Bluetooth_loop_time = 10;
+      else if (Bluetooth_loop_time == 10)
+        Bluetooth_loop_time = 60;
+      else if (Bluetooth_loop_time == 60)
+        Bluetooth_loop_time = 120;
+      else if (Bluetooth_loop_time == 120)
+        Bluetooth_loop_time = 300;
+      else if (Bluetooth_loop_time == 300)
+        Bluetooth_loop_time = 600;
+      else if (Bluetooth_loop_time == 600)
+        Bluetooth_loop_time = 3600;
+      else if (Bluetooth_loop_time == 3600)
+        Bluetooth_loop_time = 10800;
+      else
+        Bluetooth_loop_time = 2;
+      tft.drawString("                    ", tft.width() / 2, tft.height() / 2 + 15);
+      tft.drawString(String(Bluetooth_loop_time) + " seg", tft.width() / 2, tft.height() / 2 + 15);
+      delay(1000);
                                               }
                                               tft.drawString(String(Bluetooth_loop_time) + " seg", tft.width() / 2, tft.height() / 2 + 15);
                                               delay(1000);
@@ -3556,7 +3593,6 @@ void Get_AireCiudadano_DeviceId()
   Serial.print(F(", ESP CoreVersion: "));
   Serial.println(ESP.getCoreVersion());
 
-
 #endif
 
   Serial.print(F("AireCiudadano Device ID: "));
@@ -3743,7 +3779,7 @@ void Read_EEPROM()
 
     // Read saved data
     EEPROM.get(0, eepromConfig);
-//    Print_Config();
+    //    Print_Config();
   }
   else
   {
