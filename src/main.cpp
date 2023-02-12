@@ -124,12 +124,8 @@ struct MyConfigStruct
 } eepromConfig;
 
 #if PreProgSensor
-// const char *ssid = "Techotyva";
-// const char *password = "Layuyux31";
 const char *ssid = "TPred";
 const char *password = "apt413sago16";
-// const char *ssid = "Rosa";
-// const char *password = "Rudysicha";
 char aireciudadano_device_nameTemp[30] = {0};
 #endif
 
@@ -1436,6 +1432,7 @@ void Start_Captive_Portal()
   InCaptivePortal = true;
   String wifiAP;
   const int captiveportaltime = 60;
+  //  const int captiveportaltime = 5;
   //  const int connectiontimeout = 5;
 
   //  wifiAP = String(eepromConfig.aireciudadano_device_name);
