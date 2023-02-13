@@ -1834,7 +1834,7 @@ void Start_Captive_Portal()
 //  WiFiManagerParameter custom_endhtml("<p></p>"); // only custom html
 
   // Sensor PM menu
-/*
+
   if (eepromConfig.ConfigValues[8] == '0')
   {
     const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM model:</label><br/><input type='radio' name='customSenPM' value='0' checked> None<br><input type='radio' name='customSenPM' value='1'> Sensirion SPS30<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> Plantower PMS raw NOT recommended<br><input type='radio' name='customSenPM' value='4'> Plantower PMS adjust RECOMMENDED";
@@ -2069,8 +2069,6 @@ void Start_Captive_Portal()
     Serial.println(eepromConfig.sensor_lon);
     longitudef = atof(eepromConfig.sensor_lon); // Cambiar de string a float
   }
-
-  /*
 
   CustomValTotalString[9] = {0};
   sprintf(CustomValTotalString, "%9d", CustomValtotal);
