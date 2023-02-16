@@ -2048,8 +2048,6 @@ void Init_MQTT()
 //  Serial.println(eepromConfig.MQTT_port);
   Serial.println(F("80"));
 
-#if ESP8266
-  // Attempt to connect to MQTT broker
 //  MQTT_client.setBufferSize(512); // to receive messages up to 512 bytes length (default is 256)
   MQTT_client.setBufferSize(1024); // to receive messages up to 512 bytes length (default is 256)
 //  Serial.println(F("Paso1"));
@@ -2194,8 +2192,6 @@ void Send_Message_Cloud_App_MQTT()
     FlagDATAicon = true;
 
   // send message, the Print interface can be used to set the message contents
-
-#if ESP8266
 
   MQTT_client.publish(MQTT_send_topic.c_str(), MQTT_message);
 
