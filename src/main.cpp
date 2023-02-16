@@ -24,7 +24,7 @@
 ////////////////////////////////
 // Modo de comunicaciones del sensor:
 #define Wifi true        // Set to true in case Wifi is desired, Bluetooth off and SDyRTCsave optional
-#define WPA2 true       // Set to true to WPA2 enterprise networks (IEEE 802.1X)
+#define WPA2 true        // Set to true to WPA2 enterprise networks (IEEE 802.1X)
 #define Bluetooth false  // Set to true in case Bluetooth is desired, Wifi off and SDyRTCsave optional
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) is desires, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) is desires to save data in Wifi or Bluetooth mode
@@ -82,12 +82,12 @@ struct MyConfigStruct
 // #elif SDyRTC
 //   uint16_t SDyRTCTime = 10; // SDyRTC Time
 #elif Wifi
-  uint16_t PublicTime = 1;                           // Publication Time
+  uint16_t PublicTime = 1;     // Publication Time
 //  uint16_t MQTT_port = 80;                           // MQTT port; Default Port on 80
 //  char MQTT_server[30] = "sensor.aireciudadano.com"; // MQTT server url or public IP address.
 #if !PreProgSensor
-  char sensor_lat[10] = "0.0";                       // Sensor latitude  GPS
-  char sensor_lon[10] = "0.0";                       // Sensor longitude GPS
+  char sensor_lat[10] = "0.0"; // Sensor latitude  GPS
+  char sensor_lon[10] = "0.0"; // Sensor longitude GPS
   char ConfigValues[10] = "000000000";
   char aireciudadano_device_name[30]; // Device name; default to aireciudadano_device_id
 #else
@@ -331,7 +331,7 @@ PMS pms(pmsSerial);
 PMS::DATA data;
 // bool PMSflag = false;
 
-#else                                     // ESP8266 Hardware Serial 
+#else // ESP8266 Hardware Serial
 
 PMS pms(Serial);
 PMS::DATA data;
@@ -438,7 +438,7 @@ char received_payload[384];
 String MQTT_send_topic;
 String MQTT_receive_topic;
 
-//#define MQTT_VERSION MQTT_VERSION_3_1
+// #define MQTT_VERSION MQTT_VERSION_3_1
 
 // JSON
 #include <ArduinoJson.h>
@@ -1037,7 +1037,7 @@ void loop()
 #else
   // MQTT loop
   if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 60000))
-//  if ((millis() - MQTT_loop_start) >= (1 * 60000))
+  //  if ((millis() - MQTT_loop_start) >= (1 * 60000))
   {
 
     // New timestamp for the loop start time
@@ -1271,9 +1271,7 @@ void Print_WiFi_Status_ESP8266()
 
   // Print the received signal strength:
   Serial.print(F("Signal strength (RSSI):"));
-
   Serial.print(WiFi.RSSI());
-  
   Serial.println(F(" dBm"));
 }
 
@@ -1419,7 +1417,6 @@ void Connect_WiFi()
 
     // start the web server on port 80
     wifi_server.begin();
-
   }
 
 #if ESP8266
@@ -1524,9 +1521,9 @@ void Check_WiFi_Server()
 {                                              // Wifi server
   WiFiClient client = wifi_server.available(); // listen for incoming clients
   if (client)
-  {                               // if you get a client,
+  {                                  // if you get a client,
     Serial.println(F("new client")); // print a message out the serial port
-    String currentLine = "";      // make a String to hold incoming data from the client
+    String currentLine = "";         // make a String to hold incoming data from the client
     while (client.connected())
     { // loop while the client's connected
       if (client.available())
@@ -1575,11 +1572,11 @@ void Check_WiFi_Server()
             client.println("<br>");
             client.print("Publication Time: ");
             client.print(eepromConfig.PublicTime);
-//            client.print("MQTT Server: ");
-//            client.print(eepromConfig.MQTT_server);
-//            client.println("<br>");
-//            client.print("MQTT Port: ");
-//            client.print(eepromConfig.MQTT_port);
+            //            client.print("MQTT Server: ");
+            //            client.print(eepromConfig.MQTT_server);
+            //            client.println("<br>");
+            //            client.print("MQTT Port: ");
+            //            client.print(eepromConfig.MQTT_port);
             client.println("<br>");
             client.print("Sensor latitude: ");
             client.print(eepromConfig.sensor_lat);
@@ -1665,7 +1662,7 @@ void Start_Captive_Portal()
   InCaptivePortal = true;
   String wifiAP;
   const int captiveportaltime = 60;
-//  const int captiveportaltime = 5;
+  //  const int captiveportaltime = 5;
 
   wifiAP = aireciudadano_device_id;
   Serial.println(wifiAP);
@@ -1736,18 +1733,18 @@ void Start_Captive_Portal()
   char Ptime[5];
   itoa(eepromConfig.PublicTime, Ptime, 10);
   WiFiManagerParameter custom_public_time("Ptime", "Set Publication Time in minutes:", Ptime, 4);
-//  WiFiManagerParameter custom_mqtt_html("<p></p>"); // only custom html
-//  WiFiManagerParameter custom_mqtt_server("Server", "MQTT server:", eepromConfig.MQTT_server, 32);
-//  char port[6];
-  //itoa(eepromConfig.MQTT_port, port, 10);
-//  WiFiManagerParameter custom_mqtt_port("Port", "MQTT port:", port, 6);
+  //  WiFiManagerParameter custom_mqtt_html("<p></p>"); // only custom html
+  //  WiFiManagerParameter custom_mqtt_server("Server", "MQTT server:", eepromConfig.MQTT_server, 32);
+  //  char port[6];
+  //  itoa(eepromConfig.MQTT_port, port, 10);
+  //  WiFiManagerParameter custom_mqtt_port("Port", "MQTT port:", port, 6);
   WiFiManagerParameter custom_sensor_html("<p></p>"); // only custom html
   WiFiManagerParameter custom_sensor_latitude("Latitude", "Latitude sensor (5-4 dec digits are enough)", eepromConfig.sensor_lat, 10);
   WiFiManagerParameter custom_sensor_longitude("Longitude", "Longitude sensor", eepromConfig.sensor_lon, 10);
   WiFiManagerParameter custom_sensorPM_type;
   WiFiManagerParameter custom_sensorHYT_type;
   WiFiManagerParameter custom_display_type;
-//  WiFiManagerParameter custom_board_type;
+  //  WiFiManagerParameter custom_board_type;
   WiFiManagerParameter custom_outin_type;
   WiFiManagerParameter custom_endhtml("<p></p>"); // only custom html
 
@@ -1822,16 +1819,16 @@ void Start_Captive_Portal()
 
   // Sensor Board menu
 
-//  if (eepromConfig.ConfigValues[5] == '0')
-//  {
-//    const char *custom_board_str = "<br/><br/><label for='customBoard'>Board model:</label><br/><input type='radio' name='customBoard' value='0' checked> Normal (internal antenna)<br><input type='radio' name='customBoard' value='1'> Board for external antenna";
-//    new (&custom_board_type) WiFiManagerParameter(custom_board_str);
-//  }
-//  else if (eepromConfig.ConfigValues[5] == '1')
-//  {
-//    const char *custom_board_str = "<br/><br/><label for='customBoard'>Board model:</label><br/><input type='radio' name='customBoard' value='0'> Normal (internal antenna)<br><input type='radio' name='customBoard' value='1' checked> Board for external antenna";
-//    new (&custom_board_type) WiFiManagerParameter(custom_board_str);
-//  }
+  //  if (eepromConfig.ConfigValues[5] == '0')
+  //  {
+  //    const char *custom_board_str = "<br/><br/><label for='customBoard'>Board model:</label><br/><input type='radio' name='customBoard' value='0' checked> Normal (internal antenna)<br><input type='radio' name='customBoard' value='1'> Board for external antenna";
+  //    new (&custom_board_type) WiFiManagerParameter(custom_board_str);
+  //  }
+  //  else if (eepromConfig.ConfigValues[5] == '1')
+  //  {
+  //    const char *custom_board_str = "<br/><br/><label for='customBoard'>Board model:</label><br/><input type='radio' name='customBoard' value='0'> Normal (internal antenna)<br><input type='radio' name='customBoard' value='1' checked> Board for external antenna";
+  //    new (&custom_board_type) WiFiManagerParameter(custom_board_str);
+  //  }
 
   // Sensor Location menu
 
@@ -1857,16 +1854,16 @@ void Start_Captive_Portal()
 
   wifiManager.addParameter(&custom_id_name);
   wifiManager.addParameter(&custom_public_time);
-//  wifiManager.addParameter(&custom_mqtt_html);
-//  wifiManager.addParameter(&custom_mqtt_server);
-//  wifiManager.addParameter(&custom_mqtt_port);
+  //  wifiManager.addParameter(&custom_mqtt_html);
+  //  wifiManager.addParameter(&custom_mqtt_server);
+  //  wifiManager.addParameter(&custom_mqtt_port);
   wifiManager.addParameter(&custom_sensor_html);
   wifiManager.addParameter(&custom_sensor_latitude);
   wifiManager.addParameter(&custom_sensor_longitude);
   wifiManager.addParameter(&custom_sensorPM_type);
   wifiManager.addParameter(&custom_sensorHYT_type);
   wifiManager.addParameter(&custom_display_type);
-//  wifiManager.addParameter(&custom_board_type);
+  //  wifiManager.addParameter(&custom_board_type);
   wifiManager.addParameter(&custom_outin_type);
   wifiManager.addParameter(&custom_endhtml);
 
@@ -1934,24 +1931,24 @@ void Start_Captive_Portal()
     Serial.println(eepromConfig.PublicTime);
   }
 
-//  if (eepromConfig.MQTT_server != custom_mqtt_server.getValue())
-//  {
-//    strncpy(eepromConfig.MQTT_server, custom_mqtt_server.getValue(), sizeof(eepromConfig.MQTT_server));
-//    eepromConfig.MQTT_server[sizeof(eepromConfig.MQTT_server) - 1] = '\0';
-//    write_eeprom = true;
-//    Serial.println(F("MQTT server write_eeprom = true"));
-//    Serial.print(F("MQTT server: "));
-//    Serial.println(eepromConfig.MQTT_server);
-//  }
+  //  if (eepromConfig.MQTT_server != custom_mqtt_server.getValue())
+  //  {
+  //    strncpy(eepromConfig.MQTT_server, custom_mqtt_server.getValue(), sizeof(eepromConfig.MQTT_server));
+  //    eepromConfig.MQTT_server[sizeof(eepromConfig.MQTT_server) - 1] = '\0';
+  //    write_eeprom = true;
+  //    Serial.println(F("MQTT server write_eeprom = true"));
+  //    Serial.print(F("MQTT server: "));
+  //    Serial.println(eepromConfig.MQTT_server);
+  //  }
 
-//  if (eepromConfig.MQTT_port != atoi(custom_mqtt_port.getValue()))
-//  {
-//    eepromConfig.MQTT_port = atoi(custom_mqtt_port.getValue());
-//    write_eeprom = true;
-//    Serial.println(F("MQTT port write_eeprom = true"));
-//    Serial.print(F("MQTT port: "));
-//    Serial.println(eepromConfig.MQTT_port);
-//  }
+  //  if (eepromConfig.MQTT_port != atoi(custom_mqtt_port.getValue()))
+  //  {
+  //    eepromConfig.MQTT_port = atoi(custom_mqtt_port.getValue());
+  //    write_eeprom = true;
+  //    Serial.println(F("MQTT port write_eeprom = true"));
+  //    Serial.print(F("MQTT port: "));
+  //    Serial.println(eepromConfig.MQTT_port);
+  //  }
 
   if (eepromConfig.sensor_lat != custom_sensor_latitude.getValue())
   {
@@ -2042,23 +2039,23 @@ String getParam(String name)
 void Init_MQTT()
 { // MQTT Init function
   Serial.print(F("Attempting to connect to the MQTT broker "));
-//  Serial.print(eepromConfig.MQTT_server);
+  //  Serial.print(eepromConfig.MQTT_server);
   Serial.print(F("sensor.aireciudadano.com"));
   Serial.print(F(":"));
-//  Serial.println(eepromConfig.MQTT_port);
+  //  Serial.println(eepromConfig.MQTT_port);
   Serial.println(F("80"));
 
-//  MQTT_client.setBufferSize(512); // to receive messages up to 512 bytes length (default is 256)
+  //  MQTT_client.setBufferSize(512); // to receive messages up to 512 bytes length (default is 256)
   MQTT_client.setBufferSize(1024); // to receive messages up to 512 bytes length (default is 256)
-//  Serial.println(F("Paso1"));
-//  MQTT_client.setServer(eepromConfig.MQTT_server, eepromConfig.MQTT_port);
+  //  Serial.println(F("Paso1"));
+  //  MQTT_client.setServer(eepromConfig.MQTT_server, eepromConfig.MQTT_port);
   MQTT_client.setServer("sensor.aireciudadano.com", 80);
-//  Serial.println(F("Paso2"));
+  //  Serial.println(F("Paso2"));
   MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
-//  Serial.println(F("Paso3"));
+  //  Serial.println(F("Paso3"));
 
   MQTT_client.connect(aireciudadano_device_id.c_str());
-//  Serial.println(F("Paso4"));
+  //  Serial.println(F("Paso4"));
 
   if (!MQTT_client.connected())
   {
@@ -2102,7 +2099,7 @@ void MQTT_Reconnect()
       Serial.print(MQTT_client.state());
       Serial.println(F(" try again in 5 seconds"));
     }
-    Serial.println(F("Paso5"));
+//    Serial.println(F("Paso5"));
   }
 }
 
@@ -2194,7 +2191,6 @@ void Send_Message_Cloud_App_MQTT()
   // send message, the Print interface can be used to set the message contents
 
   MQTT_client.publish(MQTT_send_topic.c_str(), MQTT_message);
-
 }
 
 void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int length)
@@ -2226,41 +2222,41 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
   }
 
   // Check MQTT server
-//  if ((jsonBuffer["MQTT_server"]) && (eepromConfig.MQTT_server != jsonBuffer["MQTT_server"]))
-//  {
-//    strncpy(eepromConfig.MQTT_server, jsonBuffer["MQTT_server"], sizeof(eepromConfig.MQTT_server));
-//    eepromConfig.MQTT_server[sizeof(eepromConfig.MQTT_server) - 1] = '\0';
-//    Serial.print(F("MQTT Server: "));
-//    Serial.println(eepromConfig.MQTT_server);
-//    write_eeprom = true;
+  //  if ((jsonBuffer["MQTT_server"]) && (eepromConfig.MQTT_server != jsonBuffer["MQTT_server"]))
+  //  {
+  //    strncpy(eepromConfig.MQTT_server, jsonBuffer["MQTT_server"], sizeof(eepromConfig.MQTT_server));
+  //    eepromConfig.MQTT_server[sizeof(eepromConfig.MQTT_server) - 1] = '\0';
+  //    Serial.print(F("MQTT Server: "));
+  //    Serial.println(eepromConfig.MQTT_server);
+  //    write_eeprom = true;
 
-    // Attempt to connect to MQTT broker
-//    if (!err_wifi)
-//    {
-//      Init_MQTT();
-//    }
-//  }
+  // Attempt to connect to MQTT broker
+  //    if (!err_wifi)
+  //    {
+  //      Init_MQTT();
+  //    }
+  //  }
 
   // Check MQTT port
-//  if ((jsonBuffer["MQTT_port"]) && (eepromConfig.MQTT_port != int(jsonBuffer["MQTT_port"])))
-//  {
-//    eepromConfig.MQTT_port = int(jsonBuffer["MQTT_port"]);
-    // strncpy(eepromConfig.MQTT_port, jsonBuffer["MQTT_port"], sizeof(eepromConfig.MQTT_port));
-    // eepromConfig.MQTT_port[sizeof(eepromConfig.MQTT_port) - 1] = '\0';
-//    Serial.print(F("MQTT Port: "));
-//    Serial.println(eepromConfig.MQTT_port);
-//    write_eeprom = true;
+  //  if ((jsonBuffer["MQTT_port"]) && (eepromConfig.MQTT_port != int(jsonBuffer["MQTT_port"])))
+  //  {
+  //    eepromConfig.MQTT_port = int(jsonBuffer["MQTT_port"]);
+  // strncpy(eepromConfig.MQTT_port, jsonBuffer["MQTT_port"], sizeof(eepromConfig.MQTT_port));
+  // eepromConfig.MQTT_port[sizeof(eepromConfig.MQTT_port) - 1] = '\0';
+  //    Serial.print(F("MQTT Port: "));
+  //    Serial.println(eepromConfig.MQTT_port);
+  //    write_eeprom = true;
 
-    // Attempt to connect to MQTT broker
-//    if (!err_wifi)
-//    {
-//      Init_MQTT();
-//    }
-//  }
+  // Attempt to connect to MQTT broker
+  //    if (!err_wifi)
+  //    {
+  //      Init_MQTT();
+  //    }
+  //  }
 
   // print info
-//  Serial.println(F("MQTT update - message processed"));
-//  Print_Config();
+  //  Serial.println(F("MQTT update - message processed"));
+  //  Print_Config();
 
   // If factory reset has been enabled, just do it
   if ((jsonBuffer["factory_reset"]) && (jsonBuffer["factory_reset"] == "ON"))
@@ -2597,11 +2593,11 @@ if (PMSsen == true)
 #if !ESP8266SH
   pmsSerial.begin(9600); // Software serial begin for PMS sensor
 #endif
-//  Serial.println(F("Test5"));
+  //  Serial.println(F("Test5"));
 #endif
 
     delay(1000);
-//  Serial.println(F("Test6"));
+    //  Serial.println(F("Test6"));
 
     if (pms.readUntil(data))
     {
@@ -3066,10 +3062,10 @@ void Print_Config()
 #elif Wifi
   Serial.print(F("Publication Time: "));
   Serial.println(eepromConfig.PublicTime);
-//  Serial.print(F("MQTT server: "));
-//  Serial.println(eepromConfig.MQTT_server);
-//  Serial.print(F("MQTT Port: "));
-//  Serial.println(eepromConfig.MQTT_port);
+  //  Serial.print(F("MQTT server: "));
+  //  Serial.println(eepromConfig.MQTT_server);
+  //  Serial.print(F("MQTT Port: "));
+  //  Serial.println(eepromConfig.MQTT_port);
   Serial.print(F("Sensor latitude: "));
   Serial.println(eepromConfig.sensor_lat);
   Serial.print(F("Sensor longitude: "));
@@ -3364,7 +3360,7 @@ void TimeConfig()
 
 void FlashBluetoothTime()
 {
-//  gadgetBle.setSampleIntervalMs(Bluetooth_loop_time * 1000); // Rutina para configurar el tiempo de muestreo del sensor y la app
+  //  gadgetBle.setSampleIntervalMs(Bluetooth_loop_time * 1000); // Rutina para configurar el tiempo de muestreo del sensor y la app
 
   if (eepromConfig.BluetoothTime != Bluetooth_loop_time)
   {
@@ -3409,7 +3405,6 @@ void Get_AireCiudadano_DeviceId()
   Serial.print(F(", ESP CoreVersion: "));
   Serial.println(ESP.getCoreVersion());
 
-
 #endif
 
   Serial.print(F("AireCiudadano Device ID: "));
@@ -3444,18 +3439,18 @@ void Aireciudadano_Characteristics()
     Serial.println(F("Indoors"));
   }
 
-//  Serial.print(F("eepromConfig.ConfigValues[5]: "));
-//  Serial.println(eepromConfig.ConfigValues[5]);
-//  if (eepromConfig.ConfigValues[5] == '0')
-//  {
-//    ExtAnt = false;
-//    Serial.println(F("Normal board"));
-//  }
-//  else
-//  {
-//    ExtAnt = true;
-//    Serial.println(F("Board with externa antenna"));
-//  }
+  //  Serial.print(F("eepromConfig.ConfigValues[5]: "));
+  //  Serial.println(eepromConfig.ConfigValues[5]);
+  //  if (eepromConfig.ConfigValues[5] == '0')
+  //  {
+  //    ExtAnt = false;
+  //    Serial.println(F("Normal board"));
+  //  }
+  //  else
+  //  {
+  //    ExtAnt = true;
+  //    Serial.println(F("Board with externa antenna"));
+  //  }
 
   Serial.print(F("eepromConfig.ConfigValues[6]: "));
   Serial.println(eepromConfig.ConfigValues[6]);
@@ -3597,7 +3592,7 @@ void Read_EEPROM()
 
     // Read saved data
     EEPROM.get(0, eepromConfig);
-//    Print_Config();
+    //    Print_Config();
   }
   else
   {
@@ -4200,7 +4195,7 @@ void pageEnd()
 void Write_Bluetooth()
 { // Write measurements to Bluetooth
 
-//  uint32_t ValSampleIntervals;
+  //  uint32_t ValSampleIntervals;
 
   provider.writeValueToCurrentSample(pm25int, Unit::PM2P5);
   provider.writeValueToCurrentSample(temp, Unit::T);
@@ -4208,17 +4203,17 @@ void Write_Bluetooth()
   provider.commitSample();
   Serial.println("Bluetooth frame: PM25, humidity and temperature");
 
-//  ValSampleIntervals = gadgetBle.getSampleInterval();
+  //  ValSampleIntervals = gadgetBle.getSampleInterval();
   //  Serial.print(F("ValSampleIntervals: "));
   //  Serial.println(ValSampleIntervals);
 
   //  Serial.print(F("Bluetooth_loop_time: "));
   //  Serial.println(Bluetooth_loop_time);
 
-//  Bluetooth_loop_time = ValSampleIntervals;
+  //  Bluetooth_loop_time = ValSampleIntervals;
 
-//  if (eepromConfig.BluetoothTime != Bluetooth_loop_time)
-//    FlashBluetoothTime();
+  //  if (eepromConfig.BluetoothTime != Bluetooth_loop_time)
+  //    FlashBluetoothTime();
 }
 #endif
 
