@@ -23,7 +23,7 @@
 ////////////////////////////////
 // Modo de comunicaciones del sensor:
 #define Wifi true        // Set to true in case Wifi is desired, Bluetooth off and SDyRTCsave optional
-#define WPA2 false       // Set to true to WPA2 enterprise networks (IEEE 802.1X)
+#define WPA2 true        // Set to true to WPA2 enterprise networks (IEEE 802.1X)
 #define Bluetooth false  // Set to true in case Bluetooth is desired, Wifi off and SDyRTCsave optional
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) is desires, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) is desires to save data in Wifi or Bluetooth mode
@@ -1756,9 +1756,13 @@ void Start_Captive_Portal()
   // Captive portal parameters
 
 #if WPA2
-  WiFiManagerParameter custom_wifi_html("<p>Set WPA2 Enterprise</p>"); // only custom html
-  WiFiManagerParameter custom_wifi_user("User", "WPA2 Enterprise user-identity", eepromConfig.wifi_user, 24);
+//  WiFiManagerParameter custom_wifi_html("<p>Set WPA2 Enterprise</p>"); // only custom html
+  WiFiManagerParameter custom_wifi_user("User", "WPA2 Enterprise Identity", eepromConfig.wifi_user, 24);
+//  WiFiManagerParameter custom_wifi_password("Password", "<label for='p'>WPA2 Enterprise Password</label><input id='Password' name='Password' maxlength='64' type='password' placeholder='{p}'><input type='checkbox' onclick='f()'> Show Password", eepromConfig.wifi_password, 24);
+//  const char *custom_senPass_str = "<label for='p'>Password</label><input id='p' name='p' maxlength='64' type='password' placeholder='{p}'><input type='checkbox' onclick='f()'> Show Password";
+//    new (&custom_sensorPass_type) WiFiManagerParameter(custom_senPass_str);
   WiFiManagerParameter custom_wifi_password("Password", "WPA2 Enterprise Password", eepromConfig.wifi_password, 24);
+
   WiFiManagerParameter custom_wifi_html2("<p></p>"); // only custom html
 #endif
 
@@ -1883,7 +1887,7 @@ void Start_Captive_Portal()
   // Add parameters
 
 #if WPA2
-  wifiManager.addParameter(&custom_wifi_html);
+//  wifiManager.addParameter(&custom_wifi_html);
   wifiManager.addParameter(&custom_wifi_user);
   wifiManager.addParameter(&custom_wifi_password);
   wifiManager.addParameter(&custom_wifi_html2);
