@@ -24,21 +24,10 @@
 // Modo de comunicaciones del sensor:
 #define Wifi true        // Set to true in case Wifi is desired, Bluetooth off and SDyRTCsave optional
 #define WPA2 true        // Set to true to WPA2 enterprise networks (IEEE 802.1X)
-#define Bluetooth false  // Set to true in case Bluetooth is desired, Wifi off and SDyRTCsave optional
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) is desires, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) is desires to save data in Wifi or Bluetooth mode
-#define ESP8285 false    // Set ti true in case you use a ESP8285 switch
-
-// Escoger modelo de pantalla (pasar de false a true) o si no hay escoger ninguna (todas false):
-#define Tdisplaydisp false
-#define OLED66display false
-#define OLED96display false
-
-// Boards diferentes
-#define TTGO_TQ false
 
 // Definiciones opcionales para version Wifi
-#define BrownoutOFF false   // Colocar en true en boards con problemas de RESET por Brownout o bajo voltaje
 #define ESP8266SH false     // Colocar para PMS en pin 0 - Hardware Serial
 #define PreProgSensor false // Variables de sensor preprogramadas:
                             // Latitude: char sensor_lat[10] = "xx.xxxx";
@@ -330,8 +319,6 @@ void setup()
   Serial.print(F("Resetvar: "));
   Serial.println(Resetvar);
 
-
-
   // print info
   Serial.println();
   Serial.println(F("##### Inicializando Medidor Aire Ciudadano #####"));
@@ -363,12 +350,11 @@ void setup()
   Serial.print(F("SW version: "));
   Serial.println(sw_version);
 
+    // Initialize and warm up PM25 sensor
+  Setup_Sensor();
+
   // Get device id
   Get_AireCiudadano_DeviceId();
-
-  TDisplay = false;
-  OLED66 = false;
-  OLED96 = false;
 
   // Set MQTT topics
   MQTT_send_topic = "measurement"; // measurement are sent to this topic
@@ -398,11 +384,10 @@ void setup()
   if (!err_wifi)
   {
     Init_MQTT();
-
   }
 
   // Initialize and warm up PM25 sensor
-  Setup_Sensor();
+//  Setup_Sensor();
 
   // Init control loops
   measurements_loop_start = millis();
@@ -1547,7 +1532,7 @@ void Setup_Sensor()
 // PMS7003 PMSA003
     Serial.println(F("Test Plantower Sensor"));
 
-  pmsSerial.begin(9600); // Software serial begin for PMS sensor
+    pmsSerial.begin(9600); // Software serial begin for PMS sensor
 
     delay(1000);
 
@@ -1555,18 +1540,20 @@ void Setup_Sensor()
     {
       Serial.println(F("Plantower sensor found!"));
       PMSsen = true;
-
-      AdjPMS = true; // Por defecto se deja con ajuste, REVISAR!!!!!!
+      AdjPMS = true; // Por defecto se deja con ajuste
     }
     else
     {
       Serial.println(F("Could not find Plantower sensor!"));
+      PMSsen = false;
+      AdjPMS = false;
     }
 
     Serial.print(F("SHT31 test: "));
     if (!sht31.begin(0x44))
     { // Set to 0x45 for alternate i2c addr
       Serial.println(F("none"));
+      SHT31sen = false;
     }
     else
     {
@@ -1592,8 +1579,6 @@ if (PMSsen == true)
       Serial.print(F("PMS PM2.5: "));
       Serial.print(PM25_value);
       Serial.print(F(" ug/m3   "));
-      if (AdjPMS == true)
-      {
         PM25_value_ori = PM25_value;
         // PM25_value = ((562 * PM25_value_ori) / 1000) - 1; // Ecuación de ajuste resultado de 13 intercomparaciones entre PMS7003 y SPS30 por meses
         // PM25_value = ((553 * PM25_value_ori) / 1000) + 1.3; // Segundo ajuste
@@ -1601,9 +1586,6 @@ if (PMSsen == true)
         Serial.print(F("Adjust: "));
         Serial.print(PM25_value);
         Serial.println(F(" ug/m3"));
-      }
-      else
-        Serial.println(F(""));
     }
     else
     {
@@ -1728,14 +1710,13 @@ void Get_AireCiudadano_DeviceId()
   Serial.println(aireciudadano_device_id);
 }
 
-#if Wifi
-
 void Aireciudadano_Characteristics()
 {
-  Serial.print(F("eepromConfig.ConfigValues: "));
-  Serial.println(eepromConfig.ConfigValues);
-  Serial.print(F("eepromConfig.ConfigValues[3]: "));
-  Serial.println(eepromConfig.ConfigValues[3]);
+  Serial.println(F("eepromConfig.ConfigValues and sensors: "));
+//  Serial.println(eepromConfig.ConfigValues);
+//  Serial.print(F("eepromConfig.ConfigValues[3]: "));
+  Serial.print(F("In/Out: "));
+//  Serial.println(eepromConfig.ConfigValues[3]);
   if (eepromConfig.ConfigValues[3] == '0')
   {
     AmbInOutdoors = false;
@@ -1747,24 +1728,20 @@ void Aireciudadano_Characteristics()
     Serial.println(F("Indoors"));
   }
 
-  Serial.print(F("eepromConfig.ConfigValues[6]: "));
-  Serial.println(eepromConfig.ConfigValues[6]);
-  SHT31sen = false;
-  AM2320sen = false;
-  if (eepromConfig.ConfigValues[6] == '0')
+//  Serial.print(F("eepromConfig.ConfigValues[6]: "));
+  Serial.print(F("Sensor HYT: "));
+//  Serial.println(eepromConfig.ConfigValues[6]);
+  if (SHT31sen == false)
     Serial.println(F("None sensor HYT"));
-  else if (eepromConfig.ConfigValues[6] == '1')
-  {
-    SHT31sen = true;
+  else
     Serial.println(F("SHT31 sensor"));
-  }
 
-  Serial.print(F("eepromConfig.ConfigValues[7]: "));
-  Serial.println(eepromConfig.ConfigValues[7]);
-  SPS30sen = false;
-  SEN5Xsen = false;
-    AdjPMS = true;
-    PMSsen = true;
+//  Serial.print(F("eepromConfig.ConfigValues[7]: "));
+  Serial.print(F("Sensor PM2.5: "));
+//  Serial.println(eepromConfig.ConfigValues[7]);
+  if (PMSsen == false)
+    Serial.println(F("None sensor PM25"));
+  else
     Serial.println(F("PMS sensor with stadistical adjust"));
 
   // SPS30sen = 1
@@ -1813,8 +1790,6 @@ void Aireciudadano_Characteristics()
   Serial.print(F("IDn: "));
   Serial.println(IDn);
 }
-
-#endif
 
 #if !SDyRTC
 
