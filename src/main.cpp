@@ -63,7 +63,6 @@ uint8_t Swver;
 
 // Init to default values; if they have been chaged they will be readed later, on initialization
 struct MyConfigStruct
-// struct __attribute__((packed)) MyConfigStruct
 {
 #if Bluetooth
   uint16_t BluetoothTime = 10;        // Bluetooth Time
@@ -103,12 +102,6 @@ const char *password = "apt413sago16";
 // const char *ssid = "Rosa";
 // const char *password = "Rudysicha";
 char aireciudadano_device_nameTemp[30] = {0};
-#endif
-
-#if BrownoutOFF
-// OFF BROWNOUT/////////////////////
-#include "soc/soc.h"
-#include "soc/rtc_cntl_reg.h"
 #endif
 
 // Save config values to EEPROM
@@ -166,14 +159,10 @@ bool toggleLive;
 int dw = 0; // display width
 int dh = 0; // display height
 
-
-
 #define Sensor_SDA_pin 21 // Define the SDA pin used for the SCD30
 #define Sensor_SCL_pin 22 // Define the SCL pin used for the SCD30
 
-
 #include "PMS.h"
-
 
 #include <SoftwareSerial.h>
 
@@ -191,14 +180,10 @@ PMS pms(pmsSerial);
 PMS::DATA data;
 // bool PMSflag = false;
 
-
 #include <Adafruit_SHT31.h>
 Adafruit_SHT31 sht31;
 bool SHT31flag = false;
 byte failh = 0;
-
-
-
 
 #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
 
@@ -230,7 +215,6 @@ WiFiServer wifi_server(80); // to check if it is alive
 #include <ESP8266WebServer.h>
 #include <DNSServer.h>
 
-
 // MQTT
 #include <PubSubClient.h>
 char MQTT_message[256];
@@ -249,12 +233,9 @@ StaticJsonDocument<384> jsonBuffer;
 #include <ESP8266HTTPClient.h>
 #include <ESP8266httpUpdate.h>
 
-
 bool ResetFlag = false;
 bool DeepSleepFlag = false;
 bool NoiseBUTTONFlag = false;
-// int reason;
-
 
 // to know when there is an updating process in place
 bool updating = false;
@@ -616,7 +597,6 @@ void loop()
     }
   }
 
-
   // From here, all other tasks performed outside of measurements, MQTT and error loops
 
   // if not there are not connectivity errors, receive MQTT messages
@@ -627,7 +607,6 @@ void loop()
 
   // Process wifi server requests
   Check_WiFi_Server();
-
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -775,18 +754,12 @@ void Connect_WiFi()
   // Timestamp for connection timeout
   int wifi_timeout_start = millis();
 
-//  Serial.println("Test4");
-
   // Wait for warming time while blinking blue led AQUI ESTA EL PROBLEMA DEL DHCP
   while ((WiFi.status() != WL_CONNECTED) && ((millis() - wifi_timeout_start) < WIFI_CONNECT_TIMEOUT))
   {
     delay(500); // wait 0.5 seconds for connection
     Serial.println(F("."));
   }
-
-//  Serial.println("Test5");
-
-  //  Serial.print(F("ESP.getHeapFragmentation 1: "));
 
   // Status
   if (WiFi.status() != WL_CONNECTED)
@@ -829,7 +802,6 @@ void Print_WiFi_Status()
   switch (WiFi.status())
   {
   case WL_CONNECTED:
-    Serial.println(F("WIFI CONECTADA !!!!!!!!!!!!!!!!!!!!"));
     Serial.println(F("WIFI CONECTADA !!!!!!!!!!!!!!!!!!!!"));
 #if (OLED66 == true || OLED96 == true)
     u8g2.print("OK WIFI :)");
@@ -952,11 +924,6 @@ void Check_WiFi_Server()
             client.println("<br>");
             client.print("Publication Time: ");
             client.print(eepromConfig.PublicTime);
-            //            client.print("MQTT Server: ");
-            //            client.print(eepromConfig.MQTT_server);
-            //            client.println("<br>");
-            //            client.print("MQTT Port: ");
-            //            client.print(eepromConfig.MQTT_port);
             client.println("<br>");
             client.print("Sensor latitude: ");
             client.print(eepromConfig.sensor_lat);
@@ -964,9 +931,6 @@ void Check_WiFi_Server()
             client.print("Sensor longitude: ");
             client.print(eepromConfig.sensor_lon);
             client.println("<br>");
-            //            client.print("Alarm: ");
-            //            client.print(eepromConfig.acoustic_alarm);
-            //            client.println("<br>");
             client.println("------");
             client.println("<br>");
             client.print("PM2.5: ");
@@ -1051,15 +1015,11 @@ void Start_Captive_Portal()
 #if WPA2
 //  WiFiManagerParameter custom_wifi_html("<p>Set WPA2 Enterprise</p>"); // only custom html
   WiFiManagerParameter custom_wifi_user("User", "Identity", eepromConfig.wifi_user, 24);
-//  WiFiManagerParameter custom_wifi_password("Password", "<label for='p'>WPA2 Enterprise Password</label><input id='Password' name='Password' maxlength='64' type='password' placeholder='{p}'><input type='checkbox' onclick='f()'> Show Password", eepromConfig.wifi_password, 24);
-//  const char *custom_senPass_str = "<label for='p'>Password</label><input id='p' name='p' maxlength='64' type='password' placeholder='{p}'><input type='checkbox' onclick='f()'> Show Password";
-//    new (&custom_sensorPass_type) WiFiManagerParameter(custom_senPass_str);
 //  WiFiManagerParameter custom_wifi_password("Password", "WPA2 Enterprise Password", eepromConfig.wifi_password, 24, " readonly");
   WiFiManagerParameter custom_wifi_password("Password", "Password", eepromConfig.wifi_password, 24);
 
   WiFiManagerParameter custom_wifi_html2("<hr><br/>"); // only custom html
 #endif
-
 
   WiFiManagerParameter custom_id_name("CustomName", "Set Station Name (25 characters max):", eepromConfig.aireciudadano_device_name, 25);
 
@@ -1067,7 +1027,6 @@ void Start_Captive_Portal()
   WiFiManagerParameter custom_sensor_longitude("Longitude", "Longitude sensor", eepromConfig.sensor_lon, 10);
   WiFiManagerParameter custom_outin_type;
   WiFiManagerParameter custom_endhtml("<p></p>"); // only custom html
-
 
   // Sensor Location menu
 
@@ -1151,7 +1110,6 @@ void Start_Captive_Portal()
     Serial.print(F("Device name (captive portal): "));
     Serial.println(eepromConfig.aireciudadano_device_name);
   }
-
 
   if (eepromConfig.sensor_lat != custom_sensor_latitude.getValue())
   {
@@ -1325,16 +1283,10 @@ void Send_Message_Cloud_App_MQTT()
 
   Serial.print(F("Sending MQTT message to the send topic: "));
   Serial.println(MQTT_send_topic);
-  ///// DEBUG Samples
-  //  Serial.println(PM25_accumulated);
-  //  Serial.println(PM25_samples);
   pm25f = PM25_accumulated / PM25_samples;
   pm25int = round(pm25f);
   pm25fori = PM25_accumulated_ori / PM25_samples;
   pm25intori = round(pm25fori);
-  //  Serial.println(pm25int);
-  //  Serial.println(pm25intori);
-  ///// END DEBUG Samples
   ReadHyT();
 
   RSSI = WiFi.RSSI();
@@ -1503,7 +1455,6 @@ void update_error(int err)
   updating = false;
 }
 
-
 void saveParamCallback()
 {
   Serial.println(F("[CALLBACK] saveParamCallback fired"));
@@ -1596,11 +1547,10 @@ if (PMSsen == true)
     NoSensor = true;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////
 void ReadHyT()
 {
-  /////////  SHT31
+  // SHT31
   if (SHT31sen == true)
   {
     temperature = 0.0;
@@ -1682,7 +1632,6 @@ void Print_Config()
   Serial.println(F("#######################################"));
 }
 
-
 void Get_AireCiudadano_DeviceId()
 { // Get TTGO T-Display info and fill up aireciudadano_device_id with last 6 digits (in HEX) of WiFi mac address or Custom_Name + 6 digits
   //  uint32_t chipId = 0;
@@ -1713,10 +1662,7 @@ void Get_AireCiudadano_DeviceId()
 void Aireciudadano_Characteristics()
 {
   Serial.println(F("eepromConfig.ConfigValues and sensors: "));
-//  Serial.println(eepromConfig.ConfigValues);
-//  Serial.print(F("eepromConfig.ConfigValues[3]: "));
   Serial.print(F("In/Out: "));
-//  Serial.println(eepromConfig.ConfigValues[3]);
   if (eepromConfig.ConfigValues[3] == '0')
   {
     AmbInOutdoors = false;
@@ -1728,17 +1674,13 @@ void Aireciudadano_Characteristics()
     Serial.println(F("Indoors"));
   }
 
-//  Serial.print(F("eepromConfig.ConfigValues[6]: "));
   Serial.print(F("Sensor HYT: "));
-//  Serial.println(eepromConfig.ConfigValues[6]);
   if (SHT31sen == false)
     Serial.println(F("None sensor HYT"));
   else
     Serial.println(F("SHT31 sensor"));
 
-//  Serial.print(F("eepromConfig.ConfigValues[7]: "));
   Serial.print(F("Sensor PM2.5: "));
-//  Serial.println(eepromConfig.ConfigValues[7]);
   if (PMSsen == false)
     Serial.println(F("None sensor PM25"));
   else
@@ -1853,7 +1795,6 @@ void Wipe_EEPROM()
 }
 
 #endif
-
 
 #if (SDyRTC || SaveSDyRTC)
 void Write_SD()
