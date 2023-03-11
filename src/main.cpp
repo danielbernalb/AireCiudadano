@@ -70,14 +70,12 @@ struct MyConfigStruct
 // #elif SDyRTC
 //   uint16_t SDyRTCTime = 10; // SDyRTC Time
 #elif Wifi
-  uint16_t PublicTime = 1;     // Publication Time
-                               //  uint16_t MQTT_port = 80;                           // MQTT port; Default Port on 80
-                               //  char MQTT_server[30] = "sensor.aireciudadano.com"; // MQTT server url or public IP address.
+  uint16_t PublicTime = 1; // Publication Time
+                           //  uint16_t MQTT_port = 80;                           // MQTT port; Default Port on 80
+                           //  char MQTT_server[30] = "sensor.aireciudadano.com"; // MQTT server url or public IP address.
 #if !PreProgSensor
-//  char sensor_lat[10] = "0.0"; // Sensor latitude  GPS
-//  char sensor_lon[10] = "0.0"; // Sensor longitude GPS
-  char sensor_lat[10]; // Sensor latitude  GPS
-  char sensor_lon[10]; // Sensor longitude GPS
+  char sensor_lat[10];     // Sensor latitude  GPS
+  char sensor_lon[10];     // Sensor longitude GPS
 
   char ConfigValues[10] = "000000000";
   char aireciudadano_device_name[30]; // Device name; default to aireciudadano_device_id
@@ -331,7 +329,7 @@ void setup()
   Serial.print(F("SW version: "));
   Serial.println(sw_version);
 
-    // Initialize and warm up PM25 sensor
+  // Initialize and warm up PM25 sensor
   Setup_Sensor();
 
   // Get device id
@@ -349,7 +347,7 @@ void setup()
   latitudef = atof(eepromConfig.sensor_lat);
   longitudef = atof(eepromConfig.sensor_lon);
 
-// Initialize the GadgetBle Library for Bluetooth
+  // Initialize the GadgetBle Library for Bluetooth
 
   // Start Captive Portal for 60 seconds
   if (ResetFlag == true)
@@ -368,7 +366,7 @@ void setup()
   }
 
   // Initialize and warm up PM25 sensor
-//  Setup_Sensor();
+  //  Setup_Sensor();
 
   // Init control loops
   measurements_loop_start = millis();
@@ -451,7 +449,6 @@ void setup()
   Serial.println(F(""));
   Serial.println(F("### Configuración del medidor AireCiudadano finalizada ###\n"));
 
-
   delay(1000);
 }
 
@@ -484,8 +481,6 @@ void loop()
     {
       if (PM25_value >= 0)
       {
-
-
         // Accumulates samples
         PM25_accumulated += PM25_value;
         if (AdjPMS == true)
@@ -497,7 +492,6 @@ void loop()
     else
     {
       Serial.println(F("Medidor No configurado"));
-
     }
   }
 
@@ -1013,9 +1007,9 @@ void Start_Captive_Portal()
   // Captive portal parameters
 
 #if WPA2
-//  WiFiManagerParameter custom_wifi_html("<p>Set WPA2 Enterprise</p>"); // only custom html
+  //  WiFiManagerParameter custom_wifi_html("<p>Set WPA2 Enterprise</p>"); // only custom html
   WiFiManagerParameter custom_wifi_user("User", "Identity", eepromConfig.wifi_user, 24);
-//  WiFiManagerParameter custom_wifi_password("Password", "WPA2 Enterprise Password", eepromConfig.wifi_password, 24, " readonly");
+  //  WiFiManagerParameter custom_wifi_password("Password", "WPA2 Enterprise Password", eepromConfig.wifi_password, 24, " readonly");
   WiFiManagerParameter custom_wifi_password("Password", "Password", eepromConfig.wifi_password, 24);
 
   WiFiManagerParameter custom_wifi_html2("<hr><br/>"); // only custom html
@@ -1044,7 +1038,7 @@ void Start_Captive_Portal()
   // Add parameters
 
 #if WPA2
-//  wifiManager.addParameter(&custom_wifi_html);
+  //  wifiManager.addParameter(&custom_wifi_html);
   wifiManager.addParameter(&custom_wifi_user);
   wifiManager.addParameter(&custom_wifi_password);
   wifiManager.addParameter(&custom_wifi_html2);
@@ -1376,8 +1370,6 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
 
 void Firmware_Update()
 {
-
-
   // For remote firmware update
   BearSSL::WiFiClientSecure UpdateClient;
   int freeheap = ESP.getFreeHeap();
@@ -1477,52 +1469,51 @@ void Setup_Sensor()
 
   // Test PM2.5 SPS30
 
+  ///////////////////////////////////////////////////////////////////////////////////////////
 
-///////////////////////////////////////////////////////////////////////////////////////////
+  // PMS7003 PMSA003
+  Serial.println(F("Test Plantower Sensor"));
 
-// PMS7003 PMSA003
-    Serial.println(F("Test Plantower Sensor"));
+  pmsSerial.begin(9600); // Software serial begin for PMS sensor
 
-    pmsSerial.begin(9600); // Software serial begin for PMS sensor
+  delay(1000);
 
-    delay(1000);
+  if (pms.readUntil(data))
+  {
+    Serial.println(F("Plantower sensor found!"));
+    PMSsen = true;
+    AdjPMS = true; // Por defecto se deja con ajuste
+  }
+  else
+  {
+    Serial.println(F("Could not find Plantower sensor!"));
+    PMSsen = false;
+    AdjPMS = false;
+  }
 
-    if (pms.readUntil(data))
-    {
-      Serial.println(F("Plantower sensor found!"));
-      PMSsen = true;
-      AdjPMS = true; // Por defecto se deja con ajuste
-    }
-    else
-    {
-      Serial.println(F("Could not find Plantower sensor!"));
-      PMSsen = false;
-      AdjPMS = false;
-    }
+  Serial.print(F("SHT31 test: "));
+  if (!sht31.begin(0x44))
+  { // Set to 0x45 for alternate i2c addr
+    Serial.println(F("none"));
+    SHT31sen = false;
+  }
+  else
+  {
+    Serial.println(F("OK"));
+    SHT31sen = true;
+  }
 
-    Serial.print(F("SHT31 test: "));
-    if (!sht31.begin(0x44))
-    { // Set to 0x45 for alternate i2c addr
-      Serial.println(F("none"));
-      SHT31sen = false;
-    }
-    else
-    {
-      Serial.println(F("OK"));
-      SHT31sen = true;
-    }
-
-    Serial.print(F("Heater Enabled State: "));
-    if (sht31.isHeaterEnabled())
-      Serial.println(F("ENABLED"));
-    else
-      Serial.println(F("DISABLED"));
+  Serial.print(F("Heater Enabled State: "));
+  if (sht31.isHeaterEnabled())
+    Serial.println(F("ENABLED"));
+  else
+    Serial.println(F("DISABLED"));
 }
 
 void Read_Sensor()
 { // Read PM25, temperature and humidity values
 
-if (PMSsen == true)
+  if (PMSsen == true)
   {
     if (pms.readUntil(data))
     {
@@ -1530,13 +1521,13 @@ if (PMSsen == true)
       Serial.print(F("PMS PM2.5: "));
       Serial.print(PM25_value);
       Serial.print(F(" ug/m3   "));
-        PM25_value_ori = PM25_value;
-        // PM25_value = ((562 * PM25_value_ori) / 1000) - 1; // Ecuación de ajuste resultado de 13 intercomparaciones entre PMS7003 y SPS30 por meses
-        // PM25_value = ((553 * PM25_value_ori) / 1000) + 1.3; // Segundo ajuste
-        PM25_value = ((630 * PM25_value_ori) / 1000) + 1.56; // Tercer ajuste a los que salio en Lima y pruebas aqui
-        Serial.print(F("Adjust: "));
-        Serial.print(PM25_value);
-        Serial.println(F(" ug/m3"));
+      PM25_value_ori = PM25_value;
+      // PM25_value = ((562 * PM25_value_ori) / 1000) - 1; // Ecuación de ajuste resultado de 13 intercomparaciones entre PMS7003 y SPS30 por meses
+      // PM25_value = ((553 * PM25_value_ori) / 1000) + 1.3; // Segundo ajuste
+      PM25_value = ((630 * PM25_value_ori) / 1000) + 1.56; // Tercer ajuste a los que salio en Lima y pruebas aqui
+      Serial.print(F("Adjust: "));
+      Serial.print(PM25_value);
+      Serial.println(F(" ug/m3"));
     }
     else
     {
@@ -1759,7 +1750,6 @@ void Read_EEPROM()
     aireciudadano_device_id.toCharArray(eepromConfig.aireciudadano_device_name, sizeof(eepromConfig.aireciudadano_device_name)); // Initialize aireciudadano_device_name with aireciudadano_device_id
     Serial.println(F("No EEPROM data - using default config values"));
   }
-
 }
 
 void Write_EEPROM()
@@ -1776,7 +1766,6 @@ void Write_EEPROM()
   // write the data to EEPROM
   boolean ok = EEPROM.commit();
   Serial.println((ok) ? "EEPROM Commit OK" : "EEPROM Commit failed");
-
 }
 
 void Wipe_EEPROM()
@@ -1791,7 +1780,6 @@ void Wipe_EEPROM()
   {
     Serial.println(F("EEPROM data could not be wiped from flash store"));
   }
-
 }
 
 #endif
