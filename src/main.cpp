@@ -92,6 +92,8 @@ struct MyConfigStruct
 #endif
 } eepromConfig;
 
+  char wifi_passwpa2[24];
+
 #if PreProgSensor
 // const char *ssid = "Techotyva";
 // const char *password = "Layuyux31";
@@ -694,30 +696,16 @@ void Connect_WiFi()
     Serial.print(F("Password: "));
     Serial.println(eepromConfig.wifi_password);
 
-    //    Serial.print(F("ESP.getHeapFragmentation 1: ")); // No pasa nada
-
     // Setting ESP into STATION mode only (no AP mode or dual mode)
     wifi_set_opmode(STATION_MODE);
-
-    //    Serial.print(F("ESP.getHeapFragmentation 1: ")); // Se resetea en el dhcp client start
-
     struct station_config wifi_config;
-
-    //    Serial.print(F("ESP.getHeapFragmentation 1: ")); // Se resetea en el dhcp client start
-
     memset(&wifi_config, 0, sizeof(wifi_config));
     strcpy((char *)wifi_config.ssid, wifi_ssid.c_str());
     strcpy((char *)wifi_config.password, eepromConfig.wifi_password);
-
-    //    Serial.print(F("ESP.getHeapFragmentation 1: ")); // Se resetea en la lectura del sensor nuemro 1
-
     wifi_station_set_config(&wifi_config);
     // uint8_t target_esp_mac[6] = {0x24, 0x0a, 0xc4, 0x9a, 0x58, 0x28};
     // wifi_set_macaddr(STATION_IF,target_esp_mac);
     wifi_station_set_wpa2_enterprise_auth(1);
-
-    //    Serial.print(F("ESP.getHeapFragmentation 1: ")); // Se resetea en la lectura del sensor numero 4
-
     // Clean up to be sure no old data is still inside
     wifi_station_clear_cert_key();
     wifi_station_clear_enterprise_ca_cert();
@@ -725,19 +713,16 @@ void Connect_WiFi()
     wifi_station_clear_enterprise_username();
     wifi_station_clear_enterprise_password();
     wifi_station_clear_enterprise_new_password();
-
-    //    Serial.print(F("ESP.getHeapFragmentation 1: ")); // Se resetea en la lectura del sensor numero 6
-
     // Set up authentication
     wifi_station_set_enterprise_identity((uint8 *)eepromConfig.wifi_user, strlen(eepromConfig.wifi_user));
     wifi_station_set_enterprise_username((uint8 *)eepromConfig.wifi_user, strlen(eepromConfig.wifi_user));
 
-    //    Serial.println(F("ESP.getHeapFragmentation 1: ")); // Se resetea en la lectura del sensor numero 2
+//    Serial.println(F("ESP.getHeapFragmentation 1: ")); // Se resetea en la lectura del sensor numero 2
 
     wifi_station_set_enterprise_password((uint8 *)eepromConfig.wifi_password, strlen((char *)eepromConfig.wifi_password));
     //  wifi_station_set_enterprise_password((uint8 *)eepromConfig.wifi_password, strlen(eepromConfig.wifi_password));
 
-    Serial.println(F("ESP.getHeapFragmentation 1: ")); // NO PASA NADA
+//    Serial.println(F("ESP.getHeapFragmentation 1: ")); // NO PASA NADA
 
     wifi_station_connect();
 
@@ -1007,31 +992,32 @@ void Start_Captive_Portal()
   // Captive portal parameters
 
 #if WPA2
-  //  WiFiManagerParameter custom_wifi_html("<p>Set WPA2 Enterprise</p>"); // only custom html
   WiFiManagerParameter custom_wifi_user("User", "Identity", eepromConfig.wifi_user, 24);
-  //  WiFiManagerParameter custom_wifi_password("Password", "WPA2 Enterprise Password", eepromConfig.wifi_password, 24, " readonly");
-  WiFiManagerParameter custom_wifi_password("Password", "Password", eepromConfig.wifi_password, 24);
-
-  WiFiManagerParameter custom_wifi_html2("<hr><br/>"); // only custom html
+  WiFiManagerParameter custom_wpa2_pass;
+  WiFiManagerParameter custom_wifi_html("<hr><br/>"); // only custom html
 #endif
 
   WiFiManagerParameter custom_id_name("CustomName", "Set Station Name (25 characters max):", eepromConfig.aireciudadano_device_name, 25);
-
   WiFiManagerParameter custom_sensor_latitude("Latitude", "Latitude sensor (5-4 dec digits are enough)", eepromConfig.sensor_lat, 10);
   WiFiManagerParameter custom_sensor_longitude("Longitude", "Longitude sensor", eepromConfig.sensor_lon, 10);
   WiFiManagerParameter custom_outin_type;
   WiFiManagerParameter custom_endhtml("<p></p>"); // only custom html
 
+  // Password WPA2
+
+    const char *custom_wpa2_pw = "<label for='pwpa2'>Password</label><input id='pwpa2' name='pwpa2' maxlength='64' type='password' placeholder='{pwpa2}'><input type='checkbox' onclick='f()'> Show Password";
+    new (&custom_wpa2_pass) WiFiManagerParameter(custom_wpa2_pw);
+
   // Sensor Location menu
 
   if (eepromConfig.ConfigValues[3] == '0')
   {
-    const char *custom_outin_str = "<br/><br/><label for='customOutIn'>IMPORTANT:</label><br/><input type='radio' name='customOutIn' value='0' checked> Outdoors - sensor measures outdoors air<br><input type='radio' name='customOutIn' value='1'> Indoors - sensor measures indoors air";
+    const char *custom_outin_str = "<br/><br/><label for='customOutIn'>Location:</label><br/><input type='radio' name='customOutIn' value='0' checked> Outdoors - sensor measures outdoors air<br><input type='radio' name='customOutIn' value='1'> Indoors - sensor measures indoors air";
     new (&custom_outin_type) WiFiManagerParameter(custom_outin_str);
   }
   else if (eepromConfig.ConfigValues[3] == '1')
   {
-    const char *custom_outin_str = "<br/><br/><label for='customOutIn'>IMPORTANT:</label><br/><input type='radio' name='customOutIn' value='0'> Outdoors - sensor measures outdoors air<br><input type='radio' name='customOutIn' value='1' checked> Indoors - sensor measures indoors air";
+    const char *custom_outin_str = "<br/><br/><label for='customOutIn'>Location:</label><br/><input type='radio' name='customOutIn' value='0'> Outdoors - sensor measures outdoors air<br><input type='radio' name='customOutIn' value='1' checked> Indoors - sensor measures indoors air";
     new (&custom_outin_type) WiFiManagerParameter(custom_outin_str);
   }
 
@@ -1040,8 +1026,8 @@ void Start_Captive_Portal()
 #if WPA2
   //  wifiManager.addParameter(&custom_wifi_html);
   wifiManager.addParameter(&custom_wifi_user);
-  wifiManager.addParameter(&custom_wifi_password);
-  wifiManager.addParameter(&custom_wifi_html2);
+  wifiManager.addParameter(&custom_wpa2_pass);
+  wifiManager.addParameter(&custom_wifi_html);
 #endif
 
   wifiManager.addParameter(&custom_id_name);
@@ -1084,9 +1070,22 @@ void Start_Captive_Portal()
     Serial.print(F("WiFi user: "));
     Serial.println(eepromConfig.wifi_user);
   }
-  if (eepromConfig.wifi_password != custom_wifi_password.getValue())
+//  if (eepromConfig.wifi_password != custom_wifi_password.getValue())
+//  {
+//    strncpy(eepromConfig.wifi_password, custom_wifi_password.getValue(), sizeof(eepromConfig.wifi_password));
+//    eepromConfig.wifi_password[sizeof(eepromConfig.wifi_password) - 1] = '\0';
+//    write_eeprom = true;
+//    Serial.println(F("Wifi pass write_eeprom = true"));
+//    Serial.print(F("WiFi password: "));
+//    Serial.println(eepromConfig.wifi_password);
+//  }
+
+//  Serial.print("custom_wpa2_pass.getValue(): ");
+//  Serial.println(wifi_passwpa2);
+
+  if (eepromConfig.wifi_password != custom_wpa2_pass.getValue())
   {
-    strncpy(eepromConfig.wifi_password, custom_wifi_password.getValue(), sizeof(eepromConfig.wifi_password));
+    strncpy(eepromConfig.wifi_password, wifi_passwpa2, sizeof(eepromConfig.wifi_password));
     eepromConfig.wifi_password[sizeof(eepromConfig.wifi_password) - 1] = '\0';
     write_eeprom = true;
     Serial.println(F("Wifi pass write_eeprom = true"));
@@ -1189,6 +1188,25 @@ String getParam(String name)
   }
   CustomValue = atoi(value.c_str());
   return value;
+}
+
+void saveParamCallback()
+{
+  Serial.println(F("[CALLBACK] saveParamCallback fired"));
+  Serial.println("Value customSenPM = " + getParam("customSenPM"));
+  CustomValtotal = CustomValue;
+  Serial.println("Value cutomSenHYT = " + getParam("customSenHYT"));
+  CustomValtotal = CustomValtotal + (CustomValue * 10);
+  Serial.println("Value customDisplay = " + getParam("customDisplay"));
+  CustomValtotal = CustomValtotal + (CustomValue * 100);
+  Serial.println("Value customBoard = NA");
+  // CustomValtotal = CustomValtotal + (CustomValue * 1000);
+  Serial.println("Value customOutIn = " + getParam("customOutIn"));
+  CustomValtotal = CustomValtotal + (CustomValue * 10000);
+  Serial.print(F("CustomValtotal: "));
+  Serial.println(CustomValtotal);
+//  Serial.println("Value password wpa2 = " + getParam("pwpa2"));
+  strncpy(wifi_passwpa2, getParam("pwpa2").c_str(), sizeof(wifi_passwpa2));
 }
 
 void Init_MQTT()
@@ -1445,23 +1463,6 @@ void update_error(int err)
 {
   Serial.printf("CALLBACK:  HTTP update fatal error code %d\n", err);
   updating = false;
-}
-
-void saveParamCallback()
-{
-  Serial.println(F("[CALLBACK] saveParamCallback fired"));
-  Serial.println("Value customSenPM = " + getParam("customSenPM"));
-  CustomValtotal = CustomValue;
-  Serial.println("Value cutomSenHYT = " + getParam("customSenHYT"));
-  CustomValtotal = CustomValtotal + (CustomValue * 10);
-  Serial.println("Value customDisplay = " + getParam("customDisplay"));
-  CustomValtotal = CustomValtotal + (CustomValue * 100);
-  Serial.println("Value customBoard = NA");
-  // CustomValtotal = CustomValtotal + (CustomValue * 1000);
-  Serial.println("Value customOutIn = " + getParam("customOutIn"));
-  CustomValtotal = CustomValtotal + (CustomValue * 10000);
-  Serial.print(F("CustomValtotal: "));
-  Serial.println(CustomValtotal);
 }
 
 void Setup_Sensor()
