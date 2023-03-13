@@ -87,7 +87,7 @@ struct MyConfigStruct
 #endif
 #endif
 #if WPA2
-  char wifi_identity[24]; // WiFi user to be used on WPA Enterprise. Default to null (not used)
+  char wifi_identity[24]; // WiFi identity to be used on WPA Enterprise. Default to null (not used)
   char wifi_password[24]; // WiFi password to be used on WPA Enterprise. Default to null (not used)
 #endif
 } eepromConfig;
@@ -948,8 +948,8 @@ void Start_Captive_Portal()
       strncpy(eepromConfig.wifi_identity, custom_wifi_identity.getValue(), sizeof(eepromConfig.wifi_identity));
       eepromConfig.wifi_identity[sizeof(eepromConfig.wifi_identity) - 1] = '\0';
       write_eeprom = true;
-      Serial.println(F("Wifi user write_eeprom = true"));
-      Serial.print(F("WiFi user: "));
+      Serial.println(F("Wifi identity write_eeprom = true"));
+      Serial.print(F("WiFi identity: "));
       Serial.println(eepromConfig.wifi_identity);
     }
 
@@ -1490,7 +1490,7 @@ void Print_Config()
   Serial.println(WiFi.SSID());
   Serial.print(F("WiFi identity for WPA2 enterprise: "));
   Serial.println(eepromConfig.wifi_identity);
-  Serial.print(F("WiFi user's password for WPA2 enterprise: "));
+  Serial.print(F("WiFi identity's password for WPA2 enterprise: "));
   Serial.println(eepromConfig.wifi_password);
 #endif
 #endif
