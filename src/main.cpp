@@ -87,12 +87,13 @@ struct MyConfigStruct
 #endif
 #endif
 #if WPA2
-  char wifi_user[24];     // WiFi user to be used on WPA Enterprise. Default to null (not used)
+  char wifi_identity[24]; // WiFi user to be used on WPA Enterprise. Default to null (not used)
   char wifi_password[24]; // WiFi password to be used on WPA Enterprise. Default to null (not used)
 #endif
 } eepromConfig;
 
 char wifi_passwpa2[24];
+bool ConfigPortalSave = false;
 
 #if PreProgSensor
 const char *ssid = "aaaaa";
@@ -205,8 +206,6 @@ WiFiClient wifi_client;
 const int WIFI_CONNECT_TIMEOUT = 10000; // 10 seconds
 int wifi_status = WL_IDLE_STATUS;
 WiFiServer wifi_server(80); // to check if it is alive
-                            // String wifi_ssid = WiFi.SSID();                  // your network SSID (name)
-                            // String wifi_password = WiFi.psk();               // your network psk password
 
 #include <ESP8266WebServer.h>
 #include <DNSServer.h>
@@ -639,9 +638,7 @@ void Print_WiFi_Status_ESP8266()
 
   // Print the received signal strength:
   Serial.print(F("Signal strength (RSSI):"));
-
   Serial.print(WiFi.RSSI());
-
   Serial.println(F(" dBm"));
 }
 
@@ -651,80 +648,53 @@ void Connect_WiFi()
   WiFi.disconnect(true); // disconnect from wifi to set new wifi connection
   WiFi.mode(WIFI_STA);   // init wifi mode
 
-#if !WPA2
+  // set up wpa2 enterprise
 
-#if ESP8266
-#if !PreProgSensor
-  WiFi.begin();
-#else
-  WiFi.begin(ssid, password);
-#endif
-#endif
+  String wifi_ssid = WiFi.SSID(); // your network SSID (name)
+  // String wifi_password = WiFi.psk()); // your network psk password
+  Serial.println(F("Attempting to authenticate with WPA2 Enterprise "));
+  Serial.print(F("SSID: "));
+  Serial.print(wifi_ssid);
+  Serial.println(F("."));
+  Serial.print(F("WiFi.SSID(): "));
+  Serial.print(WiFi.SSID());
+  Serial.println(F("."));
+  Serial.print(F("Identity: "));
+  Serial.print(eepromConfig.wifi_identity);
+  Serial.println(F("."));
+  Serial.print(F("Password: "));
+  Serial.print(eepromConfig.wifi_password);
+  Serial.println(F("."));
 
-#else
-  // #if WPA2
-  //  If there are not wifi user and wifi password defined, proceed to traight forward configuration
+  // Setting ESP into STATION mode only (no AP mode or dual mode)
+  wifi_set_opmode(STATION_MODE);
+  struct station_config wifi_config;
+  memset(&wifi_config, 0, sizeof(wifi_config));
+  strcpy((char *)wifi_config.ssid, wifi_ssid.c_str());
+  strcpy((char *)wifi_config.password, eepromConfig.wifi_password);
+  wifi_station_set_config(&wifi_config);
+  // uint8_t target_esp_mac[6] = {0x24, 0x0a, 0xc4, 0x9a, 0x58, 0x28};
+  // wifi_set_macaddr(STATION_IF,target_esp_mac);
+  wifi_station_set_wpa2_enterprise_auth(1);
+  // Clean up to be sure no old data is still inside
+  wifi_station_clear_cert_key();
+  wifi_station_clear_enterprise_ca_cert();
+  wifi_station_clear_enterprise_identity();
+  wifi_station_clear_enterprise_username();
+  wifi_station_clear_enterprise_password();
+  wifi_station_clear_enterprise_new_password();
+  // Set up authentication
+  wifi_station_set_enterprise_identity((uint8 *)eepromConfig.wifi_identity, strlen(eepromConfig.wifi_identity));
+  wifi_station_set_enterprise_username((uint8 *)eepromConfig.wifi_identity, strlen(eepromConfig.wifi_identity));
 
-  if ((strlen(eepromConfig.wifi_user) == 0) && (strlen(eepromConfig.wifi_password) == 0))
-  {
-    Serial.println(F("Attempting to authenticate..."));
+  //    Serial.println(F("ESP.getHeapFragmentation 1: ")); // Se resetea en la lectura del sensor numero 2
 
-#if ESP8266
+  wifi_station_set_enterprise_password((uint8 *)eepromConfig.wifi_password, strlen((char *)eepromConfig.wifi_password));
+  //  wifi_station_set_enterprise_password((uint8 *)eepromConfig.wifi_password, strlen(eepromConfig.wifi_password));
 
-#if !PreProgSensor
-    WiFi.begin();
-#else
-    WiFi.begin(ssid, password);
-#endif
+  //    Serial.println(F("ESP.getHeapFragmentation 1: ")); // NO PASA NADA
 
-#endif
-  }
-  else
-  {
-#if WPA2
-    // set up wpa2 enterprise
-
-    String wifi_ssid = WiFi.SSID(); // your network SSID (name)
-    // String wifi_password = WiFi.psk()); // your network psk password
-    Serial.println(F("Attempting to authenticate with WPA2 Enterprise "));
-    Serial.print(F("User: "));
-    Serial.println(eepromConfig.wifi_user);
-    Serial.print(F("Password: "));
-    Serial.println(eepromConfig.wifi_password);
-
-    // Setting ESP into STATION mode only (no AP mode or dual mode)
-    wifi_set_opmode(STATION_MODE);
-    struct station_config wifi_config;
-    memset(&wifi_config, 0, sizeof(wifi_config));
-    strcpy((char *)wifi_config.ssid, wifi_ssid.c_str());
-    strcpy((char *)wifi_config.password, eepromConfig.wifi_password);
-    wifi_station_set_config(&wifi_config);
-    // uint8_t target_esp_mac[6] = {0x24, 0x0a, 0xc4, 0x9a, 0x58, 0x28};
-    // wifi_set_macaddr(STATION_IF,target_esp_mac);
-    wifi_station_set_wpa2_enterprise_auth(1);
-    // Clean up to be sure no old data is still inside
-    wifi_station_clear_cert_key();
-    wifi_station_clear_enterprise_ca_cert();
-    wifi_station_clear_enterprise_identity();
-    wifi_station_clear_enterprise_username();
-    wifi_station_clear_enterprise_password();
-    wifi_station_clear_enterprise_new_password();
-    // Set up authentication
-    wifi_station_set_enterprise_identity((uint8 *)eepromConfig.wifi_user, strlen(eepromConfig.wifi_user));
-    wifi_station_set_enterprise_username((uint8 *)eepromConfig.wifi_user, strlen(eepromConfig.wifi_user));
-
-    //    Serial.println(F("ESP.getHeapFragmentation 1: ")); // Se resetea en la lectura del sensor numero 2
-
-    wifi_station_set_enterprise_password((uint8 *)eepromConfig.wifi_password, strlen((char *)eepromConfig.wifi_password));
-    //  wifi_station_set_enterprise_password((uint8 *)eepromConfig.wifi_password, strlen(eepromConfig.wifi_password));
-
-    //    Serial.println(F("ESP.getHeapFragmentation 1: ")); // NO PASA NADA
-
-    wifi_station_connect();
-
-#endif
-  }
-#endif
+  wifi_station_connect();
 
   // Timestamp for connection timeout
   int wifi_timeout_start = millis();
@@ -752,96 +722,6 @@ void Connect_WiFi()
   }
 
   Print_WiFi_Status_ESP8266();
-}
-
-void Print_WiFi_Status()
-{ // Print wifi status on serial monitor
-
-  // Get current status
-  //  WL_CONNECTED: assigned when connected to a WiFi network;
-  //  WL_NO_SHIELD: assigned when no WiFi shield is present;
-  //  WL_IDLE_STATUS: it is a temporary status assigned when WiFi.begin() is called and remains active until the number of attempts expires (resulting in WL_CONNECT_FAILED) or a connection is established (resulting in WL_CONNECTED);
-  //  WL_NO_SSID_AVAIL: assigned when no SSID are available;
-  //  WL_SCAN_COMPLETED: assigned when the scan networks is completed;
-  //  WL_CONNECT_FAILED: assigned when the connection fails for all the attempts;
-  //  WL_CONNECTION_LOST: assigned when the connection is lost;
-  //  WL_DISCONNECTED: assigned when disconnected from a network;
-
-  Serial.println(F("wifi_status: "));
-  Serial.println(F(""));
-#if (OLED66 == true || OLED96 == true)
-  pageStart();
-  u8g2.setFont(u8g2_font_5x7_tf);
-  u8g2.setCursor(10, dh / 2);
-#endif
-  switch (WiFi.status())
-  {
-  case WL_CONNECTED:
-    Serial.println(F("WIFI CONECTADA !!!!!!!!!!!!!!!!!!!!"));
-#if (OLED66 == true || OLED96 == true)
-    u8g2.print("OK WIFI :)");
-#endif
-    break;
-  case WL_NO_SHIELD:
-    Serial.println(F("No WiFi HW detected"));
-    break;
-  case WL_IDLE_STATUS:
-    Serial.println(F("Attempting..."));
-    break;
-  case WL_NO_SSID_AVAIL:
-    Serial.println(F("No SSID available"));
-#if (OLED66 == true || OLED96 == true)
-    u8g2.print("NO WIFI :(");
-#endif
-    break;
-  case WL_SCAN_COMPLETED:
-    Serial.println(F("Networks scan completed"));
-    break;
-  case WL_CONNECT_FAILED:
-    Serial.println(F("Connect failed"));
-#if (OLED66 == true || OLED96 == true)
-    u8g2.print("NO WIFI :(");
-#endif
-    break;
-  case WL_CONNECTION_LOST:
-    Serial.println(F("Connection lost"));
-#if (OLED66 == true || OLED96 == true)
-    u8g2.print("NO WIFI :(");
-#endif
-    break;
-  case WL_DISCONNECTED:
-    Serial.println(F("Disconnected"));
-#if (OLED66 == true || OLED96 == true)
-    u8g2.print("NO WIFI :(");
-#endif
-    break;
-  default:
-    Serial.println(F("Unknown status"));
-    break;
-  }
-  Serial.println(F(""));
-  delay(3000);
-#if (OLED66 == true || OLED96 == true)
-  pageEnd();
-#endif
-
-  // Print the SSID of the network you're attached to:
-  Serial.print(F("SSID: "));
-  Serial.println(WiFi.SSID());
-
-  // Print your WiFi shield's IP address:
-  Serial.print(F("IP Address: "));
-  Serial.println(WiFi.localIP());
-
-  // Print your WiFi shield's MAC address:
-  Serial.print(F("MAC Adress: "));
-  Serial.println(WiFi.macAddress());
-
-  // Print the received signal strength:
-  Serial.print(F("Signal strength (RSSI): "));
-
-  Serial.print(WiFi.RSSI());
-  Serial.println(F(" dBm"));
 }
 
 void Check_WiFi_Server()
@@ -988,7 +868,7 @@ void Start_Captive_Portal()
   // Captive portal parameters
 
 #if WPA2
-  WiFiManagerParameter custom_wifi_user("User", "Identity", eepromConfig.wifi_user, 24);
+  WiFiManagerParameter custom_wifi_identity("User", "Identity", eepromConfig.wifi_identity, 24);
   WiFiManagerParameter custom_wpa2_pass;
   WiFiManagerParameter custom_wifi_html("<hr><br/>"); // only custom html
 #endif
@@ -1021,7 +901,7 @@ void Start_Captive_Portal()
 
 #if WPA2
   //  wifiManager.addParameter(&custom_wifi_html);
-  wifiManager.addParameter(&custom_wifi_user);
+  wifiManager.addParameter(&custom_wifi_identity);
   wifiManager.addParameter(&custom_wpa2_pass);
   wifiManager.addParameter(&custom_wifi_html);
 #endif
@@ -1034,14 +914,17 @@ void Start_Captive_Portal()
 
   wifiManager.setSaveParamsCallback(saveParamCallback);
 
-  wifiManager.setConfigPortalTimeout(captiveportaltime);
-
   const char *menu[] = {"wifi", "wifinoscan", "info", "exit", "sep", "update"};
   wifiManager.setMenu(menu, 6);
+
+  wifiManager.setConfigPortalTimeout(captiveportaltime);
 
   // it starts an access point
   // and goes into a blocking loop awaiting configuration
   // wifiManager.resetSettings(); // reset previous configurations
+  ConfigPortalSave = false;
+  Serial.print(F("ConfigPortalSave1: "));
+  Serial.println(ConfigPortalSave);
   bool res = wifiManager.startConfigPortal(wifiAP.c_str());
   if (!res)
   {
@@ -1053,86 +936,89 @@ void Start_Captive_Portal()
     Serial.println(F("Captive portal operative"));
   }
 
-  // Save parameters to EEPROM only if any of them changed
-  bool write_eeprom = false;
+  // Save parameters to EEPROM only if the Save button in the Config Portal was pressed
+
+  if (ConfigPortalSave == true)
+  {
+    bool write_eeprom = false;
 
 #if WPA2
-  if (eepromConfig.wifi_user != custom_wifi_user.getValue())
-  {
-    strncpy(eepromConfig.wifi_user, custom_wifi_user.getValue(), sizeof(eepromConfig.wifi_user));
-    eepromConfig.wifi_user[sizeof(eepromConfig.wifi_user) - 1] = '\0';
-    write_eeprom = true;
-    Serial.println(F("Wifi user write_eeprom = true"));
-    Serial.print(F("WiFi user: "));
-    Serial.println(eepromConfig.wifi_user);
-  }
+    if (eepromConfig.wifi_identity != custom_wifi_identity.getValue())
+    {
+      strncpy(eepromConfig.wifi_identity, custom_wifi_identity.getValue(), sizeof(eepromConfig.wifi_identity));
+      eepromConfig.wifi_identity[sizeof(eepromConfig.wifi_identity) - 1] = '\0';
+      write_eeprom = true;
+      Serial.println(F("Wifi user write_eeprom = true"));
+      Serial.print(F("WiFi user: "));
+      Serial.println(eepromConfig.wifi_identity);
+    }
 
-  if (eepromConfig.wifi_password != custom_wpa2_pass.getValue())
-  {
-    strncpy(eepromConfig.wifi_password, wifi_passwpa2, sizeof(eepromConfig.wifi_password));
-    eepromConfig.wifi_password[sizeof(eepromConfig.wifi_password) - 1] = '\0';
-    write_eeprom = true;
-    Serial.println(F("Wifi pass write_eeprom = true"));
-    Serial.print(F("WiFi password: "));
-    Serial.println(eepromConfig.wifi_password);
-  }
+    if (eepromConfig.wifi_password != custom_wpa2_pass.getValue())
+    {
+      strncpy(eepromConfig.wifi_password, wifi_passwpa2, sizeof(eepromConfig.wifi_password));
+      eepromConfig.wifi_password[sizeof(eepromConfig.wifi_password) - 1] = '\0';
+      write_eeprom = true;
+      Serial.println(F("Wifi pass write_eeprom = true"));
+      Serial.print(F("WiFi password: "));
+      Serial.println(eepromConfig.wifi_password);
+    }
 #endif
 
-  if (eepromConfig.aireciudadano_device_name != custom_id_name.getValue())
-  {
-    strncpy(eepromConfig.aireciudadano_device_name, custom_id_name.getValue(), sizeof(eepromConfig.aireciudadano_device_name));
-    eepromConfig.aireciudadano_device_name[sizeof(eepromConfig.aireciudadano_device_name) - 1] = '\0';
-    write_eeprom = true;
-    Serial.println(F("Devname write_eeprom = true"));
-    Serial.print(F("Device name (captive portal): "));
-    Serial.println(eepromConfig.aireciudadano_device_name);
-  }
+    if (eepromConfig.aireciudadano_device_name != custom_id_name.getValue())
+    {
+      strncpy(eepromConfig.aireciudadano_device_name, custom_id_name.getValue(), sizeof(eepromConfig.aireciudadano_device_name));
+      eepromConfig.aireciudadano_device_name[sizeof(eepromConfig.aireciudadano_device_name) - 1] = '\0';
+      write_eeprom = true;
+      Serial.println(F("Devname write_eeprom = true"));
+      Serial.print(F("Device name (captive portal): "));
+      Serial.println(eepromConfig.aireciudadano_device_name);
+    }
 
-  if (eepromConfig.sensor_lat != custom_sensor_latitude.getValue())
-  {
-    strncpy(eepromConfig.sensor_lat, custom_sensor_latitude.getValue(), sizeof(eepromConfig.sensor_lat));
-    eepromConfig.sensor_lat[sizeof(eepromConfig.sensor_lat) - 1] = '\0';
-    write_eeprom = true;
-    Serial.println(F("Lat write_eeprom = true"));
-    Serial.print(F("Sensor Latitude: "));
-    Serial.println(eepromConfig.sensor_lat);
-    latitudef = atof(eepromConfig.sensor_lat); // Cambiar de string a float
-  }
+    if (eepromConfig.sensor_lat != custom_sensor_latitude.getValue())
+    {
+      strncpy(eepromConfig.sensor_lat, custom_sensor_latitude.getValue(), sizeof(eepromConfig.sensor_lat));
+      eepromConfig.sensor_lat[sizeof(eepromConfig.sensor_lat) - 1] = '\0';
+      write_eeprom = true;
+      Serial.println(F("Lat write_eeprom = true"));
+      Serial.print(F("Sensor Latitude: "));
+      Serial.println(eepromConfig.sensor_lat);
+      latitudef = atof(eepromConfig.sensor_lat); // Cambiar de string a float
+    }
 
-  if (eepromConfig.sensor_lon != custom_sensor_longitude.getValue())
-  {
-    strncpy(eepromConfig.sensor_lon, custom_sensor_longitude.getValue(), sizeof(eepromConfig.sensor_lon));
-    eepromConfig.sensor_lon[sizeof(eepromConfig.sensor_lon) - 1] = '\0';
-    write_eeprom = true;
-    Serial.println(F("Lon write_eeprom = true"));
-    Serial.print(F("Sensor Longitude: "));
-    Serial.println(eepromConfig.sensor_lon);
-    longitudef = atof(eepromConfig.sensor_lon); // Cambiar de string a float
-  }
+    if (eepromConfig.sensor_lon != custom_sensor_longitude.getValue())
+    {
+      strncpy(eepromConfig.sensor_lon, custom_sensor_longitude.getValue(), sizeof(eepromConfig.sensor_lon));
+      eepromConfig.sensor_lon[sizeof(eepromConfig.sensor_lon) - 1] = '\0';
+      write_eeprom = true;
+      Serial.println(F("Lon write_eeprom = true"));
+      Serial.print(F("Sensor Longitude: "));
+      Serial.println(eepromConfig.sensor_lon);
+      longitudef = atof(eepromConfig.sensor_lon); // Cambiar de string a float
+    }
 
-  CustomValTotalString[9] = {0};
-  sprintf(CustomValTotalString, "%8d", CustomValtotal);
-  if (CustomValTotalString[0] == ' ')
-    CustomValTotalString[0] = '0';
-  if (CustomValTotalString[1] == ' ')
-    CustomValTotalString[1] = '0';
-  if (CustomValTotalString[2] == ' ')
-    CustomValTotalString[2] = '0';
-  if (CustomValTotalString[3] == ' ')
-    CustomValTotalString[3] = '0';
-  if (CustomValTotalString[4] == ' ')
-    CustomValTotalString[4] = '0';
-  if (CustomValTotalString[5] == ' ')
-    CustomValTotalString[5] = '0';
-  if (CustomValTotalString[6] == ' ')
-    CustomValTotalString[6] = '0';
-  if (CustomValTotalString[7] == ' ')
-    CustomValTotalString[7] = '0';
-  if (CustomValTotalString[8] == ' ')
-    CustomValTotalString[8] = '0';
+    CustomValTotalString[9] = {0};
+    sprintf(CustomValTotalString, "%8d", CustomValtotal);
+    if (CustomValTotalString[0] == ' ')
+      CustomValTotalString[0] = '0';
+    if (CustomValTotalString[1] == ' ')
+      CustomValTotalString[1] = '0';
+    if (CustomValTotalString[2] == ' ')
+      CustomValTotalString[2] = '0';
+    if (CustomValTotalString[3] == ' ')
+      CustomValTotalString[3] = '0';
+    if (CustomValTotalString[4] == ' ')
+      CustomValTotalString[4] = '0';
+    if (CustomValTotalString[5] == ' ')
+      CustomValTotalString[5] = '0';
+    if (CustomValTotalString[6] == ' ')
+      CustomValTotalString[6] = '0';
+    if (CustomValTotalString[7] == ' ')
+      CustomValTotalString[7] = '0';
+    if (CustomValTotalString[8] == ' ')
+      CustomValTotalString[8] = '0';
 
-  Serial.print(F("CustomValTotalString: "));
-  Serial.println(CustomValTotalString);
+    Serial.print(F("CustomValTotalString: "));
+    Serial.println(CustomValTotalString);
 
     if (eepromConfig.ConfigValues != CustomValTotalString)
     {
@@ -1144,13 +1030,20 @@ void Start_Captive_Portal()
       Serial.println(eepromConfig.ConfigValues);
     }
 
-  if (write_eeprom)
-  {
-    Write_EEPROM();
-    Serial.println(F("write_eeprom = true Final"));
-    ESP.restart();
-  }
+    if (write_eeprom)
+    {
+      Serial.print(F("ConfigPortalSave3: "));
+      Serial.println(ConfigPortalSave);
 
+      ConfigPortalSave = false;
+      Serial.print(F("ConfigPortalSave4: "));
+      Serial.println(ConfigPortalSave);
+
+      Write_EEPROM();
+      Serial.println(F("write_eeprom = true Final"));
+      ESP.restart();
+    }
+  }
   InCaptivePortal = false;
 }
 
@@ -1182,6 +1075,9 @@ void saveParamCallback()
   Serial.print(F("CustomValtotal: "));
   Serial.println(CustomValtotal);
   strncpy(wifi_passwpa2, getParam("p").c_str(), sizeof(wifi_passwpa2));
+  ConfigPortalSave = true;
+  Serial.print(F("ConfigPortalSave2: "));
+  Serial.println(ConfigPortalSave);
 }
 
 void Init_MQTT()
@@ -1590,9 +1486,11 @@ void Print_Config()
   Serial.print(F("Configuration values: "));
   Serial.println(eepromConfig.ConfigValues);
 #if WPA2
-  Serial.print(F("WiFi user for WPA enterprise: "));
-  Serial.println(eepromConfig.wifi_user);
-  Serial.print(F("WiFi user's password for WPA enterprise: "));
+  Serial.print(F("WiFi SSID for WPA2 enterprise: "));
+  Serial.println(WiFi.SSID());
+  Serial.print(F("WiFi identity for WPA2 enterprise: "));
+  Serial.println(eepromConfig.wifi_identity);
+  Serial.print(F("WiFi user's password for WPA2 enterprise: "));
   Serial.println(eepromConfig.wifi_password);
 #endif
 #endif
@@ -1719,7 +1617,7 @@ void Read_EEPROM()
 
     // Read saved data
     EEPROM.get(0, eepromConfig);
-    //    Print_Config();
+    // Print_Config();
   }
   else
   {
