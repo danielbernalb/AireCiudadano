@@ -6,11 +6,9 @@
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Pendientes:
-// OK: Funcionamiento correcto con WPA2 enterprise con ESP8266
 // Revisar actualizacion por orden a una direccion web repositorio y cada caso especifico: sin pantalla, OLED96, OLED66, wifi, bluetooth, etc
 // SDy RTC version independiente o unido a BT y Wifi
 // Mqtt para recepcion de ordenes desde el portal
-// OK: Revisar Warnings
 // Version solo para proyecto U Rosario: PMS7003 y deteccion del SHT31 asi define interior o exterior. Sin opciones menu en Portal Cautivo. SD definir como lee y RTC
 //
 // MODIFICACIONES EXTERNAS:
@@ -37,15 +35,9 @@
 
 // Fin definiciones opcionales Wifi
 
-bool SPS30sen = false;      // Sensor Sensirion SPS30
-bool SEN5Xsen = false;      // Sensor Sensirion SEN5X
 bool PMSsen = false;        // Sensor Plantower PMS
 bool AdjPMS = false;        // PMS sensor adjust
 bool SHT31sen = false;      // Sensor SHT31 humedad y temperatura
-bool AM2320sen = false;     // Sensor AM2320 humedad y temperatura
-bool TDisplay = false;      // Set to true if Board TTGO T-Display is used
-bool OLED66 = false;        // Set to true if you use a OLED Diplay 0.66 inch 64x48
-bool OLED96 = false;        // Set to true if you use a OLED Diplay 0.96 inch 128x64
 bool ExtAnt = false;        // External antenna
 bool AmbInOutdoors = false; // Set to true if your sensor is indoors measuring outside environment, false if is outdoors
 
@@ -64,12 +56,6 @@ uint8_t Swver;
 // Init to default values; if they have been chaged they will be readed later, on initialization
 struct MyConfigStruct
 {
-#if Bluetooth
-  uint16_t BluetoothTime = 10;        // Bluetooth Time
-  char aireciudadano_device_name[30]; // Device name; default to aireciudadano_device_id
-// #elif SDyRTC
-//   uint16_t SDyRTCTime = 10; // SDyRTC Time
-#elif Wifi
   uint16_t PublicTime = 1; // Publication Time
                            //  uint16_t MQTT_port = 80;                           // MQTT port; Default Port on 80
                            //  char MQTT_server[30] = "sensor.aireciudadano.com"; // MQTT server url or public IP address.
@@ -83,8 +69,7 @@ struct MyConfigStruct
   char sensor_lat[10] = "4.69375";   // Aquí colocar la Latitud del sensor
   char sensor_lon[10] = "-74.09382"; // Colocar la Longitud del sensor
   char ConfigValues[10] = "000010111";
-  char aireciudadano_device_name[30] = "AireCiudadano_DBB_01"; // Nombre de la estacion
-#endif
+  char aireciudadano_device_name[30] = "AireCiudadano_Test01"; // Nombre de la estacion
 #endif
 #if WPA2
   char wifi_identity[24]; // WiFi identity to be used on WPA Enterprise. Default to null (not used)
@@ -131,7 +116,6 @@ bool NoSensor = false;
 unsigned int measurements_loop_duration = 1000; // 1 second
 unsigned long measurements_loop_start;          // holds a timestamp for each control loop start
 
-unsigned int Bluetooth_loop_time;
 unsigned int Con_loop_times = 0;
 
 unsigned int SDyRTC_loop_time;
@@ -146,15 +130,6 @@ unsigned long errors_loop_start;           // holds a timestamp for each error l
 
 #include <Wire.h>
 
-// OLED display
-unsigned int mcount, ecode = 0;
-int lastDrawedLine = 0;
-unsigned int inthumi = 0;
-unsigned int inttemp = 0;
-unsigned int cursor = 0;
-bool toggleLive;
-int dw = 0; // display width
-int dh = 0; // display height
 
 #define Sensor_SDA_pin 21 // Define the SDA pin used for the SCD30
 #define Sensor_SCL_pin 22 // Define the SCL pin used for the SCD30
@@ -290,7 +265,7 @@ void setup()
   if (Resetvar == 1 || Resetvar == 2 || Resetvar == 3 || Resetvar == 4)
   {
     ResetFlag = false;
-    Serial.print(F("Resetvar: false"));
+    Serial.print(F("Resetvar: false   "));
   }
   Serial.print(F("Resetvar: "));
   Serial.println(Resetvar);
@@ -1564,27 +1539,12 @@ void Aireciudadano_Characteristics()
   // AmbInOutdoors (Indoors) = 4096
   // Brownout trick (true) = 8192
 
-  if (SPS30sen)
-    IDn = IDn + 1;
-  if (SEN5Xsen)
-    IDn = IDn + 2;
   if (PMSsen)
     IDn = IDn + 4;
   if (AdjPMS)
     IDn = IDn + 8;
   if (SHT31sen)
     IDn = IDn + 16;
-  if (AM2320sen)
-    IDn = IDn + 32;
-
-  if (TDisplay)
-    IDn = IDn + 256;
-  if (OLED66)
-    IDn = IDn + 512;
-  if (OLED96)
-    IDn = IDn + 1024;
-  if (ExtAnt)
-    IDn = IDn + 2048;
   if (AmbInOutdoors)
     IDn = IDn + 4096;
 #if BrownoutOFF
