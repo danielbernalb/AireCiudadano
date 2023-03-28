@@ -71,13 +71,11 @@ struct MyConfigStruct
   char ConfigValues[10] = "000010111";
   char aireciudadano_device_name[30] = "AireCiudadano_Test01"; // Nombre de la estacion
 #endif
-#if WPA2
   char wifi_identity[24]; // WiFi identity to be used on WPA Enterprise. Default to null (not used)
   char wifi_password[24]; // WiFi password to be used on WPA Enterprise. Default to null (not used)
-#endif
 } eepromConfig;
 
-char wifi_passwpa2[24];
+char wifi_passwpa2[24];   // REVISAR!!!!!!!!!!!!!!!!!!!
 bool ConfigPortalSave = false;
 
 #if PreProgSensor
@@ -166,11 +164,7 @@ WiFiManager wifiManager;
 extern "C"
 {
 #include "user_interface.h"
-
-#if WPA2
 #include "wpa2_enterprise.h"
-#endif
-
 #include "c_types.h"
   bool PortalFlag = false;
 }
@@ -221,7 +215,8 @@ bool Calibrating = false;
 #include "RTClib.h"
 
 const int chipSelect = 10;
-uint16_t SDyRTCtime = 15;
+uint16_t SDyRTCtime = 60;       // Valor de Sample Time de SD y RTC
+byte SDreset = 0;
 
 File dataFile;
 
@@ -412,9 +407,16 @@ void setup()
     // rtc.adjust(DateTime(2022, 8, 20, 15, 18, 0));
   }
   else
-    Serial.println(F("ds1307 is running, no changes"));
-
+  {
+    if (analogRead(A0) > 200)
+    {
+      rtc.adjust(DateTime(__DATE__, __TIME__));
+      Serial.println(F("RTC set at compilation time!"));
+    }
+    else
+      Serial.println(F("ds1307 is running, no changes"));
     //  rtc.adjust(DateTime(2022, 8, 20, 15, 18, 0));
+  }
 
 #endif
 
@@ -475,17 +477,10 @@ void loop()
   {
     float PM25f;
 
-    ///// DEBUG Samples
-    // Serial.println(PM25_accumulated);
-    // Serial.print(F("#samples: "));
-    // Serial.println(PM25_samples);
     PM25f = PM25_accumulated / PM25_samples;
     pm25int = round(PM25f);
-    // Serial.println(pm25int);
-    ///// END DEBUG Samples
-    Serial.print(F("PM25: "));
-    Serial.print(pm25int);
-    Serial.print(F("   "));
+    Serial.print(F("PM2.5: "));
+    Serial.println(pm25int);
     ReadHyT();
     Write_SD();
     PM25_accumulated = 0.0;
@@ -495,8 +490,8 @@ void loop()
 
 #else
   // MQTT loop
-  if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 60000))
-  //  if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 6000))
+  //if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 60000))
+    if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 6000))
   //  if ((millis() - MQTT_loop_start) >= (1 * 60000))
   {
 
@@ -645,7 +640,7 @@ void Connect_WiFi()
   wifi_set_opmode(STATION_MODE);
   struct station_config wifi_config;
   memset(&wifi_config, 0, sizeof(wifi_config));
-  strcpy((char *)wifi_config.ssid, wifi_ssid.c_str());
+  strcpy((char *)wifi_config.ssid, wifi_ssid.c_str());    ///REVISAR!!!!!!!!!!!!!!!
   strcpy((char *)wifi_config.password, eepromConfig.wifi_password);
   wifi_station_set_config(&wifi_config);
   // uint8_t target_esp_mac[6] = {0x24, 0x0a, 0xc4, 0x9a, 0x58, 0x28};
@@ -827,8 +822,8 @@ void Start_Captive_Portal()
 { // Run a captive portal to configure WiFi and MQTT
   InCaptivePortal = true;
   String wifiAP;
-  const int captiveportaltime = 60;
-  //    const int captiveportaltime = 13;
+  //const int captiveportaltime = 60;
+      const int captiveportaltime = 13;
 
   wifiAP = aireciudadano_device_id;
   Serial.println(wifiAP);
@@ -842,11 +837,9 @@ void Start_Captive_Portal()
 
   // Captive portal parameters
 
-#if WPA2
-  WiFiManagerParameter custom_wifi_identity("User", "Identity", eepromConfig.wifi_identity, 24);
+  WiFiManagerParameter custom_wifi_identity("User", "Identity", eepromConfig.wifi_identity, 24);   // REVISAR!!!!!!!!!!!!!!
   WiFiManagerParameter custom_wpa2_pass;
   WiFiManagerParameter custom_wifi_html("<hr><br/>"); // only custom html
-#endif
 
   WiFiManagerParameter custom_id_name("CustomName", "Set Station Name (25 characters max):", eepromConfig.aireciudadano_device_name, 25);
   WiFiManagerParameter custom_sensor_latitude("Latitude", "Latitude sensor (5-4 dec digits are enough)", eepromConfig.sensor_lat, 10);
@@ -857,29 +850,27 @@ void Start_Captive_Portal()
   // Password WPA2
 
   const char *custom_wpa2_pw = "<label for='p'>Password</label><input id='p' name='p' maxlength='64' type='password' placeholder='{p}'><input type='checkbox' onclick='f()'> Show Password";
-  new (&custom_wpa2_pass) WiFiManagerParameter(custom_wpa2_pw);
+  new (&custom_wpa2_pass) WiFiManagerParameter(custom_wpa2_pw);      //REVISAR!!!!!!!!!!!
 
   // Sensor Location menu
 
   if (eepromConfig.ConfigValues[3] == '0')
   {
-    const char *custom_outin_str = "<br/><br/><label for='customOutIn'>Location:</label><br/><input type='radio' name='customOutIn' value='0' checked> Outdoors - sensor measures outdoors air<br><input type='radio' name='customOutIn' value='1'> Indoors - sensor measures indoors air";
+    const char *custom_outin_str = "<br/><br/><label for='customOutIn'>Location:</label><br/><input type='radio' name='customOutIn' value='1'> Indoors - sensor measures indoors air<br><input type='radio' name='customOutIn' value='0' checked> Outdoors - sensor measures outdoors air";
     new (&custom_outin_type) WiFiManagerParameter(custom_outin_str);
   }
   else if (eepromConfig.ConfigValues[3] == '1')
   {
-    const char *custom_outin_str = "<br/><br/><label for='customOutIn'>Location:</label><br/><input type='radio' name='customOutIn' value='0'> Outdoors - sensor measures outdoors air<br><input type='radio' name='customOutIn' value='1' checked> Indoors - sensor measures indoors air";
+    const char *custom_outin_str = "<br/><br/><label for='customOutIn'>Location:</label><br/><input type='radio' name='customOutIn' value='1' checked> Indoors - sensor measures indoors air<br><input type='radio' name='customOutIn' value='0'> Outdoors - sensor measures outdoors air";
     new (&custom_outin_type) WiFiManagerParameter(custom_outin_str);
   }
 
   // Add parameters
 
-#if WPA2
   //  wifiManager.addParameter(&custom_wifi_html);
   wifiManager.addParameter(&custom_wifi_identity);
-  wifiManager.addParameter(&custom_wpa2_pass);
+  wifiManager.addParameter(&custom_wpa2_pass);        // REVISAR!!!!!!!!!
   wifiManager.addParameter(&custom_wifi_html);
-#endif
 
   wifiManager.addParameter(&custom_id_name);
   wifiManager.addParameter(&custom_sensor_latitude);
@@ -888,11 +879,11 @@ void Start_Captive_Portal()
   wifiManager.addParameter(&custom_endhtml);
 
   wifiManager.setSaveParamsCallback(saveParamCallback);
+  
+  wifiManager.setConfigPortalTimeout(captiveportaltime);
 
   const char *menu[] = {"wifi", "wifinoscan", "info", "exit", "sep", "update"};
   wifiManager.setMenu(menu, 6);
-
-  wifiManager.setConfigPortalTimeout(captiveportaltime);
 
   // it starts an access point
   // and goes into a blocking loop awaiting configuration
@@ -917,7 +908,6 @@ void Start_Captive_Portal()
   {
     bool write_eeprom = false;
 
-#if WPA2
     if (eepromConfig.wifi_identity != custom_wifi_identity.getValue())
     {
       strncpy(eepromConfig.wifi_identity, custom_wifi_identity.getValue(), sizeof(eepromConfig.wifi_identity));
@@ -937,7 +927,6 @@ void Start_Captive_Portal()
       Serial.print(F("WiFi password: "));
       Serial.println(eepromConfig.wifi_password);
     }
-#endif
 
     if (eepromConfig.aireciudadano_device_name != custom_id_name.getValue())
     {
@@ -1049,7 +1038,7 @@ void saveParamCallback()
   CustomValtotal = CustomValtotal + (CustomValue * 10000);
   Serial.print(F("CustomValtotal: "));
   Serial.println(CustomValtotal);
-  strncpy(wifi_passwpa2, getParam("p").c_str(), sizeof(wifi_passwpa2));
+  strncpy(wifi_passwpa2, getParam("p").c_str(), sizeof(wifi_passwpa2));   // REVISAR!!!!!!!!!!!
   ConfigPortalSave = true;
   Serial.print(F("ConfigPortalSave2: "));
   Serial.println(ConfigPortalSave);
@@ -1154,13 +1143,9 @@ void Send_Message_Cloud_App_MQTT()
   Serial.println(F(" dBm"));
 
   if (AmbInOutdoors)
-  {
     inout = 1;
-  }
   else
-  {
     inout = 0;
-  }
 
   sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
 
@@ -1460,14 +1445,12 @@ void Print_Config()
   Serial.println(eepromConfig.sensor_lon);
   Serial.print(F("Configuration values: "));
   Serial.println(eepromConfig.ConfigValues);
-#if WPA2
   Serial.print(F("WiFi SSID for WPA2 enterprise: "));
   Serial.println(WiFi.SSID());
   Serial.print(F("WiFi identity for WPA2 enterprise: "));
   Serial.println(eepromConfig.wifi_identity);
   Serial.print(F("WiFi identity's password for WPA2 enterprise: "));
   Serial.println(eepromConfig.wifi_password);
-#endif
 #endif
   Serial.println(F("#######################################"));
 }
@@ -1630,7 +1613,7 @@ void Write_SD()
   // make a string for assembling the data to log:
 
   dataString = now.toString(buf1);
-  dataString += "_PM:";
+  dataString += "_PM25:";
   dataString += pm25int;
   if (SHT31sen == true || AM2320sen == true)
   {
@@ -1640,18 +1623,32 @@ void Write_SD()
     dataString += temp;
   }
 
-  dataFile.println(dataString);
+    Serial.print(F("SDreset: "));
+    Serial.println(SDreset);
+    SDreset = SDreset + 1;
 
-  // print to the serial port too:
-  Serial.print(F("Data SD: "));
-  Serial.println(dataString);
+  if (SDreset == 180)
+  {
+    Serial.print(F("SD reset 180 cycles"));
+    SDreset = 0;
+    ESP.restart();
+  }
 
-  //  Serial.print(F("Unixtime = "));
-  //  Serial.print(now.unixtime());
-  //  Serial.println(F(" s"));
-  //  Serial.print(now.unixtime() / 86400L);
-  //  Serial.println(F("d"));
+  dataFile = SD.open("datalog.txt", FILE_WRITE);
 
-  dataFile.flush();
+  // if the file is available, write to it:
+  if (dataFile)
+  {
+    dataFile.println(dataString);
+    dataFile.close();
+    // print to the serial port too:
+    Serial.print(F("SD write: "));
+    Serial.println(dataString);
+  }
+  // if the file isn't open, pop up an error:
+  else
+  {
+    Serial.println("SD write: error opening file");
+  }
 }
 #endif
