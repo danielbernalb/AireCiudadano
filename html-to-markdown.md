@@ -123,7 +123,7 @@ Baja la App **Sensirion MyAmbience** para conectarte al medidor AireCiudadano y 
 
 *   [Download for iOS](https://apps.apple.com/ch/app/sensirion-myambience-co2/id1529131572)
 
-<img src="https://aireciudadano.com/wp-content/uploads/photo_2023-01-27_22-07-30-511x1024.jpg"  width="60%" height="60%">
+<img src="https://aireciudadano.com/wp-content/uploads/photo_2023-01-27_22-07-30-511x1024.jpg"  width="40%" height="40%">
 
 En este pdf del fabricante página 5, encontrarás una buena explicación del funcionamiento de la App:
 
