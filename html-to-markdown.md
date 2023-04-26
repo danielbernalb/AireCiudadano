@@ -91,7 +91,7 @@ Selecciona el uso que le quieres dar a de tu medidor y versión sin pantalla:
 
 2\. Si lo que necesitas es hacer mediciones móviles usando batería escoge las opciones “Móvil – Bluetooth”:
 
-![](https://aireciudadano.com/wp-content/uploads/2022/06/IMG_20220609_122753-975x1024.jpg)
+<img src="https://aireciudadano.com/wp-content/uploads/2022/06/IMG_20220609_122753-975x1024.jpg"  width="50%" height="50%">
 
 En este video se explica detalladamente cómo programar el firmware, hasta el minuto 3:30 aplica para versión móvil y fija, después sólo a la versión fija:
 
@@ -105,11 +105,7 @@ En este video se explica detalladamente cómo programar el firmware, hasta el mi
 
 Puedes conectar tu medidor AireCiudadano a una red Wifi y dejarlo en modo fijo – estático (en el mismo lugar todo el tiempo). Así reportaras a la red fija AireCiudadano y podrás ver los datos monitoreados en la página web:
 
-[![](https://aireciudadano.com/wp-content/uploads/MapaAC-1024x463.jpg)
-
 ![](https://aireciudadano.com/wp-content/uploads/MapaAC-1024x463.jpg)
-
-](https://sensor.aireciudadano.com/)
 
 [https://sensor.aireciudadano.com/](https://sensor.aireciudadano.com/)
 
@@ -127,7 +123,7 @@ Baja la App **Sensirion MyAmbience** para conectarte al medidor AireCiudadano y 
 
 *   [Download for iOS](https://apps.apple.com/ch/app/sensirion-myambience-co2/id1529131572)
 
-![](https://aireciudadano.com/wp-content/uploads/photo_2023-01-27_22-07-30-511x1024.jpg)
+<img src="https://aireciudadano.com/wp-content/uploads/photo_2023-01-27_22-07-30-511x1024.jpg"  width="60%" height="60%">
 
 En este pdf del fabricante página 5, encontrarás una buena explicación del funcionamiento de la App:
 
