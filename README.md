@@ -113,9 +113,9 @@ En este video se explica detalladamente cómo programar el firmware, hasta el mi
 
 Puedes conectar tu medidor AireCiudadano a una red Wifi y dejarlo en modo fijo – estático (en el mismo lugar todo el tiempo). Así reportaras a la red fija AireCiudadano y podrás ver los datos monitoreados en la página web:
 
+[https://sensor.aireciudadano.com/](https://sensor.aireciudadano.com/)
 ![](https://aireciudadano.com/wp-content/uploads/MapaAC-1024x463.jpg)
 
-[https://sensor.aireciudadano.com/](https://sensor.aireciudadano.com/)
 
 Para la configuración del medidor en Modo fijo sigue el siguiente video:
 
@@ -131,7 +131,7 @@ Baja la App **Sensirion MyAmbience** para conectarte al medidor AireCiudadano y 
 
 *   [Download for iOS](https://apps.apple.com/ch/app/sensirion-myambience-co2/id1529131572)
 
-<img src="https://aireciudadano.com/wp-content/uploads/photo_2023-01-27_22-07-30-511x1024.jpg"  width="25%" height="25%">
+<img src="https://aireciudadano.com/wp-content/uploads/photo_2023-01-27_22-07-30-511x1024.jpg"  width="30%" height="30%">
 
 En este pdf del fabricante página 5, encontrarás una buena explicación del funcionamiento de la App:
 
