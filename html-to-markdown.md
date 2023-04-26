@@ -14,8 +14,6 @@ El medidor tiene las mismas partes, lo que varía es el modelo de sensor de Mate
 
 ![](https://aireciudadano.com/wp-content/uploads/IMG_20230126_153505-001-1024x577.jpg)
 
-![](https://aireciudadano.com/wp-content/uploads/IMG_20230126_153505-001-1024x577.jpg)
-
 ### **1\. Board Wemos D1 o ESPduino 32.**
 
 [Board muy popular y económica](https://www.google.com/search?q=wemos+d1+board), se consigue en cualquier país, en Latam por Mercadolibre o tiendas de electrónica.
@@ -23,8 +21,6 @@ El medidor tiene las mismas partes, lo que varía es el modelo de sensor de Mate
 ### **2\. Sensor, opciones:**
 
 #### **2.1. Sensirion SPS30**
-
-![](https://aireciudadano.com/wp-content/uploads/IMG_20230126_153505-002-1024x766.jpg)
 
 ![](https://aireciudadano.com/wp-content/uploads/IMG_20230126_153505-002-1024x766.jpg)
 
@@ -40,8 +36,6 @@ Link compra [Mouser](https://co.mouser.com/ProductDetail/Sensirion/SPS30?qs=lc2O
 
 ![](https://aireciudadano.com/wp-content/uploads/IMG_20230126_153332-001-1024x768.jpg)
 
-![](https://aireciudadano.com/wp-content/uploads/IMG_20230126_153332-001-1024x768.jpg)
-
 Una opción más económica que el SPS30 y también de buena calidad. Hay 3 modelos: [SEN55](https://sensirion.com/products/catalog/SEN55/), [SEN54](https://sensirion.com/products/catalog/SEN54/) y [SEN50](https://sensirion.com/products/catalog/SEN50/).
 
 Link compra [Mouser](https://co.mouser.com/ProductDetail/Sensirion/SEN55-SDN-T?qs=MyNHzdoqoQLyWUzejWkZfg%3D%3D), [Digikey](https://www.digikey.com/es/products/detail/sensirion-ag/SEN55-SDN-T/16342756).
@@ -51,8 +45,6 @@ Link compra [Mouser](https://co.mouser.com/ProductDetail/Sensirion/SEN55-SDN-T?q
 **En contra:** tamaño grande, importación desde USA.
 
 **2.3. Plantower PMS7003.**
-
-![](https://aireciudadano.com/wp-content/uploads/IMG_20230126_153852-001-1024x768.jpg)
 
 ![](https://aireciudadano.com/wp-content/uploads/IMG_20230126_153852-001-1024x768.jpg)
 
@@ -73,17 +65,11 @@ Link compra [Mouser](https://co.mouser.com/ProductDetail/Sensirion/SEN55-SDN-T?q
 
 ![](https://aireciudadano.com/wp-content/uploads/Con4_1.jpg)
 
-![](https://aireciudadano.com/wp-content/uploads/Con4_1.jpg)
-
 ### **Sensirion S**EN5X
 
 ![](https://aireciudadano.com/wp-content/uploads/Con3_1.jpg)
 
-![](https://aireciudadano.com/wp-content/uploads/Con3_1.jpg)
-
 ### **Plantower PMS7003**
-
-![](https://aireciudadano.com/wp-content/uploads/Con5_1.jpg)
 
 ![](https://aireciudadano.com/wp-content/uploads/Con5_1.jpg)
 
@@ -108,11 +94,7 @@ Selecciona el uso que le quieres dar a de tu medidor y versión sin pantalla:
 
 ![](https://aireciudadano.com/wp-content/uploads/Sin-titulo-3.jpg)
 
-![](https://aireciudadano.com/wp-content/uploads/Sin-titulo-3.jpg)
-
 2\. Si lo que necesitas es hacer mediciones móviles usando batería escoge las opciones “Móvil – Bluetooth”:
-
-![](https://aireciudadano.com/wp-content/uploads/2022/06/IMG_20220609_122753-975x1024.jpg)
 
 ![](https://aireciudadano.com/wp-content/uploads/2022/06/IMG_20220609_122753-975x1024.jpg)
 
@@ -156,8 +138,6 @@ Baja la App **Sensirion MyAmbience** para conectarte al medidor AireCiudadano y 
 *   [Download for Android](https://play.google.com/store/apps/details?id=com.sensirion.myam)
 
 *   [Download for iOS](https://apps.apple.com/ch/app/sensirion-myambience-co2/id1529131572)
-
-![](https://aireciudadano.com/wp-content/uploads/photo_2023-01-27_22-07-30-511x1024.jpg)
 
 ![](https://aireciudadano.com/wp-content/uploads/photo_2023-01-27_22-07-30-511x1024.jpg)
 
