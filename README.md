@@ -1,4 +1,4 @@
-# Medidor AireCiudadano: sensores de PM2.5, humedad y temperatura. Opcional VOC y NOx
+# Medidor AireCiudadano: sensor de PM2.5, opcional: humedad y temperatura, VOCs y NOx
 
 ![Logo](https://github.com/danielbernalb/aireciudadano/blob/main/img/Logo_aireciudadano2.jpg)
 
@@ -131,7 +131,7 @@ Baja la App **Sensirion MyAmbience** para conectarte al medidor AireCiudadano y 
 
 *   [Download for iOS](https://apps.apple.com/ch/app/sensirion-myambience-co2/id1529131572)
 
-<img src="https://aireciudadano.com/wp-content/uploads/photo_2023-01-27_22-07-30-511x1024.jpg"  width="30%" height="30%">
+<img src="https://aireciudadano.com/wp-content/uploads/photo_2023-01-27_22-07-30-511x1024.jpg"  width="25%" height="25%">
 
 En este pdf del fabricante página 5, encontrarás una buena explicación del funcionamiento de la App:
 
