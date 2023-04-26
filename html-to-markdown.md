@@ -71,13 +71,10 @@ Link compra [Mouser](https://co.mouser.com/ProductDetail/Sensirion/SEN55-SDN-T?q
 
 ![](https://aireciudadano.com/wp-content/uploads/Con5_1.jpg)
 
-[](https://github.com/danielbernalb/LibreCO2/blob/main/INSTRUCCIONES%20en%20Espa%C3%B1ol.md#video-explicativo)Video explicativo paso a paso:
+Video explicativo paso a paso:
 
-[![](https://aireciudadano.com/wp-content/uploads/VideoCP.jpg)
+[![](https://aireciudadano.com/wp-content/uploads/VideoCP.jpg)](https://www.youtube.com/watch?v=Jkhu_hSVWPI "Video ensamblaje")
 
-![](https://aireciudadano.com/wp-content/uploads/VideoCP.jpg)
-
-](https://www.youtube.com/watch?v=Jkhu_hSVWPI)
 
 **3\. Programar el Firmware (código en la board)**
 --------------------------------------------------
@@ -98,11 +95,8 @@ Selecciona el uso que le quieres dar a de tu medidor y versión sin pantalla:
 
 En este video se explica detalladamente cómo programar el firmware, hasta el minuto 3:30 aplica para versión móvil y fija, después sólo a la versión fija:
 
-[![](https://aireciudadano.com/wp-content/uploads/VideoIns.jpg)
+[![](https://aireciudadano.com/wp-content/uploads/VideoIns.jpg)](https://youtu.be/IA3pZgo-LZg "Video instalación")
 
-![](https://aireciudadano.com/wp-content/uploads/VideoIns.jpg)
-
-](https://youtu.be/IA3pZgo-LZg)
 
 **4\. Modos de uso del medidor: Wifi y Bluetooth.**
 ---------------------------------------------------
@@ -121,11 +115,7 @@ Puedes conectar tu medidor AireCiudadano a una red Wifi y dejarlo en modo fijo �
 
 Para la configuración del medidor en Modo fijo sigue el siguiente video:
 
-[![](https://aireciudadano.com/wp-content/uploads/VideoWifi.jpg)
-
-![](https://aireciudadano.com/wp-content/uploads/VideoWifi.jpg)
-
-](https://youtu.be/-J3zXF87OIE)
+[![](https://aireciudadano.com/wp-content/uploads/VideoWifi.jpg)](https://youtu.be/-J3zXF87OIE "Video configuraciíon Wifi")
 
 ### **4.2. Modo móvil Bluetooh:**
 
