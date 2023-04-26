@@ -5,8 +5,6 @@ En esta guía construiremos una versión sencilla de un medidor de Material Part
 
 ![](https://aireciudadano.com/wp-content/uploads/IMG_20230126_154103-1024x576.jpg)
 
-![](https://aireciudadano.com/wp-content/uploads/IMG_20230126_154103-1024x576.jpg)
-
 **1\. Materiales:**
 -------------------
 
@@ -22,7 +20,7 @@ El medidor tiene las mismas partes, lo que varía es el modelo de sensor de Mate
 
 #### **2.1. Sensirion SPS30**
 
-![](https://aireciudadano.com/wp-content/uploads/IMG_20230126_153505-002-1024x766.jpg)
+<img src="https://aireciudadano.com/wp-content/uploads/IMG_20230126_153505-002-1024x766.jpg"  width="35%" height="35%">
 
 [El SPS30](https://sensirion.com/products/catalog/SPS30/) es el que más usamos en AireCiudadano por su calidad aunque es el más costoso del mercado. Tiene certificación de calidad MCERTS.
 
@@ -34,7 +32,7 @@ Link compra [Mouser](https://co.mouser.com/ProductDetail/Sensirion/SPS30?qs=lc2O
 
 #### 2.**2\. Sensirion SEN5X**
 
-![](https://aireciudadano.com/wp-content/uploads/IMG_20230126_153332-001-1024x768.jpg)
+<img src="https://aireciudadano.com/wp-content/uploads/IMG_20230126_153332-001-1024x768.jpg"  width="35%" height="35%">
 
 Una opción más económica que el SPS30 y también de buena calidad. Hay 3 modelos: [SEN55](https://sensirion.com/products/catalog/SEN55/), [SEN54](https://sensirion.com/products/catalog/SEN54/) y [SEN50](https://sensirion.com/products/catalog/SEN50/).
 
@@ -46,7 +44,7 @@ Link compra [Mouser](https://co.mouser.com/ProductDetail/Sensirion/SEN55-SDN-T?q
 
 **2.3. Plantower PMS7003.**
 
-![](https://aireciudadano.com/wp-content/uploads/IMG_20230126_153852-001-1024x768.jpg)
+<img src="https://aireciudadano.com/wp-content/uploads/IMG_20230126_153852-001-1024x768.jpg"  width="35%" height="35%">
 
 [El PMS7003](https://www.espruino.com/datasheets/PMS7003.pdf) es el más barato y popular, tiene un aceptable desempeño.
 
