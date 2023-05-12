@@ -74,5 +74,3 @@ void displayPrefSaveIcon(bool enable);
 void updateError(unsigned int error);
 void pageStart();
 void pageEnd();
-void mic_i2s_init();
-void mic_i2s_reader_task(void *parameter);
