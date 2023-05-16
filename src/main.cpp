@@ -2423,16 +2423,6 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
     return;
   }
 
-  // Update name
-  if (jsonBuffer["name"] != "")
-  {
-    strncpy(eepromConfig.aireciudadano_device_name, jsonBuffer["name"].as<const char *>(), sizeof(eepromConfig.aireciudadano_device_name));
-    eepromConfig.aireciudadano_device_name[sizeof(eepromConfig.aireciudadano_device_name) - 1] = '\0';
-    Serial.print(F("AireCiudadano custom name (json buffer): "));
-    Serial.println(eepromConfig.aireciudadano_device_name);
-    write_eeprom = true;
-  }
-
   // Publication Time
 
   tempcustom = uint16_t(jsonBuffer["warning"]);
@@ -2469,113 +2459,6 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
     write_eeprom = true;
   }
 
-  // CustomSenPM
-
-#if !Rosver
-
-  tempcustom = ((uint16_t)jsonBuffer["altitude_compensation"]);
-  if (tempcustom != 0)
-  {
-    tempcustom = tempcustom - 1;
-    Serial.print("Value customSenPM = ");
-    Serial.println(tempcustom);
-    CustomValtotal2 = tempcustom;
-  }
-  else
-#endif
-    CustomValtotal2 = ((int)(eepromConfig.ConfigValues[7]) - 48);
-
-    // CustomSenHYT
-
-#if !Rosver
-
-  tempcustom = ((uint16_t)jsonBuffer["FRC_value"]);
-
-  if (tempcustom != 0)
-  {
-    tempcustom = tempcustom - 1;
-    Serial.print("Value customSenHYT = ");
-    Serial.println(tempcustom);
-    CustomValtotal2 = CustomValtotal2 + (tempcustom * 10);
-  }
-  else
-#endif
-    CustomValtotal2 = CustomValtotal2 + ((int)eepromConfig.ConfigValues[6] - 48) * 10;
-
-  // CustomOutIn
-
-  tempcustom = ((uint16_t)jsonBuffer["MQTT_port"]);
-
-  if (tempcustom != 0)
-  {
-    tempcustom = tempcustom - 1;
-    Serial.print("Value customSenOutIn = ");
-    Serial.println(tempcustom);
-    CustomValtotal2 = CustomValtotal2 + (tempcustom * 10000);
-  }
-  else
-    CustomValtotal2 = CustomValtotal2 + ((int)eepromConfig.ConfigValues[3] - 48) * 10000;
-
-  CustomValTotalString[9] = {0};
-  sprintf(CustomValTotalString, "%8d", CustomValtotal2);
-  if (CustomValTotalString[0] == ' ')
-    CustomValTotalString[0] = '0';
-  if (CustomValTotalString[1] == ' ')
-    CustomValTotalString[1] = '0';
-  if (CustomValTotalString[2] == ' ')
-    CustomValTotalString[2] = '0';
-  if (CustomValTotalString[3] == ' ')
-    CustomValTotalString[3] = '0';
-  if (CustomValTotalString[4] == ' ')
-    CustomValTotalString[4] = '0';
-  if (CustomValTotalString[5] == ' ')
-    CustomValTotalString[5] = '0';
-  if (CustomValTotalString[6] == ' ')
-    CustomValTotalString[6] = '0';
-  if (CustomValTotalString[7] == ' ')
-    CustomValTotalString[7] = '0';
-  if (CustomValTotalString[8] == ' ')
-    CustomValTotalString[8] = '0';
-
-  Serial.print(F("CustomValTotalString: "));
-  Serial.println(CustomValTotalString);
-
-  if (CustomValtotal2 == 0)
-  {
-    Serial.println(F("No configuration sensor values ​​chosen, no changes will be stored"));
-  }
-  else
-  {
-    strncpy(eepromConfig.ConfigValues, CustomValTotalString, sizeof(eepromConfig.ConfigValues));
-    eepromConfig.ConfigValues[sizeof(eepromConfig.ConfigValues) - 1] = '\0';
-    write_eeprom = true;
-    Serial.println(F("CustomVal write_eeprom = true"));
-    Serial.print(F("Configuration Values: "));
-    Serial.println(eepromConfig.ConfigValues);
-  }
-
-  Aireciudadano_Characteristics(); // PENDIENTE!!!!
-
-  // print info
-  Serial.println(F("MQTT update - message processed"));
-  //  Print_Config();
-
-  // if update flag has been enabled, update to latest bin
-  // It has to be the last option, to allow to save EEPROM if required
-  if (((jsonBuffer["update"]) && (jsonBuffer["update"] == "ON")))
-  {
-    // Update firmware to latest bin
-    Serial.println(F("Update firmware to latest bin"));
-    Firmware_Update();
-  }
-
-  // If factory reset has been enabled, just do it
-  if ((jsonBuffer["factory_reset"]) && (jsonBuffer["factory_reset"] == "ON"))
-  {
-    Wipe_EEPROM(); // Wipe EEPROM
-    ESP.restart();
-  }
-
   // save the new values if the flag was set
   if (write_eeprom)
   {
@@ -2583,10 +2466,6 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
     Write_EEPROM();
     ESP.restart();
   }
-
-  // If reboot, just do it, without cleaning the EEPROM
-  //  if ((jsonBuffer["reboot"]) && (jsonBuffer["reboot"] == "ON"))
-  //    ESP.restart();
 }
 
 void Firmware_Update()
