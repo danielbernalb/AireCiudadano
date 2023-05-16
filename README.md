@@ -137,5 +137,5 @@ En este pdf del fabricante página 5, encontrarás una buena explicación del fu
 
 [https://sensirion.com/media/documents/F8D0AE28/617BC2FB/Sensirion\_Humidity\_Sensors\_SHT4x\_Smart-Gadget\_User-Guide.pdf](https://sensirion.com/media/documents/F8D0AE28/617BC2FB/Sensirion_Humidity_Sensors_SHT4x_Smart-Gadget_User-Guide.pdf)
 
-Cualquier duda que tengas puedes contactarnos por correo electrónico ([info@aireciudadano.com](mailto:info@aireciudadano.com)) o a nuestras redes sociales [@aireciudadano](https://twitter.com/AireCiudadano)[  
+Cualquier duda que tengas puedes contactarnos por correo electrónico ([info@aireciudadano.com](mailto:info@aireciudadano.com)) o a nuestras redes sociales [@aireciudadano](https://twitter.com/AireCiudadano)[  <<<<<<< AireCiudadano1.96_mergemain_15mayo2023
 ](https://sensirion.com/media/documents/F8D0AE28/617BC2FB/Sensirion_Humidity_Sensors_SHT4x_Smart-Gadget_User-Guide.pdf)
