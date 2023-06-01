@@ -24,7 +24,8 @@
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
 #define ESP8285 false    // Set to true for SHT4x sensor
 #define CO2sensor false  // Set to true in case you use a ESP8285 switch
-#define SHT4x false      // Set to true for CO2 sensors: SCD30 and SenseAir S8
+#define SHT4x true       // Set to true for CO2 sensors: SCD30 and SenseAir S8
+#define Influxver true   // Set to true for InfluxDB version
 
 #define SiteAltitude 0 // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
 // #define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
@@ -480,6 +481,10 @@ char received_payload[384];
 String MQTT_send_topic;
 String MQTT_receive_topic;
 
+#if Influxver
+byte Influxseconds = 60;
+#endif
+
 // #define MQTT_VERSION MQTT_VERSION_3_1
 
 // JSON
@@ -775,8 +780,11 @@ void setup()
 
 #if Wifi
   // Set MQTT topics
+#if !Influxver
   MQTT_send_topic = "measurement"; // measurement are sent to this topic
-  // MQTT_send_topic = "measurementfix";                          // measurementfix are sent to this topic
+#else
+  MQTT_send_topic = "measurementinflux"; // topic para InfluxDB
+#endif
   MQTT_receive_topic = "config/" + aireciudadano_device_id; // Config messages will be received in config/id
 #endif
 
@@ -1160,9 +1168,13 @@ void loop()
   else
   {
     // MQTT loop
+#if !Influxver
     if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 60000))
-    //  if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 6000))
+    //  if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 5000))
     //  if ((millis() - MQTT_loop_start) >= (1 * 60000))
+#else
+    if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 1000 * Influxseconds))
+#endif
     {
       // New timestamp for the loop start time
       MQTT_loop_start = millis();
@@ -1706,7 +1718,11 @@ void Check_WiFi_Server()                       // Server access by http when you
             client.print("sensor.aireciudadano.com");
             client.println("<br>");
             client.print("MQTT Port: ");
+#if !Influxver
             client.print("80");
+#else
+            client.print("30183");
+#endif
             client.println("<br>");
             client.print("Sensor latitude: ");
             client.print(eepromConfig.sensor_lat);
@@ -2258,7 +2274,11 @@ void Init_MQTT()
   Serial.print(F("sensor.aireciudadano.com"));
   Serial.print(F(":"));
   //  Serial.println(eepromConfig.MQTT_port);
+#if !Influxver
   Serial.println(F("80"));
+#else
+  Serial.println(F("30183"));       // InfluxDB port
+#endif
 
 #if !ESP8266
   MQTT_client.setBufferSize(512); // to receive messages up to 512 bytes length (default is 256)
@@ -2267,7 +2287,11 @@ void Init_MQTT()
 #endif
 
   //  MQTT_client.setServer(eepromConfig.MQTT_server, eepromConfig.MQTT_port);
+#if !Influxver
   MQTT_client.setServer("sensor.aireciudadano.com", 80);
+#else
+  MQTT_client.setServer("sensor.aireciudadano.com", 30183);
+#endif
   MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
 
   MQTT_client.connect(aireciudadano_device_id.c_str());
@@ -2397,19 +2421,27 @@ void Send_Message_Cloud_App_MQTT()
       nox = 0;
     else
       nox = round(noxIndex);
-
+#if !Influxver
     sprintf(MQTT_message, "{id: %s, PM25: %d, VOC: %d, NOx: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, voc, nox, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
-    // sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"VOC\": %d, \"NOx\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, voc, nox, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId); // for Telegraf
+#else
+    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"VOC\": %d, \"NOx\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, voc, nox, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId); // for Telegraf
+#endif
   }
   else
   {
     if (AdjPMS == true)
-      sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
-    // sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId); // for Telegraf
+#if !Influxver
+    sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
+#else
+    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId); // for Telegraf
+#endif
 
     else
-      sprintf(MQTT_message, "{id: %s, PM25: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
-    // sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId); // for Telegraf
+#if !Influxver
+     sprintf(MQTT_message, "{id: %s, PM25: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
+#else
+     sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId); // for Telegraf
+#endif
   }
   Serial.print(MQTT_message);
   Serial.println();
