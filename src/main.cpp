@@ -3131,6 +3131,8 @@ if (PMSsen == true)
       Serial.println(F("Could not find Plantower sensor!"));
     }
 
+#endif
+
 #if !Rosver
 #if Wifi
   }
@@ -3694,6 +3696,7 @@ void printSerialNumber()
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
+
 #if !SoundMeter
 
 void ReadHyT()
