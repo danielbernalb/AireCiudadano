@@ -25,6 +25,7 @@
 #define ESP8285 false    // Set to true for SHT4x sensor
 #define CO2sensor false  // Set to true in case you use a ESP8285 switch
 #define SHT4x true       // Set to true for CO2 sensors: SCD30 and SenseAir S8
+#define SoundMeter false // set to true for Sound Meter
 #define Influxver true   // Set to true for InfluxDB version
 
 #define SiteAltitude 0 // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
@@ -146,6 +147,7 @@ float humidity;                 // Read humidity in %
 int PM25_samples = 0;           // Counts de number of samples for a MQTT period
 int pm25int;                    // PM25 publicado
 int pm25intori;
+float dBAmax = 0;
 
 int temp;
 int humi;
@@ -345,6 +347,7 @@ PMS::DATA data;
 #define PMS_RX 2 // PMS RX pin
 #endif
 
+#if !SoundMeter
 SoftwareSerial pmsSerial(PMS_TX, PMS_RX); // SoftwareSerial(rxPin, txPin)
 
 PMS pms(pmsSerial);
@@ -355,6 +358,8 @@ PMS::DATA data;
 
 PMS pms(Serial);
 PMS::DATA data;
+
+#endif
 
 #endif
 
@@ -579,6 +584,15 @@ const char *customHtml = R"(
 #endif
 
 bool FlagLED = false;
+
+#if SoundMeter
+#if !ESP8266
+#define ESP32_RX 16 // ESP_MEMS TX pin
+#else
+#define ESP8266_RX 14 // ESP_MEMS TX pin
+SoftwareSerial SerialESP(ESP8266_RX, 16);
+#endif
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // SETUP
@@ -837,10 +851,12 @@ void setup()
 
   // Initialize and warm up PM25 sensor
 
-#if !CO2sensor
-  Setup_Sensor();
-#else
+#if CO2sensor
   Setup_CO2sensor();
+#elif SoundMeter
+  Setup_SoundMeter();
+#else
+  Setup_Sensor();  
 #endif
 
   // Init control loops
@@ -929,7 +945,7 @@ void setup()
 #endif
 
   // Get device id
-#if Rosver
+#if (Rosver || SoundMeter)
   IDn = 0;
   Aireciudadano_Characteristics();
 #endif
@@ -1002,10 +1018,12 @@ void loop()
 
     // Read sensors
 
-#if !CO2sensor
-    Read_Sensor();
-#else
+#if CO2sensor
     Read_CO2sensor();
+#elif SoundMeter
+    Read_SoundMeter();
+#else
+    Read_Sensor();
 #endif
 
     if (FlagLED == true)
@@ -1122,15 +1140,21 @@ void loop()
     float PM25f;
     PM25f = PM25_accumulated / PM25_samples;
     pm25int = round(PM25f);
-#if !CO2sensor
+#if CO2sensor
+    Serial.print(F("CO2: "));
+    Serial.print(pm25int);
+    Serial.println(F(" ppm"));
+#elif SoundMeter
+    Serial.print(F("SP level Aw: "));
+    Serial.print(PM25f, 1);
+    Serial.print(F(" dBA    Max: "));
+    Serial.print(dBAmax, 1);
+    Serial.println(F(" dBA"));   
+#else
     Serial.print(F("PM2.5: "));
     Serial.print(pm25int);
     Serial.print(F(" ug/m3"));
     Serial.print(F("   "));
-#else
-    Serial.print(F("CO2: "));
-    Serial.print(pm25int);
-    Serial.println(F(" ppm"));
 #endif
     ReadHyT();
     Write_Bluetooth();
@@ -1140,6 +1164,7 @@ void loop()
     PM25_accumulated = 0.0;
     PM25_samples = 0.0;
     Con_loop_times = 0;
+    dBAmax = 0.0;
   }
 
 #elif (Wifi || SDyRTC || Rosver)
@@ -1157,11 +1182,14 @@ void loop()
       pm25int = round(PM25f);
       Serial.print(F("PM2.5: "));
       Serial.println(pm25int);
+#if !SoundMeter
       ReadHyT();
+#endif
       Write_SD();
       PM25_accumulated = 0.0;
       PM25_samples = 0.0;
       Con_loop_times = 0;
+      dBAmax = 0.0;
     }
 #endif
   }
@@ -1193,6 +1221,7 @@ void loop()
       PM25_accumulated = 0.0;
       PM25_accumulated_ori = 0.0;
       PM25_samples = 0.0;
+      dBAmax = 0.0;
     }
   }
 #endif
@@ -1732,8 +1761,12 @@ void Check_WiFi_Server()                       // Server access by http when you
             client.println("<br>");
             client.println("------");
             client.println("<br>");
+#if SoundMeter
+            client.print("SP level Aw: ");
+            client.print(PM25_value); //!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#else
             client.print("PM2.5: ");
-            client.print(PM25_value);
+            client.print(PM25_value); //!!!!!!!!!!!!!!!!!!!!!!!!!!!
             client.println("<br>");
             client.print("Temperature: ");
             client.print(temp);
@@ -1741,6 +1774,7 @@ void Check_WiFi_Server()                       // Server access by http when you
             client.print("Humidity: ");
             client.print(humi);
             client.println("<br>");
+#endif
             client.println("------");
             client.println("<br>");
 
@@ -1867,7 +1901,7 @@ void Start_Captive_Portal()
   WiFiManagerParameter custom_wifi_html("<p>Set WPA2 Enterprise</p>"); // only custom html
   WiFiManagerParameter custom_wifi_user("User", "WPA2 Enterprise identity", eepromConfig.wifi_user, 24);
   WiFiManagerParameter custom_wpa2_pass;
-#if !Rosver
+#if !(Rosver || SoundMeter)
   WiFiManagerParameter custom_wifi_html2("<p></p>"); // only custom html
 #else
   WiFiManagerParameter custom_wifi_html2("<hr><br/>"); // only custom html
@@ -1880,7 +1914,7 @@ void Start_Captive_Portal()
   WiFiManagerParameter custom_id_name("CustomName", "Set Station Name (25 characters max):", eepromConfig.aireciudadano_device_name, 25);
 #endif
 
-#if !Rosver
+#if !(Rosver || SoundMeter)
   char Ptime[5];
   itoa(eepromConfig.PublicTime, Ptime, 10);
   WiFiManagerParameter custom_public_time("Ptime", "Set Publication Time in minutes:", Ptime, 4);
@@ -1888,7 +1922,7 @@ void Start_Captive_Portal()
 #endif
   WiFiManagerParameter custom_sensor_latitude("Latitude", "Latitude (5-4 dec digits are enough)", eepromConfig.sensor_lat, 10);
   WiFiManagerParameter custom_sensor_longitude("Longitude", "Longitude (5-4 dec)", eepromConfig.sensor_lon, 10);
-#if !Rosver
+#if !(Rosver|| SoundMeter)
   WiFiManagerParameter custom_sensorPM_type;
   WiFiManagerParameter custom_sensorHYT_type;
   WiFiManagerParameter custom_display_type;
@@ -1900,7 +1934,7 @@ void Start_Captive_Portal()
   WiFiManagerParameter custom_endhtml("<p></p>"); // only custom html
   WiFiManagerParameter custom_endhtmlup2("<hr>"); // only custom html
 
-#if !Rosver
+#if !(Rosver || SoundMeter)
   // Sensor PM menu
 
   if (eepromConfig.ConfigValues[7] == '0')
@@ -2033,13 +2067,13 @@ void Start_Captive_Portal()
 #endif
 
   wifiManager.addParameter(&custom_id_name);
-#if !Rosver
+#if !(Rosver || SoundMeter)
   wifiManager.addParameter(&custom_public_time);
   wifiManager.addParameter(&custom_sensor_html);
 #endif
   wifiManager.addParameter(&custom_sensor_latitude);
   wifiManager.addParameter(&custom_sensor_longitude);
-#if !Rosver
+#if !(Rosver || SoundMeter)
   wifiManager.addParameter(&custom_sensorPM_type);
   wifiManager.addParameter(&custom_sensorHYT_type);
   wifiManager.addParameter(&custom_display_type);
@@ -2099,7 +2133,7 @@ void Start_Captive_Portal()
     eepromConfig.aireciudadano_device_name[sizeof(eepromConfig.aireciudadano_device_name) - 1] = '\0';
     Serial.println(F("Devname write_eeprom = true"));
 
-#if !Rosver
+#if !(Rosver || SoundMeter)
     eepromConfig.PublicTime = atoi(custom_public_time.getValue());
     Serial.println(F("PublicTime write_eeprom = true"));
 #endif
@@ -2374,14 +2408,28 @@ void Send_Message_Cloud_App_MQTT()
   float pm25fori;
   int8_t RSSI;
   int8_t inout;
+  int8_t dBAmaxint;
+//  long pm25SP;
 
   Serial.print(F("Sending MQTT message to the send topic: "));
   Serial.println(MQTT_send_topic);
   pm25f = PM25_accumulated / PM25_samples;
+//#if SoundMeter
+//   Serial.print("pm25f1: ");
+   Serial.println(pm25f);
+//   pm25SP = (long) (pm25f * 10L);
+//   pm25f = (float) pm25SP / 10.0;
+//   Serial.print("pm25f2: ");
+//   Serial.println(pm25f);
+//#endif
   pm25int = round(pm25f);
+// Serial.println(pm25int);
   pm25fori = PM25_accumulated_ori / PM25_samples;
   pm25intori = round(pm25fori);
+  dBAmaxint = round(dBAmax);
+#if !SoundMeter
   ReadHyT();
+#endif
 
   RSSI = WiFi.RSSI();
 
@@ -2535,7 +2583,7 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
 
   // CustomSenPM
 
-#if !Rosver
+#if !(Rosver || SoundMeter)
 
   tempcustom = ((uint16_t)jsonBuffer["altitude_compensation"]);
   if (tempcustom != 0)
@@ -2551,7 +2599,7 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
 
     // CustomSenHYT
 
-#if !Rosver
+#if !(Rosver || SoundMeter)
 
   tempcustom = ((uint16_t)jsonBuffer["FRC_value"]);
 
@@ -2704,6 +2752,9 @@ void Firmware_Update()
 #elif OLED66display
   Serial.println("Firmware WI66");
   t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI66.bin");
+#elif SoundMeter
+  Serial.println("Firmware WISP SoundMeter");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISP.bin");
 #else
   Serial.println("Firmware WISP");
   t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISP.bin");
@@ -2718,6 +2769,9 @@ void Firmware_Update()
 #elif OLED66display
   Serial.println("Firmware WI66 WPA2");
   t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI66WPA2.bin");
+#elif SoundMeter
+  Serial.println("Firmware WISP SoundMeter");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISPWPA2.bin");
 #else
   Serial.println("Firmware WISP WPA2");
   t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISPWPA2.bin");
@@ -2817,6 +2871,9 @@ void Firmware_Update()
 #else
 #if Rosver
   Serial.println("Firmware ESP8266WISP_Rosver");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISP_Rosver.bin");
+#elif SoundMeter
+  Serial.println("Firmware ESP8266WISP_SoundMeter");
   t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISP_Rosver.bin");
 #else
   Serial.println("Firmware ESP8266WISP");
@@ -3046,15 +3103,16 @@ if (PMSsen == true)
 #endif
 
 #else
-
+#if !SoundMeter
 #if !ESP8266SH
   pmsSerial.begin(9600); // Software serial begin for PMS sensor
+#endif
 #endif
                          //  Serial.println(F("Test5"));
 #endif
 
     delay(1000);
-
+#if !SoundMeter
     if (pms.readUntil(data))
     {
       Serial.println(F("Plantower sensor found!"));
@@ -3134,6 +3192,8 @@ if (PMSsen == true)
 #endif
 #endif
 }
+
+#if !SoundMeter
 
 void Read_Sensor()
 { // Read PM25, temperature and humidity values
@@ -3260,6 +3320,8 @@ void Read_Sensor()
   else
     NoSensor = true;
 }
+
+#endif
 
 #if CO2sensor
 void Setup_CO2sensor()
@@ -3403,11 +3465,61 @@ void Read_CO2sensor()
 
 #endif
 
+#if SoundMeter
+
+void Setup_SoundMeter()
+{
+  Serial.println("Config Sound Meter ESP_MEMS");
+#if !ESP8266
+  Serial2.begin(115200, SERIAL_8N1, ESP32_RX, 17);
+#else
+  SerialESP.begin(9600);
+#endif
+}
+
+void Read_SoundMeter()
+{
+//Serial.println("Read Sound Meter ESP_MEMS");
+  String frame;
+#if !ESP8266
+  if (Serial2.available() != 0)
+  {
+    frame = Serial2.readStringUntil('\n');
+    PM25_value = frame.toFloat();
+    if (PM25_value > 255)
+      PM25_value = 255;
+    if (PM25_value > dBAmax)
+      dBAmax = PM25_value;
+    Serial.print("SP level Aw: ");
+    Serial.print(PM25_value);
+    Serial.print(" dBA    ");
+    Serial.print("Max: ");
+    Serial.print(dBAmax);
+    Serial.println(" dBA");
+  }
+#else
+    frame = SerialESP.readStringUntil('\n');
+    PM25_value = frame.toFloat();
+    if (PM25_value > 255)
+      PM25_value = 255;
+    if (PM25_value > dBAmax)
+      dBAmax = PM25_value;
+    Serial.print("SP level Aw: ");
+    Serial.print(PM25_value);
+    Serial.print(" dBA    ");
+    Serial.print("Max: ");
+    Serial.print(dBAmax);
+    Serial.println(" dBA");
+#endif
+}
+
+#endif
+
 /**
  * @brief : read and display device info
  */
 
-#if !Rosver
+#if !(Rosver || SoundMeter)
 void GetDeviceInfo()
 {
   char buf[32];
@@ -3582,6 +3694,8 @@ void printSerialNumber()
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
+#if !SoundMeter
+
 void ReadHyT()
 {
   //  SHT31 or SHT4x
@@ -3689,6 +3803,8 @@ void ReadHyT()
   }
 #endif
 }
+
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -4124,7 +4240,7 @@ void Get_AireCiudadano_DeviceId()
 void Aireciudadano_Characteristics()
 {
 #if !Bluetooth
-#if !Rosver
+#if !(Rosver || SoundMeter)
   Serial.print(F("eepromConfig.ConfigValues: "));
   Serial.println(eepromConfig.ConfigValues);
 
@@ -4235,7 +4351,7 @@ void Aireciudadano_Characteristics()
   Serial.println(F("WPA2 security"));
 #endif
 
-#else
+#elif Rosver
   Serial.print(F("eepromConfig.ConfigValues: "));
   Serial.println(eepromConfig.ConfigValues);
   Serial.print(F("eepromConfig.ConfigValues[3]: "));
@@ -4289,6 +4405,30 @@ void Aireciudadano_Characteristics()
   Serial.println(F("WPA2 security"));
 #endif
 
+#else         // SoundMeter
+
+  Serial.print(F("eepromConfig.ConfigValues: "));
+  Serial.println(eepromConfig.ConfigValues);
+  Serial.print(F("eepromConfig.ConfigValues[3]: "));
+  Serial.println(eepromConfig.ConfigValues[3]);
+  if (eepromConfig.ConfigValues[3] == '0')
+  {
+    AmbInOutdoors = false;
+    Serial.println(F("Outdoors"));
+  }
+  else
+  {
+    AmbInOutdoors = true;
+    Serial.println(F("Indoors"));
+  }
+
+    Serial.println(F("Sound Meter MEMES sensor"));
+
+#if !WPA2
+  Serial.println(F("No WPA2"));
+#else
+  Serial.println(F("WPA2 security"));
+#endif
 
 #endif
 
@@ -4299,7 +4439,7 @@ void Aireciudadano_Characteristics()
   // SHT31sen = 16
   // AM2320sen =32
   // SDflag = 64
-  //        = 128
+  // SPmeter = 128
   // TDisplay = 256
   // OLED66 = 512
   // OLED96 = 1024
@@ -4326,6 +4466,9 @@ void Aireciudadano_Characteristics()
     IDn = IDn + 64;
 #if SaveSDyRTC
     IDn = IDn + 64;
+#endif
+#if SoundMeter
+    IDn = IDn + 128;
 #endif
   if (TDisplay)
     IDn = IDn + 256;
