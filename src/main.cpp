@@ -487,7 +487,7 @@ String MQTT_send_topic;
 String MQTT_receive_topic;
 
 #if Influxver
-byte Influxseconds = 60;
+byte Influxseconds = 5;
 #endif
 
 // #define MQTT_VERSION MQTT_VERSION_3_1
