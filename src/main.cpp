@@ -487,7 +487,7 @@ String MQTT_send_topic;
 String MQTT_receive_topic;
 
 #if Influxver
-byte Influxseconds = 5;
+byte Influxseconds = 60;
 #endif
 
 // #define MQTT_VERSION MQTT_VERSION_3_1
@@ -2408,7 +2408,7 @@ void Send_Message_Cloud_App_MQTT()
   float pm25fori;
   int8_t RSSI;
   int8_t inout;
-  int8_t dBAmaxint;
+//  int8_t dBAmaxint;
 //  long pm25SP;
 
   Serial.print(F("Sending MQTT message to the send topic: "));
@@ -2426,7 +2426,7 @@ void Send_Message_Cloud_App_MQTT()
 // Serial.println(pm25int);
   pm25fori = PM25_accumulated_ori / PM25_samples;
   pm25intori = round(pm25fori);
-  dBAmaxint = round(dBAmax);
+//  dBAmaxint = round(dBAmax);
 #if !SoundMeter
   ReadHyT();
 #endif
@@ -2513,6 +2513,9 @@ void Send_Message_Cloud_App_MQTT()
   digitalWrite(LEDPIN, LOW);
 #endif
   FlagLED = true;
+  Influxseconds = 60;
+  Serial.print("Influxseconds = ");
+  Serial.println(Influxseconds);
 }
 
 void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int length)
@@ -3483,6 +3486,7 @@ void Read_SoundMeter()
 {
 //Serial.println("Read Sound Meter ESP_MEMS");
   String frame;
+  byte dBActual;
 #if !ESP8266
   if (Serial2.available() != 0)
   {
@@ -3513,6 +3517,33 @@ void Read_SoundMeter()
     Serial.print(dBAmax);
     Serial.println(" dBA");
 #endif
+
+  if (PM25_value > 80)
+  {
+    dBActual = 2;
+    if (dBActual < Influxseconds)
+      Influxseconds = 2;
+  }
+  else if (PM25_value > 70)
+  {
+    dBActual = 5;
+    if (dBActual < Influxseconds)
+      Influxseconds = 4;
+  }
+  else if (PM25_value > 60)
+  {
+    dBActual = 10;
+    if (dBActual < Influxseconds)
+      Influxseconds = 8;
+  }
+  else
+  {
+    dBActual = 60;
+    if (dBActual < Influxseconds)
+      Influxseconds = 60;
+  }
+  Serial.print("Influxseconds = ");
+  Serial.println(Influxseconds);
 }
 
 #endif
