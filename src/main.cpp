@@ -2408,7 +2408,7 @@ void Send_Message_Cloud_App_MQTT()
   float pm25fori;
   int8_t RSSI;
   int8_t inout;
-//  int8_t dBAmaxint;
+  int8_t dBAmaxint;
 //  long pm25SP;
 
   Serial.print(F("Sending MQTT message to the send topic: "));
@@ -2426,7 +2426,7 @@ void Send_Message_Cloud_App_MQTT()
 // Serial.println(pm25int);
   pm25fori = PM25_accumulated_ori / PM25_samples;
   pm25intori = round(pm25fori);
-//  dBAmaxint = round(dBAmax);
+  dBAmaxint = round(dBAmax);
 #if !SoundMeter
   ReadHyT();
 #endif
@@ -2485,10 +2485,18 @@ void Send_Message_Cloud_App_MQTT()
 #endif
 
     else
+#if SoundMeter
+#if !Influxver
+      sprintf(MQTT_message, "{id: %s, noisedba: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, noisepeak: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, RSSI, latitudef, longitudef, inout, IDn, dBAmaxint, chipId);
+#else
+      sprintf(MQTT_message, "{\"id\": \"%s\", \"noisedba\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"noisepeak\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, RSSI, latitudef, longitudef, inout, IDn, dBAmaxint, chipId); // for Telegraf
+#endif
+#else
 #if !Influxver
      sprintf(MQTT_message, "{id: %s, PM25: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
 #else
      sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId); // for Telegraf
+#endif
 #endif
   }
   Serial.print(MQTT_message);
@@ -2514,8 +2522,8 @@ void Send_Message_Cloud_App_MQTT()
 #endif
   FlagLED = true;
   Influxseconds = 60;
-  Serial.print("Influxseconds = ");
-  Serial.println(Influxseconds);
+//  Serial.print("Influxseconds = ");
+//  Serial.println(Influxseconds);
 }
 
 void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int length)
@@ -2757,7 +2765,7 @@ void Firmware_Update()
   t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI66.bin");
 #elif SoundMeter
   Serial.println("Firmware WISP SoundMeter");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISP.bin");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISMeter.bin");
 #else
   Serial.println("Firmware WISP");
   t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISP.bin");
@@ -2774,7 +2782,7 @@ void Firmware_Update()
   t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI66WPA2.bin");
 #elif SoundMeter
   Serial.println("Firmware WISP SoundMeter");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISPWPA2.bin");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISMeterWPA2.bin");
 #else
   Serial.println("Firmware WISP WPA2");
   t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISPWPA2.bin");
@@ -2876,8 +2884,13 @@ void Firmware_Update()
   Serial.println("Firmware ESP8266WISP_Rosver");
   t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISP_Rosver.bin");
 #elif SoundMeter
+#if !Influxver
   Serial.println("Firmware ESP8266WISP_SoundMeter");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISP_Rosver.bin");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISMeter.bin");
+#else
+  Serial.println("Firmware ESP8266WISP_SoundMeter_InfluxDB");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISMeterInflux.bin");
+#endif
 #else
   Serial.println("Firmware ESP8266WISP");
   t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISP.bin");
@@ -3518,23 +3531,23 @@ void Read_SoundMeter()
     Serial.println(" dBA");
 #endif
 
-  if (PM25_value > 80)
+  if (PM25_value > 70)
   {
     dBActual = 2;
     if (dBActual < Influxseconds)
       Influxseconds = 2;
   }
-  else if (PM25_value > 70)
+  else if (PM25_value > 65)
   {
     dBActual = 5;
     if (dBActual < Influxseconds)
-      Influxseconds = 4;
+      Influxseconds = 8;
   }
-  else if (PM25_value > 60)
+    else if (PM25_value > 60)
   {
     dBActual = 10;
     if (dBActual < Influxseconds)
-      Influxseconds = 8;
+      Influxseconds = 30;
   }
   else
   {
