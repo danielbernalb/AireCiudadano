@@ -17,16 +17,17 @@
 ////////////////////////////////
 // Modo de comunicaciones del sensor:
 #define Wifi true        // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
-#define WPA2 false       // Set to true to WPA2 enterprise networks (IEEE 802.1X)
-#define Rosver false     // Set to true URosario version
+#define WPA2 true        // Set to true to WPA2 enterprise networks (IEEE 802.1X)
+#define Rosver true     // Set to true URosario version
+#define Rosver2 true
 #define Bluetooth false  // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
 #define ESP8285 false    // Set to true for SHT4x sensor
 #define CO2sensor false  // Set to true in case you use a ESP8285 switch
-#define SHT4x false       // Set to true for CO2 sensors: SCD30 and SenseAir S8
-#define SoundMeter true  // set to true for Sound Meter
-#define Influxver true   // Set to true for InfluxDB version
+#define SHT4x true       // Set to true for CO2 sensors: SCD30 and SenseAir S8
+#define SoundMeter false // set to true for Sound Meter
+#define Influxver false  // Set to true for InfluxDB version
 
 #define SiteAltitude 0 // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
 // #define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
@@ -92,8 +93,13 @@ struct MyConfigStruct
                                //  uint16_t MQTT_port = 80;                           // MQTT port; Default Port on 80
                                //  char MQTT_server[30] = "sensor.aireciudadano.com"; // MQTT server url or public IP address.
 #if !PreProgSensor
+#if !Rosver2
   char sensor_lat[10] = "0.0"; // Sensor latitude  GPS
   char sensor_lon[10] = "0.0"; // Sensor longitude GPS
+#else
+  char sensor_lat[10] = "4.6947"; // Sensor latitude  GPS
+  char sensor_lon[10] = "-74.0946"; // Sensor longitude GPS
+#endif
   char ConfigValues[10] = "000100000";
   char aireciudadano_device_name[30]; // Device name; default to aireciudadano_device_id
 #else
@@ -270,6 +276,8 @@ int vref = 1100;
 #define Sensor_SDA_pin 21 // Define the SDA pin used
 #define Sensor_SCL_pin 22 // Define the SCL pin used
 
+#if !Rosver2
+
 #include <sps30.h>
 SPS30 sps30;
 #define SP30_COMMS Wire
@@ -296,6 +304,8 @@ float ambientHumidity;
 float ambientTemperature;
 float vocIndex;
 float noxIndex;
+
+#endif
 
 #include "PMS.h"
 
@@ -377,10 +387,14 @@ bool SHT31flag = false;
 byte failh = 0;
 #endif
 
+#if !Rosver2
+
 #include "Adafruit_Sensor.h"
 #include "Adafruit_AM2320.h"
 Adafruit_AM2320 am2320 = Adafruit_AM2320();
 bool AM2320flag = false;
+
+#endif
 
 #if CO2sensor
 bool CO2measure = false;
@@ -1589,6 +1603,28 @@ void Connect_WiFi()
 
     // start the web server on port 80
     wifi_server.begin();
+
+#if !ESP8266
+    digitalWrite(LEDPIN, HIGH);
+    delay(800);
+    digitalWrite(LEDPIN, LOW);
+    delay(800);
+    digitalWrite(LEDPIN, HIGH);
+    delay(800);
+    digitalWrite(LEDPIN, LOW);
+    delay(800);
+    digitalWrite(LEDPIN, HIGH);
+#else
+    digitalWrite(LEDPIN, LOW);
+    delay(800);
+    digitalWrite(LEDPIN, HIGH);
+    delay(800);
+    digitalWrite(LEDPIN, LOW);
+    delay(800);
+    digitalWrite(LEDPIN, HIGH);
+    delay(800);
+    digitalWrite(LEDPIN, LOW);
+#endif
   }
 
 #if ESP8266
@@ -1908,6 +1944,8 @@ void Start_Captive_Portal()
 #endif
 #endif
 
+#if !Rosver2
+
 #if !ESP8266
   WiFiManagerParameter custom_id_name("CustomName", "Set Station Name (29 characters max):", eepromConfig.aireciudadano_device_name, 29);
 #else
@@ -2018,10 +2056,14 @@ void Start_Captive_Portal()
 
 #endif
 
+#endif
+
 #if WPA2
   const char *custom_wpa2_pw = "<label for='p'>Password</label><input id='p' name='p' maxlength='64' type='password' placeholder='{p}'><input type='checkbox' onclick='f()'> Show Password";
   new (&custom_wpa2_pass) WiFiManagerParameter(custom_wpa2_pw); // REVISAR!!!!!!!!!!!
 #endif
+
+#if !Rosver2
 
   // Sensor Location menu
 
@@ -2055,6 +2097,8 @@ void Start_Captive_Portal()
 #endif
 #endif
 
+#endif
+
   // Add parameters
 
 #if WPA2
@@ -2063,8 +2107,12 @@ void Start_Captive_Portal()
 #endif
   wifiManager.addParameter(&custom_wifi_user);
   wifiManager.addParameter(&custom_wpa2_pass);
+#if !Rosver2
   wifiManager.addParameter(&custom_wifi_html2);
 #endif
+#endif
+
+#if !Rosver2
 
   wifiManager.addParameter(&custom_id_name);
 #if !(Rosver || SoundMeter)
@@ -2088,6 +2136,8 @@ void Start_Captive_Portal()
 #endif
 #else
   wifiManager.addParameter(&custom_endhtml);
+#endif
+
 #endif
 
   wifiManager.setSaveParamsCallback(saveParamCallback);
@@ -2129,6 +2179,8 @@ void Start_Captive_Portal()
     Serial.println(F("Wifi pass write_eeprom = true"));
 #endif
 
+#if !Rosver2
+
     strncpy(eepromConfig.aireciudadano_device_name, custom_id_name.getValue(), sizeof(eepromConfig.aireciudadano_device_name));
     eepromConfig.aireciudadano_device_name[sizeof(eepromConfig.aireciudadano_device_name) - 1] = '\0';
     Serial.println(F("Devname write_eeprom = true"));
@@ -2147,6 +2199,9 @@ void Start_Captive_Portal()
     eepromConfig.sensor_lon[sizeof(eepromConfig.sensor_lon) - 1] = '\0';
     Serial.println(F("Lon write_eeprom = true"));
     longitudef = atof(eepromConfig.sensor_lon); // Cambiar de string a float
+
+
+#endif
 
     CustomValTotalString[9] = {0};
     sprintf(CustomValTotalString, "%8d", CustomValtotal);
@@ -2343,19 +2398,6 @@ void Init_MQTT()
     MQTT_client.subscribe(MQTT_receive_topic.c_str());
     Serial.print(F("MQTT connected - Receive topic: "));
     Serial.println(MQTT_receive_topic);
-#if !ESP8266
-    digitalWrite(LEDPIN, HIGH);
-    delay(1000);
-    digitalWrite(LEDPIN, LOW);
-    delay(1000);
-    digitalWrite(LEDPIN, HIGH);
-#else
-    digitalWrite(LEDPIN, LOW);
-    delay(1000);
-    digitalWrite(LEDPIN, HIGH);
-    delay(1000);
-    digitalWrite(LEDPIN, LOW);
-#endif
   }
 }
 
@@ -2377,19 +2419,6 @@ void MQTT_Reconnect()
       MQTT_client.subscribe(MQTT_receive_topic.c_str());
       Serial.print(F("MQTT connected - Receive topic: "));
       Serial.println(MQTT_receive_topic);
-#if !ESP8266
-      digitalWrite(LEDPIN, HIGH);
-      delay(1000);
-      digitalWrite(LEDPIN, LOW);
-      delay(1000);
-      digitalWrite(LEDPIN, HIGH);
-#else
-      digitalWrite(LEDPIN, LOW);
-      delay(1000);
-      digitalWrite(LEDPIN, HIGH);
-      delay(1000);
-      digitalWrite(LEDPIN, LOW);
-#endif
     }
     else
     {
@@ -2408,7 +2437,9 @@ void Send_Message_Cloud_App_MQTT()
   float pm25fori;
   int8_t RSSI;
   int8_t inout;
+#if Influxver 
   int8_t dBAmaxint;
+#endif
 //  long pm25SP;
 
   Serial.print(F("Sending MQTT message to the send topic: "));
@@ -2416,7 +2447,7 @@ void Send_Message_Cloud_App_MQTT()
   pm25f = PM25_accumulated / PM25_samples;
 //#if SoundMeter
 //   Serial.print("pm25f1: ");
-   Serial.println(pm25f);
+//   Serial.println(pm25f);
 //   pm25SP = (long) (pm25f * 10L);
 //   pm25f = (float) pm25SP / 10.0;
 //   Serial.print("pm25f2: ");
@@ -2426,7 +2457,9 @@ void Send_Message_Cloud_App_MQTT()
 // Serial.println(pm25int);
   pm25fori = PM25_accumulated_ori / PM25_samples;
   pm25intori = round(pm25fori);
+#if Influxver
   dBAmaxint = round(dBAmax);
+#endif
 #if !SoundMeter
   ReadHyT();
 #endif
@@ -2446,6 +2479,8 @@ void Send_Message_Cloud_App_MQTT()
   {
     uint8_t voc;
     uint8_t nox;
+
+#if !Rosver2
 
     if (isnan(ambientHumidity))
     {
@@ -2469,8 +2504,11 @@ void Send_Message_Cloud_App_MQTT()
       nox = 0;
     else
       nox = round(noxIndex);
+#endif
+
 #if !Influxver
-    sprintf(MQTT_message, "{id: %s, PM25: %d, VOC: %d, NOx: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, voc, nox, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
+//    sprintf(MQTT_message, "{id: %s, PM25: %d, VOC: %d, NOx: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, voc, nox, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
+    sprintf(MQTT_message, "{id: %s, PM25: %d}", aireciudadano_device_id.c_str(), pm25int);
 #else
     sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"VOC\": %d, \"NOx\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, voc, nox, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId); // for Telegraf
 #endif
@@ -2521,9 +2559,11 @@ void Send_Message_Cloud_App_MQTT()
   digitalWrite(LEDPIN, LOW);
 #endif
   FlagLED = true;
+#if Influxver
   Influxseconds = 60;
 //  Serial.print("Influxseconds = ");
 //  Serial.println(Influxseconds);
+#endif
 }
 
 void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int length)
