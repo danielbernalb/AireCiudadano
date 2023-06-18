@@ -18,8 +18,9 @@
 // Modo de comunicaciones del sensor:
 #define Wifi true        // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
 #define WPA2 true        // Set to true to WPA2 enterprise networks (IEEE 802.1X)
-#define Rosver true     // Set to true URosario version
-#define Rosver2 true
+#define Rosver false     // Set to true URosario version
+#define Rosver2 false    // Dejar menu de portal cautivo solo con SSID, identidad y password
+#define Rosver3 false    // Eliminar Wifimanager
 #define Bluetooth false  // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
@@ -28,12 +29,13 @@
 #define SHT4x true       // Set to true for CO2 sensors: SCD30 and SenseAir S8
 #define SoundMeter false // set to true for Sound Meter
 #define Influxver false  // Set to true for InfluxDB version
+#define ESP32C3 false
 
 #define SiteAltitude 0 // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
 // #define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
 
 // Escoger modelo de pantalla (pasar de false a true) o si no hay escoger ninguna (todas false):
-#define Tdisplaydisp false
+#define Tdisplaydisp true
 #define OLED66display false
 #define OLED96display false
 
@@ -438,7 +440,9 @@ DataProvider provider(lib, DataType::T_RH_CO2_ALT);
 #if Wifi
 // WiFi
 // #define WM_DEBUG_LEVEL DEBUG_DEV
+#if !Rosver3
 #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
+#endif
 
 #if WPA2
 #include "esp_wpa2.h" //wpa2 library for connections to Enterprise networks
@@ -449,16 +453,21 @@ WiFiServer wifi_server(80);
 WiFiClient wifi_client;
 bool PortalFlag = false;
 
+#if !Rosver3
 WiFiManager wifiManager;
+#endif
 
 #endif
 
 #else
 #if Wifi
 
+#if !Rosver3
 #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
 
 WiFiManager wifiManager;
+
+#endif
 
 // WiFi
 #include <ESP8266WiFi.h> // Wifi ESP8266
@@ -627,6 +636,14 @@ void setup()
   }
   Serial.setDebugOutput(true);
   Serial.println(F(""));
+  Serial.println(F(""));
+#if ESP8266
+  enable_wifi_enterprise_patch();
+  Serial.print(F("ESP CoreVersion: "));
+  Serial.println(ESP.getCoreVersion());
+  Serial.printf("SDK version: %s\n", system_get_sdk_version());
+  Serial.printf("Free Heap: %4d\n",ESP.getFreeHeap());
+#endif
 
 #if (Wifi || Rosver)
 
@@ -841,7 +858,11 @@ void setup()
     Serial.println("Test_Sensor");
     Test_Sensor();
 #endif
+
+#if !Rosver3
     Start_Captive_Portal();
+#endif
+
     delay(100);
   }
   if (SDflag == false)
@@ -1211,8 +1232,8 @@ void loop()
   {
     // MQTT loop
 #if !Influxver
-    if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 60000))
-    //  if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 5000))
+    // if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 60000))
+      if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 5000))
     //  if ((millis() - MQTT_loop_start) >= (1 * 60000))
 #else
     if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 1000 * Influxseconds))
@@ -1531,7 +1552,7 @@ void Connect_WiFi()
 
     String wifi_ssid = WiFi.SSID(); // your network SSID (name)
     // String wifi_password = WiFi.psk()); // your network psk password
-    Serial.println(F("Attempting to authenticate with WPA2 Enterprise "));
+    Serial.println(F("Attempting to authenticate with WPA2 Enterprise..."));
     Serial.print(F("SSID: "));
     Serial.println(WiFi.SSID());
     Serial.print(F("Identity: "));
@@ -1548,7 +1569,7 @@ void Connect_WiFi()
     wifi_station_set_config(&wifi_config);
     // uint8_t target_esp_mac[6] = {0x24, 0x0a, 0xc4, 0x9a, 0x58, 0x28};
     // wifi_set_macaddr(STATION_IF,target_esp_mac);
-    wifi_station_set_wpa2_enterprise_auth(1);
+//    wifi_station_set_wpa2_enterprise_auth(1);
     // Clean up to be sure no old data is still inside
     wifi_station_clear_cert_key();
     wifi_station_clear_enterprise_ca_cert();
@@ -1557,10 +1578,13 @@ void Connect_WiFi()
     wifi_station_clear_enterprise_password();
     wifi_station_clear_enterprise_new_password();
 
+    wifi_station_set_wpa2_enterprise_auth(1);
+
     // Set up authentication
     wifi_station_set_enterprise_identity((uint8 *)eepromConfig.wifi_user, strlen(eepromConfig.wifi_user));
     wifi_station_set_enterprise_username((uint8 *)eepromConfig.wifi_user, strlen(eepromConfig.wifi_user));
     wifi_station_set_enterprise_password((uint8 *)eepromConfig.wifi_password, strlen((char *)eepromConfig.wifi_password));
+    wifi_station_set_enterprise_new_password((uint8 *)eepromConfig.wifi_password, strlen((char *)eepromConfig.wifi_password));
     wifi_station_connect();
 
 #endif
@@ -1713,7 +1737,7 @@ void Print_WiFi_Status()
   Serial.println(WiFi.localIP());
 
   // Print your WiFi shield's MAC address:
-  Serial.print(F("MAC Adress: "));
+  Serial.print(F("MAC Address: "));
   Serial.println(WiFi.macAddress());
 
   // Print the received signal strength:
@@ -1847,12 +1871,14 @@ void Check_WiFi_Server()                       // Server access by http when you
         if (currentLine.endsWith("GET /3"))
         {
           PortalFlag = true;
+#if !Rosver3
           Start_Captive_Portal();
+#endif
         }
         // #if !ESP8266        // Check to see if the client request was "GET /4" to suspend the device:
         if (currentLine.endsWith("GET /4"))
         {
-          Firmware_Update();
+//          Firmware_Update();
         }
         // #endif
 
@@ -1870,6 +1896,7 @@ void Check_WiFi_Server()                       // Server access by http when you
   }
 }
 
+#if !Rosver3
 void Start_Captive_Portal()
 { // Run a captive portal to configure WiFi and MQTT
   InCaptivePortal = true;
@@ -1879,7 +1906,8 @@ void Start_Captive_Portal()
   Serial.println(F("Start_Captive_Portal"));
 
   if (SDflag == false)
-    captiveportaltime = 60;
+//    captiveportaltime = 60;
+    captiveportaltime = 25;
   else
     captiveportaltime = 30; // captiveportaltime = 15;
 
@@ -2301,6 +2329,8 @@ void saveParamCallback()
   ConfigPortalSave = true;
 }
 
+#endif
+
 #if Rosver
 #if !WPA2
 void RTCadjustTime()
@@ -2381,7 +2411,7 @@ void Init_MQTT()
 #else
   MQTT_client.setServer("sensor.aireciudadano.com", 30183);
 #endif
-  MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
+//  MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
 
   MQTT_client.connect(aireciudadano_device_id.c_str());
 
@@ -2477,10 +2507,11 @@ void Send_Message_Cloud_App_MQTT()
 
   if (SEN5Xsen == true)
   {
-    uint8_t voc;
-    uint8_t nox;
 
 #if !Rosver2
+
+    uint8_t voc;
+    uint8_t nox;
 
     if (isnan(ambientHumidity))
     {
@@ -2504,13 +2535,13 @@ void Send_Message_Cloud_App_MQTT()
       nox = 0;
     else
       nox = round(noxIndex);
-#endif
 
 #if !Influxver
-//    sprintf(MQTT_message, "{id: %s, PM25: %d, VOC: %d, NOx: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, voc, nox, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
-    sprintf(MQTT_message, "{id: %s, PM25: %d}", aireciudadano_device_id.c_str(), pm25int);
+    sprintf(MQTT_message, "{id: %s, PM25: %d, VOC: %d, NOx: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, voc, nox, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
 #else
     sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"VOC\": %d, \"NOx\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, voc, nox, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId); // for Telegraf
+#endif
+
 #endif
   }
   else
@@ -2565,6 +2596,10 @@ void Send_Message_Cloud_App_MQTT()
 //  Serial.println(Influxseconds);
 #endif
 }
+
+
+/*
+
 
 void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int length)
 {                               // callback function to receive configuration messages from the cloud application by MQTT
@@ -2979,6 +3014,8 @@ void update_error(int err)
   updating = false;
 }
 
+*/
+
 #endif
 
 #if Rosver
@@ -3148,6 +3185,8 @@ if (PMSsen == true)
 {
 #endif
 #endif
+
+#if !ESP32C3
     Serial.println(F("Test Plantower Sensor"));
 
 #if !ESP8266
@@ -3186,6 +3225,8 @@ if (PMSsen == true)
     {
       Serial.println(F("Could not find Plantower sensor!"));
     }
+
+#endif
 
 #endif
 
@@ -3348,6 +3389,7 @@ void Read_Sensor()
 #if !Rosver
   else if (PMSsen == true)
 #else
+  PMSsen = true;
   if (PMSsen == true)
 #endif
   {
@@ -3372,7 +3414,8 @@ void Read_Sensor()
     }
     else
     {
-      Serial.println(F("No data by Plantower sensor!"));
+      Serial.println(F("PM25 dummy  = 10"));
+      PM25_value = 10;
     }
   }
   else
@@ -4804,12 +4847,15 @@ void Suspend_Device()
   //  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
   // esp_sleep_enable_ext1_wakeup(GPIO_SEL_0, ESP_EXT1_WAKEUP_ALL_LOW);
 
+#if !ESP32C3
   // set top button for wake up
   esp_sleep_enable_ext0_wakeup(GPIO_NUM_35, 0); // Top button
   // esp_sleep_enable_ext0_wakeup(GPIO_NUM_0, 0); // Bottom button
 
   delay(200);
   esp_deep_sleep_start();
+#endif
+
 }
 
 void print_reset_reason(RESET_REASON reason)
