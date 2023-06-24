@@ -18,9 +18,10 @@
 // Modo de comunicaciones del sensor:
 #define Wifi true        // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
 #define WPA2 true        // Set to true to WPA2 enterprise networks (IEEE 802.1X)
-#define Rosver false     // Set to true URosario version
-#define Rosver2 false    // Dejar menu de portal cautivo solo con SSID, identidad y password
+#define Rosver true     // Set to true URosario version
+#define Rosver2 true    // Dejar menu de portal cautivo solo con SSID, identidad y password
 #define Rosver3 false    // Eliminar Wifimanager
+#define RosverRTOS true  // RosverRTOS version
 #define Bluetooth false  // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
@@ -35,7 +36,7 @@
 // #define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
 
 // Escoger modelo de pantalla (pasar de false a true) o si no hay escoger ninguna (todas false):
-#define Tdisplaydisp true
+#define Tdisplaydisp false
 #define OLED66display false
 #define OLED96display false
 
@@ -463,11 +464,40 @@ WiFiManager wifiManager;
 #if Wifi
 
 #if !Rosver3
-#include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
 
-WiFiManager wifiManager;
+//#include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
+
+//WiFiManager wifiManager;
 
 #endif
+
+#if RosverRTOS
+// RTOS version WPA2 enterprise !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+#include <string.h>
+#include <stdlib.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/event_groups.h"
+#include "esp_wifi.h"
+#include "esp_event.h"
+#include "esp_log.h"
+#include "esp_system.h"
+#include "nvs_flash.h"
+#include "tcpip_adapter.h"
+
+#if WPA2
+#include "esp_wpa2.h" //wpa2 library for connections to Enterprise networks
+#endif
+
+const int WIFI_CONNECT_TIMEOUT = 10000; // 10 seconds
+WiFiServer wifi_server(80);
+WiFiClient wifi_client;
+bool PortalFlag = false;
+
+// RTOS version WPA2 enterprise !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+#else
 
 // WiFi
 #include <ESP8266WiFi.h> // Wifi ESP8266
@@ -494,6 +524,8 @@ WiFiServer wifi_server(80); // to check if it is alive
 
 #include <ESP8266WebServer.h>
 #include <DNSServer.h>
+
+#endif
 
 #endif
 
@@ -1550,6 +1582,19 @@ void Connect_WiFi()
 
 #else
 
+#if RosverRTOS
+    Serial.println(F("Attempting to authenticate using WPA2 Enterprise RTOS ESP8266..."));
+    Serial.print(F("Identity: "));
+    Serial.println(eepromConfig.wifi_user);
+    Serial.print(F("Password: "));
+    Serial.println(eepromConfig.wifi_password);
+    esp_wifi_sta_wpa2_ent_set_identity((uint8_t *)eepromConfig.wifi_user, strlen(eepromConfig.wifi_user));         // provide identity
+    esp_wifi_sta_wpa2_ent_set_username((uint8_t *)eepromConfig.wifi_user, strlen(eepromConfig.wifi_user));         // provide username --> identity and username is same
+    esp_wifi_sta_wpa2_ent_set_password((uint8_t *)eepromConfig.wifi_password, strlen(eepromConfig.wifi_password)); // provide password
+    esp_wifi_sta_wpa2_ent_enable();
+
+#else
+
     String wifi_ssid = WiFi.SSID(); // your network SSID (name)
     // String wifi_password = WiFi.psk()); // your network psk password
     Serial.println(F("Attempting to authenticate with WPA2 Enterprise..."));
@@ -1586,6 +1631,8 @@ void Connect_WiFi()
     wifi_station_set_enterprise_password((uint8 *)eepromConfig.wifi_password, strlen((char *)eepromConfig.wifi_password));
     wifi_station_set_enterprise_new_password((uint8 *)eepromConfig.wifi_password, strlen((char *)eepromConfig.wifi_password));
     wifi_station_connect();
+
+#endif
 
 #endif
 
@@ -2411,7 +2458,7 @@ void Init_MQTT()
 #else
   MQTT_client.setServer("sensor.aireciudadano.com", 30183);
 #endif
-//  MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
+  MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
 
   MQTT_client.connect(aireciudadano_device_id.c_str());
 
@@ -2597,9 +2644,7 @@ void Send_Message_Cloud_App_MQTT()
 #endif
 }
 
-
-/*
-
+// /*
 
 void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int length)
 {                               // callback function to receive configuration messages from the cloud application by MQTT
@@ -3014,7 +3059,7 @@ void update_error(int err)
   updating = false;
 }
 
-*/
+// */
 
 #endif
 
@@ -3389,7 +3434,7 @@ void Read_Sensor()
 #if !Rosver
   else if (PMSsen == true)
 #else
-  PMSsen = true;
+  PMSsen = true;            // TEST PMS7003 dummy
   if (PMSsen == true)
 #endif
   {
@@ -3414,8 +3459,9 @@ void Read_Sensor()
     }
     else
     {
-      Serial.println(F("PM25 dummy  = 10"));
-      PM25_value = 10;
+//      Serial.println(F("No data by Plantower sensor!"));
+      Serial.println(F("PM25 dummy  = 10"));                      // TEST PMS7003 dummy
+      PM25_value = 10;                                            // TEST PMS7003 dummy
     }
   }
   else
