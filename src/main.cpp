@@ -16,6 +16,12 @@ char wifi_passwpa2[24];
 bool ConfigPortalSave = false;
 
 // WiFi
+
+#if !ESP8266
+#include <WiFi.h>
+#include "esp_wpa2.h" //wpa2 library for connections to Enterprise networks
+
+#else
 #include <ESP8266WiFi.h> // Wifi ESP8266
 extern "C"
 {
@@ -29,15 +35,15 @@ extern "C"
 
 #include <ESP8266WiFiMulti.h>
 #include <ESP8266mDNS.h>
-WiFiClient wifi_client;
-const int WIFI_CONNECT_TIMEOUT = 10000; // 10 seconds
-int wifi_status = WL_IDLE_STATUS;
-WiFiServer wifi_server(80); // to check if it is alive
-                            // String wifi_ssid = WiFi.SSID();                  // your network SSID (name)
-                            // String wifi_password = WiFi.psk();               // your network psk password
 
 #include <ESP8266WebServer.h>
 #include <DNSServer.h>
+
+#endif
+
+const int WIFI_CONNECT_TIMEOUT = 10000; // 10 seconds
+WiFiServer wifi_server(80);
+WiFiClient wifi_client;
 
 #define LEDPIN 2
 
@@ -93,10 +99,23 @@ void Connect_WiFi()
   WiFi.disconnect(true); // disconnect from wifi to set new wifi connection
   WiFi.mode(WIFI_STA);   // init wifi mode
 
-  //  If there are not wifi identity and wifi password defined, proceed to traight forward configuration
+#if !ESP8266
+  String wifi_ssid = wifissid;
+  Serial.println(F("Attempting to authenticate with WPA2 Enterprise..."));
+  Serial.print(F("SSID: "));
+  Serial.println(wifi_ssid);
+  Serial.print(F("Identity: "));
+  Serial.println(wifi_user);
+  Serial.print(F("Password: "));
+  Serial.println(wifi_password);
+  esp_wifi_sta_wpa2_ent_set_identity((uint8_t *)wifi_user, strlen(wifi_user));         // provide identity
+  esp_wifi_sta_wpa2_ent_set_username((uint8_t *)wifi_user, strlen(wifi_user));         // provide username --> identity and username is same
+  esp_wifi_sta_wpa2_ent_set_password((uint8_t *)wifi_password, strlen(wifi_password)); // provide password
+  esp_wifi_sta_wpa2_ent_enable();
+
+#else
 
   String wifi_ssid = wifissid;
-  // String wifi_password = WiFi.psk()); // your network psk password
   Serial.println(F("Attempting to authenticate with WPA2 Enterprise..."));
   Serial.print(F("SSID: "));
   Serial.println(WiFi.SSID());
@@ -128,6 +147,14 @@ void Connect_WiFi()
   wifi_station_set_enterprise_password((uint8 *)wifi_password, strlen((char *)wifi_password));
   wifi_station_set_enterprise_new_password((uint8 *)wifi_password, strlen((char *)wifi_password));
   wifi_station_connect();
+
+#endif
+
+#if !ESP8266
+  WiFi.begin(wifi_ssid);
+#else
+  WiFi.begin();
+#endif
 
   // Timestamp for connection timeout
   int wifi_timeout_start = millis();
