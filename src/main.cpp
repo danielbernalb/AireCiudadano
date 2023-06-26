@@ -18,8 +18,8 @@
 
 ////////////////////////////////
 // Modo de comunicaciones del sensor:
-#define Rosver2 false   // Dejar menu de portal cautivo solo con SSID, identidad y password
-#define Rosver3 false   // Eliminar Wifimanager
+#define Rosver2 true    // Dejar menu de portal cautivo solo con SSID, identidad y password
+#define Rosver3 true    // Eliminar Wifimanager
 #define RosverRTOS true // RosverRTOS version
 
 #define PreProgSensor false // Variables de sensor preprogramadas:
@@ -68,20 +68,26 @@ struct MyConfigStruct
   char ConfigValues[10] = "000010111";
   char aireciudadano_device_name[30] = "AireCiudadano_DBB_01"; // Nombre de la estacion
 #endif
+
+#if !Rosver3
   char wifi_user[24];     // WiFi user to be used on WPA Enterprise. Default to null (not used)
   char wifi_password[24]; // WiFi password to be used on WPA Enterprise. Default to null (not used)
+#else
+  char wifi_user[24] = "prueba1";
+  char wifi_password[24] = "daniel2022";
+#endif
 } eepromConfig;
 
 char wifi_passwpa2[24];
 bool ConfigPortalSave = false;
 
+#if Rosver3
+String wifissid = "TPwpa2";
+#endif
+
 #if PreProgSensor
-// const char *ssid = "Techotyva";
-// const char *password = "Layuyux31";
 const char *ssid = "TPred";
 const char *password = "apt413sago16";
-// const char *ssid = "Rosa";
-// const char *password = "Rudysicha";
 char aireciudadano_device_nameTemp[30] = {0};
 #endif
 
@@ -147,9 +153,11 @@ Adafruit_SHT4x sht4 = Adafruit_SHT4x();
 bool SHT31flag = false;
 byte failh = 0;
 
+#if !Rosver3
 #include <WiFiManager.h> // https://github.com/tzapu/WiFiManager
 
 WiFiManager wifiManager;
+#endif
 
 // WiFi
 #include <ESP8266WiFi.h> // Wifi ESP8266
@@ -494,7 +502,11 @@ void Connect_WiFi()
 
   //  If there are not wifi identity and wifi password defined, proceed to traight forward configuration
 
+#if !Rosver3
   String wifi_ssid = WiFi.SSID(); // your network SSID (name)
+#else
+  String wifi_ssid = wifissid;
+#endif
   // String wifi_password = WiFi.psk()); // your network psk password
   Serial.println(F("Attempting to authenticate with WPA2 Enterprise..."));
   Serial.print(F("SSID: "));
@@ -703,6 +715,8 @@ void Check_WiFi_Server()                       // Server access by http when you
     Serial.println(F("client disconnected"));
   }
 }
+
+#if !Rosver3
 
 void Start_Captive_Portal()
 { // Run a captive portal to configure WiFi and MQTT
@@ -916,6 +930,8 @@ void saveParamCallback()
   Serial.println("No SD & RTC");
   ConfigPortalSave = true;
 }
+
+#endif
 
 void Init_MQTT()
 { // MQTT Init function
