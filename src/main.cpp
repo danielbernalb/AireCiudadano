@@ -18,9 +18,9 @@
 
 ////////////////////////////////
 // Modo de comunicaciones del sensor:
-#define Rosver2 true    // Dejar menu de portal cautivo solo con SSID, identidad y password
-#define Rosver3 true    // Eliminar Wifimanager
-#define RosverRTOS true // RosverRTOS version
+#define Rosver2 false    // Dejar menu de portal cautivo solo con SSID, identidad y password
+#define Rosver3 false    // Eliminar Wifimanager
+#define RosverRTOS false // RosverRTOS version
 
 #define PreProgSensor false // Variables de sensor preprogramadas:
                             // Latitude: char sensor_lat[10] = "xx.xxxx";
@@ -1066,7 +1066,6 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
   }
 
   // Publication Time
-
   tempcustom = uint16_t(jsonBuffer["warning"]);
 
   if (tempcustom != 0)
@@ -1078,7 +1077,6 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
   }
 
   // Latitude
-
   latitudef = atof(jsonBuffer["caution"]);
   if (latitudef != 0)
   {
@@ -1090,7 +1088,6 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
   }
 
   // Longitude
-
   longitudef = atof(jsonBuffer["temperature_offset"]);
   if (longitudef != 0)
   {
@@ -1102,15 +1099,12 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
   }
 
   // CustomSenPM
-
   CustomValtotal2 = ((int)(eepromConfig.ConfigValues[7]) - 48);
 
   // CustomSenHYT
-
   CustomValtotal2 = CustomValtotal2 + ((int)eepromConfig.ConfigValues[6] - 48) * 10;
 
   // CustomOutIn
-
   tempcustom = ((uint16_t)jsonBuffer["MQTT_port"]);
 
   if (tempcustom != 0)
@@ -1162,7 +1156,6 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
   }
 
   Aireciudadano_Characteristics();
-
   // print info
   Serial.println(F("MQTT update - message processed"));
   //  Print_Config();
@@ -1190,7 +1183,6 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
     Write_EEPROM();
     ESP.restart();
   }
-
   // If reboot, just do it, without cleaning the EEPROM
   //  if ((jsonBuffer["reboot"]) && (jsonBuffer["reboot"] == "ON"))
   //    ESP.restart();
@@ -1495,7 +1487,6 @@ void Get_AireCiudadano_DeviceId()
 
 void Aireciudadano_Characteristics()
 {
-
   Serial.print(F("eepromConfig.ConfigValues: "));
   Serial.println(eepromConfig.ConfigValues);
   Serial.print(F("eepromConfig.ConfigValues[3]: "));
