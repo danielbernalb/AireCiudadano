@@ -17,17 +17,18 @@
 ////////////////////////////////
 // Modo de comunicaciones del sensor:
 #define Wifi true        // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
-#define WPA2 true        // Set to true to WPA2 enterprise networks (IEEE 802.1X)
-#define Rosver true     // Set to true URosario version
-#define Rosver2 true
+#define WPA2 false       // Set to true to WPA2 enterprise networks (IEEE 802.1X)
+#define Rosver false     // Set to true URosario version
+#define Rosver2 false
 #define Bluetooth false  // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
 #define ESP8285 false    // Set to true for SHT4x sensor
 #define CO2sensor false  // Set to true in case you use a ESP8285 switch
 #define SHT4x true       // Set to true for CO2 sensors: SCD30 and SenseAir S8
-#define SoundMeter false // set to true for Sound Meter
-#define Influxver false  // Set to true for InfluxDB version
+#define SoundMeter true  // set to true for Sound Meter
+#define Influxver true   // Set to true for InfluxDB version
+#define SoundAM false     // Set to true to Sound meter airplane mode 
 
 #define SiteAltitude 0 // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
 // #define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
@@ -1725,7 +1726,7 @@ void Print_WiFi_Status()
 
 void Check_WiFi_Server()                       // Server access by http when you put the ip address in a web browser !!!!!!!!!!!!!!!!!!!!!!!!!!!
 {                                              // Wifi server
-  WiFiClient client = wifi_server.available(); // listen for incoming clients
+  WiFiClient client = wifi_server.accept(); // listen for incoming clients
   if (client)
   {                                  // if you get a client,
     Serial.println(F("new client")); // print a message out the serial port
@@ -3533,6 +3534,9 @@ void Setup_SoundMeter()
 #else
   SerialESP.begin(9600);
 #endif
+#if !SoundAM
+  Influxseconds = 60;
+#endif
 }
 
 void Read_SoundMeter()
@@ -3571,6 +3575,8 @@ void Read_SoundMeter()
     Serial.println(" dBA");
 #endif
 
+#if SoundAM
+
   if (PM25_value > 70)
   {
     dBActual = 2;
@@ -3597,6 +3603,9 @@ void Read_SoundMeter()
   }
   Serial.print("Influxseconds = ");
   Serial.println(Influxseconds);
+
+#endif
+
 }
 
 #endif
@@ -4509,7 +4518,7 @@ void Aireciudadano_Characteristics()
     Serial.println(F("Indoors"));
   }
 
-    Serial.println(F("Sound Meter MEMES sensor"));
+    Serial.println(F("Sound Meter MEMS sensor"));
 
 #if !WPA2
   Serial.println(F("No WPA2"));
