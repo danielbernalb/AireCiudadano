@@ -19,13 +19,13 @@
 #define Wifi true        // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
 #define WPA2 false       // Set to true to WPA2 enterprise networks (IEEE 802.1X)
 #define Rosver true      // Set to true URosario version
-#define Rosver2 true     // Level 2 Urosario version
+#define Rosver2 false    // Level 2 Urosario version
 #define Bluetooth false  // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
-#define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
+#define SDyRTC true      // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
-#define ESP8285 false    // Set to true for SHT4x sensor
-#define CO2sensor false  // Set to true in case you use a ESP8285 switch
-#define SHT4x true       // Set to true for CO2 sensors: SCD30 and SenseAir S8
+#define ESP8285 false    // Set to true in case you use a ESP8285 switch
+#define CO2sensor false  // Set to true for CO2 sensors: SCD30 and SenseAir S8 
+#define SHT4x true       // Set to true for SHT4x sensor
 
 #define SiteAltitude 0   // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
 // #define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
@@ -533,7 +533,8 @@ bool InCaptivePortal = false;
 bool Calibrating = false;
 
 // uint16_t SDyRTCtime = 15;       // Valor de Sample Time de SD y RTC
-uint16_t SDyRTCtime = 60; // Valor de Sample Time de SD y RTC
+//uint16_t SDyRTCtime = 60; // Valor de Sample Time de SD y RTC
+uint16_t SDyRTCtime = 3; // Valor de Sample Time de SD y RTC
 
 #if (Wifi || SDyRTC || SaveSDyRTC || Rosver)
 #if !WPA2
@@ -722,7 +723,7 @@ void setup()
   Get_AireCiudadano_DeviceId();
 
 #if SDyRTC
-  SDflag == true;
+  SDflag = true;
 #endif
 
 #if Bluetooth
@@ -1000,6 +1001,7 @@ void setup()
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 void loop()
 {
+  SDflag = true;
   // If a firmware update is in progress do not do anything else
   if (updating)
   {
@@ -1075,7 +1077,12 @@ void loop()
     }
     else
     {
-      Serial.println(F("Medidor No configurado"));
+//      Serial.println(F("Medidor No configurado"));
+      Serial.println(F("PMdummy = 5"));
+      PM25_value = 5;
+      PM25_accumulated += PM25_value;
+      PM25_samples++;
+      Con_loop_times++;
 
 #if (Tdisplaydisp || OLED96display || OLED66display)
 
@@ -1823,7 +1830,8 @@ void Start_Captive_Portal()
   if (SDflag == false)
     captiveportaltime = 60;
   else
-    captiveportaltime = 30; // captiveportaltime = 15;
+//    captiveportaltime = 30;
+    captiveportaltime = 3;
 
   wifiAP = aireciudadano_device_id;
   Serial.println(wifiAP);
