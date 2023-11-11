@@ -2507,7 +2507,7 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
     Serial.println(error.f_str());
     return;
   }
-
+  
   Aireciudadano_Characteristics();
 
   // print info
@@ -2530,10 +2530,6 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
     Write_EEPROM();
     ESP.restart();
   }
-
-  // If reboot, just do it, without cleaning the EEPROM
-  //  if ((jsonBuffer["reboot"]) && (jsonBuffer["reboot"] == "ON"))
-  //    ESP.restart();
 }
 
 void Firmware_Update()
