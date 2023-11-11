@@ -2025,12 +2025,12 @@ void Start_Captive_Portal()
   // SD option
   if (eepromConfig.ConfigValues[4] == '0')
   {
-    const char *custom_sd_str = "<label for='customSD'>SD version:</label><br/><input type='radio' name='customSD' value='0' checked> No SD & RTC<br><input type='radio' name='customSD' value='1'> SD & RTC connected";
+    const char *custom_sd_str = "<label for='customSD'>SD version:</label><br/><input type='radio' name='customSD' value='0' checked> No SD & RTC<br><input type='radio' name='customSD' value='1'> SD & RTC mode";
     new (&custom_sd_type) WiFiManagerParameter(custom_sd_str);
   }
   else if (eepromConfig.ConfigValues[4] == '1')
   {
-    const char *custom_sd_str = "<label for='customSD'>SD version:</label><br/><input type='radio' name='customSD' value='0'> No SD & RTC<br><input type='radio' name='customSD' value='1' checked> SD & RTC connected";
+    const char *custom_sd_str = "<label for='customSD'>SD version:</label><br/><input type='radio' name='customSD' value='0'> No SD & RTC<br><input type='radio' name='customSD' value='1' checked> SD & RTC mode";
     new (&custom_sd_type) WiFiManagerParameter(custom_sd_str);
   }
 
@@ -4292,7 +4292,7 @@ void Aireciudadano_Characteristics()
   else
   {
     SDflag = true;
-    Serial.println(F("SD & RTC connected"));
+    Serial.println(F("SD & RTC mode"));
   }
 
 #if !WPA2
@@ -4346,7 +4346,7 @@ void Aireciudadano_Characteristics()
   else
   {
     SDflag = true;
-    Serial.println(F("SD & RTC connected"));
+    Serial.println(F("SD & RTC mode"));
   }
 
 #if !WPA2
