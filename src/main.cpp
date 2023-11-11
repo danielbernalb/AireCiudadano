@@ -1818,7 +1818,7 @@ void Start_Captive_Portal()
   String wifiAP;
   int captiveportaltime = 0;
 
-  Serial.println(F("Start Captive Portal"));ok todo por SD
+  Serial.println(F("Start Captive Portal"));
   Serial.println(F("Timeout to login: 60 seconds -> timeout in portal: 300 seconds"));
 
   if (SDflag == false)
