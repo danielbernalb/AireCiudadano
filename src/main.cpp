@@ -567,15 +567,15 @@ const char *customHtml = R"(
     if (i < 10) {i = "0" + i}
     return i;
     }
-    date = new Date();
-    year = date.getFullYear();
-    month = addZero(date.getMonth() + 1);
-    day = addZero(date.getDate());
-    hour = addZero(date.getHours());
-    minutes = addZero(date.getMinutes());
-    seconds = addZero(date.getSeconds());
-    prueba1 = year + month + day + hour + minutes + seconds;
-    document.getElementById("date_time_id").value = prueba1;
+    const date = new Date();
+    let year = date.getFullYear();
+    let month = addZero(date.getMonth() + 1);
+    let day = addZero(date.getDate());
+    let hour = addZero(date.getHours());
+    let minutes = addZero(date.getMinutes());
+    let seconds = addZero(date.getSeconds());
+    let datestring = year + ":" + month + ":" + day + "_" + hour + ":" + minutes + ":" + seconds;
+    document.getElementById("date_time_id").value = datestring;
   </script>   
      )";
 
@@ -2242,11 +2242,11 @@ void saveParamCallback()
 void RTCadjustTime()
 {
   String Valdate_year = Valdate_time_id.substring(0, 4);
-  String Valdate_month = Valdate_time_id.substring(4, 6);
-  String Valdate_day = Valdate_time_id.substring(6, 8);
-  String Valdate_hour = Valdate_time_id.substring(8, 10);
-  String Valdate_min = Valdate_time_id.substring(10, 12);
-  String Valdate_sec = Valdate_time_id.substring(12, 14);
+  String Valdate_month = Valdate_time_id.substring(5, 7);
+  String Valdate_day = Valdate_time_id.substring(8, 10);
+  String Valdate_hour = Valdate_time_id.substring(11, 13);
+  String Valdate_min = Valdate_time_id.substring(14, 16);
+  String Valdate_sec = Valdate_time_id.substring(17, 19);
 
   uint16_t year = Valdate_year.toInt();
   uint8_t month = Valdate_month.toInt();
@@ -2257,8 +2257,12 @@ void RTCadjustTime()
 
   Serial.print("year = ");
   Serial.print(year);
+  Serial.print(", month = ");
+  Serial.print(month);
   Serial.print(", day = ");
   Serial.print(day);
+  Serial.print(", hour = ");
+  Serial.print(hour);
   Serial.print(", min = ");
   Serial.print(min);
   Serial.print(", sec = ");
