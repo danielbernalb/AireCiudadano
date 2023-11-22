@@ -16,11 +16,11 @@
 
 ////////////////////////////////
 // Modo de comunicaciones del sensor:
-#define Wifi true       // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
+#define Wifi true        // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
 #define WPA2 false       // Set to true to WPA2 enterprise networks (IEEE 802.1X)
-#define Rosver true     // Set to true URosario version
+#define Rosver true      // Set to true URosario version
 #define Rosver2 false    // Level 2 Urosario version
-#define Bluetooth false   // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
+#define Bluetooth false  // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
 #define ESP8285 false    // Set to true in case you use a ESP8285 switch
@@ -28,7 +28,7 @@
 #define SHT4x true       // Set to true for SHT4x sensor
 
 #define SiteAltitude 0   // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
-// #define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
+//#define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
 
 // Escoger modelo de pantalla (pasar de false a true) o si no hay escoger ninguna (todas false):
 #define Tdisplaydisp false
@@ -88,7 +88,7 @@ struct MyConfigStruct
 #if !CO2sensor
   uint16_t BluetoothTime = 10; // Bluetooth Time
 #else
-  uint16_t BluetoothTime = 2; // Bluetooth Time
+  uint16_t BluetoothTime = 10; // Bluetooth Time
 #endif
   char aireciudadano_device_name[30]; // Device name; default to aireciudadano_device_id
 #elif Wifi
@@ -4055,16 +4055,20 @@ void TimeConfig()
       }
       FlashBluetoothTime();
 #else
+#if (OLED96display || OLED66display)
       u8g2.setFont(u8g2_font_6x10_tf);
+#endif
       Serial.print("CALIBRATION:");
       for (int i = 180; i > -1; i--)
       { // loop from 0 to 180
+#if (OLED96display || OLED66display)
         pageStart();
         u8g2.setCursor(0, dh / 2 - 7);
         u8g2.print("Calib time:");
         u8g2.setCursor(8, dh / 2 + 7);
         u8g2.print(String(i) + " seg");
         pageEnd();
+#endif
         delay(1000); // wait 1000 ms
 
         if (toggleLive == false)
@@ -4095,12 +4099,14 @@ void TimeConfig()
       else if (S8sen == true)
         sensor_S8->manual_calibration();
       Serial.println("Resetting forced calibration factor to 400: done");
+#if (OLED96display || OLED66display)
       pageStart();
       u8g2.setCursor(0, dh / 2 - 2);
       u8g2.print("Reset calib:");
       u8g2.setCursor(8, dh / 2 + 7);
       u8g2.print("400 ppm");
       pageEnd();
+#endif
       delay(5000);
 #endif
     }
@@ -5098,7 +5104,6 @@ void Write_Bluetooth()
   provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
   provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
   provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
-//  provider.commitSample(Bluetooth_loop_time);
   provider.commitSample(Bluetooth_loop_time);
   Serial.print("Bluetooth frame: PM2.5(ug/m3):");
 
@@ -5106,8 +5111,7 @@ void Write_Bluetooth()
   provider.writeValueToCurrentSample(pm25int, SignalType::CO2_PARTS_PER_MILLION);
   provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
   provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
-//  provider.commitSample(Bluetooth_loop_time);
-  provider.commitSample();
+  provider.commitSample(Bluetooth_loop_time);
   Serial.print("Bluetooth frame: CO2(ppm):");
 #endif
   Serial.print(pm25int);
