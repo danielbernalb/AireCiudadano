@@ -16,22 +16,22 @@
 
 ////////////////////////////////
 // Modo de comunicaciones del sensor:
-#define Wifi true        // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
+#define Wifi false       // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
 #define WPA2 false       // Set to true to WPA2 enterprise networks (IEEE 802.1X)
-#define Rosver true      // Set to true URosario version
+#define Rosver false     // Set to true URosario version
 #define Rosver2 false    // Level 2 Urosario version
-#define Bluetooth false  // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
+#define Bluetooth true   // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
 #define ESP8285 false    // Set to true in case you use a ESP8285 switch
-#define CO2sensor false  // Set to true for CO2 sensors: SCD30 and SenseAir S8
+#define CO2sensor true   // Set to true for CO2 sensors: SCD30 and SenseAir S8
 #define SHT4x true       // Set to true for SHT4x sensor
 
 #define SiteAltitude 0   // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
 //#define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
 
 // Escoger modelo de pantalla (pasar de false a true) o si no hay escoger ninguna (todas false):
-#define Tdisplaydisp false
+#define Tdisplaydisp true
 #define OLED66display false
 #define OLED96display false
 
@@ -233,11 +233,15 @@ U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE, 5, 4);
 #include "ArchivoNarrow_Regular50pt7b.h"
 #include "ArimoBoldFont16.h"
 #include "ArimoBoldFont20.h"
+#include "FreeSansBold30pt7b.h"
+
 #define GFXFF 1
 // #define FF90 &ArchivoNarrow_Regular10pt7b
 #define FF90 &ArimoBoldFont16
 #define FF92 &ArimoBoldFont20
 #define FF95 &ArchivoNarrow_Regular50pt7b
+#define FF97 &FreeSansBold30pt7b
+
 TFT_eSPI tft = TFT_eSPI(135, 240); // Invoke library, pins defined in User_Setup.h
 
 // Customized AireCiudadano splash screen
@@ -3861,7 +3865,11 @@ void Button_Init()
     tft.setFreeFont(FF90);
     tft.drawString("Left button", 3, 5);
     tft.drawString("  Short: Menu", 3, 21);
+#if !CO2sensor
     tft.drawString("  Long: SampTi", 3, 37);
+#else
+    tft.drawString("  Long: Calibr", 3, 37);
+#endif
     tft.drawString("Right button", 3, 75);
     tft.drawString("  Short: Info", 3, 91);
     tft.drawString("  Long: Sleep", 3, 107);
@@ -3879,6 +3887,7 @@ void Button_Init()
                                               tft.setFreeFont(FF90);
                                               tft.setTextDatum(MC_DATUM);
 #if Bluetooth
+#if !CO2sensor
                                               tft.drawString("Eval Time:", tft.width() / 2, tft.height() / 2 - 15);
                                               tft.drawString(String(eepromConfig.BluetoothTime) + " seg", tft.width() / 2, tft.height() / 2 + 15);
                                               delay(1000);
@@ -3910,6 +3919,51 @@ void Button_Init()
                                               tft.drawString(String(Bluetooth_loop_time) + " seg", tft.width() / 2, tft.height() / 2 + 15);
                                               delay(1000);
                                               FlashBluetoothTime();
+#else
+                                              Serial.print("CALIBRATION:");
+                                              for (int i = 180; i > -1; i--)
+                                              { // loop from 0 to 180
+
+                                                tft.drawString("Calib Time:", tft.width() / 2, tft.height() / 2 - 15);
+                                                tft.drawString("                    ", tft.width() / 2, tft.height() / 2 + 15);
+                                                tft.drawString(String(i) + " seg", tft.width() / 2, tft.height() / 2 + 15);
+                                                delay(1000); // wait 1000 ms
+
+                                                if (toggleLive == false)
+                                                {
+                                                  if (SCD30sen == true)
+                                                  {
+                                                    pm25int = airSensor.getCO2();
+                                                    Serial.print(i);
+                                                    Serial.print(" CO2(ppm):");
+                                                    Serial.println(pm25int);
+                                                    toggleLive = true;
+                                                  }
+                                                  else if (S8sen == true)
+                                                  {
+                                                    // Get CO2 measure
+                                                    pm25int = sensor_S8->get_co2();
+                                                    Serial.print(i);
+                                                    Serial.print(" CO2(ppm):");
+                                                    Serial.println(pm25int);
+                                                    toggleLive = true;
+                                                  }
+                                                }
+                                                else
+                                                  toggleLive = false;
+                                              }
+                                              if (SCD30sen == true)
+                                                airSensor.setForcedRecalibrationFactor(400);
+                                              else if (S8sen == true)
+                                                sensor_S8->manual_calibration();
+                                              Serial.println("Resetting forced calibration factor to 400: done");
+
+                                              tft.drawString("Reset calib:", tft.width() / 2, tft.height() / 2 - 15);
+                                              tft.drawString("400 ppm", tft.width() / 2, tft.height() / 2 + 15);
+
+                                              delay(5000);
+#endif
+
 #else
                                               tft.drawString("Reiniciando", tft.width() / 2, tft.height() / 2 - 5);
                                               delay(2000);
@@ -3950,10 +4004,17 @@ void Update_Display()
   if (toggleLive)
   {
 #if Bluetooth
+#if !CO2sensor
     if (pm25int < 57)
       tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_BLACK);
     else
       tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_WHITE);
+#else
+    if (pm25int < 801)
+      tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_BLACK);
+    else
+      tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_WHITE);
+#endif
 #endif
   }
   toggleLive = !toggleLive;
@@ -4843,9 +4904,9 @@ void displayAverage(int average)
 {
   tft.setTextSize(1);
 
+#if !CO2sensor
   if (average < 13)
   {
-
     tft.fillScreen(TFT_GREEN);
     tft.setTextColor(TFT_BLACK, TFT_GREEN);
 #if Bluetooth
@@ -4857,7 +4918,6 @@ void displayAverage(int average)
   }
   else if (average < 36)
   {
-
     tft.fillScreen(TFT_YELLOW);
     tft.setTextColor(TFT_BLACK, TFT_YELLOW);
     delay(50);
@@ -4870,7 +4930,6 @@ void displayAverage(int average)
   }
   else if (average < 56)
   {
-
     tft.fillScreen(TFT_ORANGE);
     tft.setTextColor(TFT_BLACK, TFT_ORANGE);
 #if Bluetooth
@@ -4882,7 +4941,6 @@ void displayAverage(int average)
   }
   else if (average < 151)
   {
-
     tft.fillScreen(TFT_RED);
     tft.setTextColor(TFT_WHITE, TFT_RED);
 #if Bluetooth
@@ -4961,6 +5019,115 @@ void displayAverage(int average)
     Serial.println(rssi);
     tft.drawString(String(rssi), 30, 220);
   }
+#endif
+
+#else
+
+  if (average < 600)
+  {
+    tft.fillScreen(TFT_GREEN);
+    tft.setTextColor(TFT_BLACK, TFT_GREEN);
+#if Bluetooth
+    displayBatteryLevel(TFT_BLACK);
+#endif
+    tft.drawXBitmap(27, 10, SmileFaceGoodBig, 80, 80, TFT_BLACK);
+    tft.setFreeFont(FF92);
+    tft.drawString("GOOD", 34, 100);
+  }
+  else if (average < 800)
+  {
+    tft.fillScreen(TFT_ORANGE);
+    tft.setTextColor(TFT_BLACK, TFT_ORANGE);
+    delay(50);
+#if Bluetooth
+    displayBatteryLevel(TFT_BLACK);
+#endif
+    tft.drawXBitmap(27, 10, SmileFaceModerateBig, 80, 80, TFT_BLACK);
+    tft.setFreeFont(FF90);
+    tft.drawString("MODERATE", 18, 100);
+  }
+  else if (average < 1000)
+  {
+    tft.fillScreen(TFT_RED);
+    tft.setTextColor(TFT_WHITE, TFT_RED);
+#if Bluetooth
+    displayBatteryLevel(TFT_WHITE);
+#endif
+    tft.drawXBitmap(27, 10, SmileFaceUnhealthyBig, 80, 80, TFT_WHITE);
+    tft.setFreeFont(FF90);
+    tft.drawString("UNHEALTHY", 13, 100);
+  }
+  else if (average < 1400)
+  {
+    tft.fillScreen(TFT_VIOLET);
+    tft.setTextColor(TFT_WHITE, TFT_VIOLET);
+#if Bluetooth
+    displayBatteryLevel(TFT_WHITE);
+#endif
+    tft.drawXBitmap(27, 10, SmileFaceVeryUnhealthyBig, 80, 80, TFT_WHITE);
+    tft.setFreeFont(FF90);
+    tft.drawString("VERY UNHEAL", 5, 100);
+  }
+  else
+  {
+    tft.fillScreen(TFT_BROWN);
+    tft.setTextColor(TFT_WHITE, TFT_BROWN);
+#if Bluetooth
+    displayBatteryLevel(TFT_WHITE);
+#endif
+    tft.drawXBitmap(27, 10, SmileFaceHazardousBig, 80, 80, TFT_WHITE);
+    tft.setFreeFont(FF90);
+    tft.drawString("HAZARDOUS", 13, 100);
+  }
+
+  // Draw CO2 number
+  tft.setTextSize(1);
+  tft.setFreeFont(FF97);      // CO2 grande
+
+  if (average == 0)
+    tft.drawString(String(average), 52, 132);
+  else if (average < 1000)
+    tft.drawString(String(average), 18, 132);
+  else
+    tft.drawString(String(average), 2, 132);
+
+  // Draw PM25 units
+  tft.setTextSize(1);
+  tft.setFreeFont(FF90);
+  tft.drawString("CO2: ", 30, 197);
+  tft.drawString(String(round(PM25_value), 0), 80, 197);
+
+  if (temp != 0 || humi != 0)
+  {
+    // Draw temperature
+    tft.drawString("T" + String(temp), 60, 220);
+
+    // Draw humidity
+    tft.drawString("H" + String(humi), 95, 220);
+  }
+  else
+    tft.drawString("ppm", 72, 218);
+    // tft.drawString("ug/m3", 72, 268);
+
+#if Wifi
+  int rssi;
+  rssi = WiFi.RSSI();
+
+  if (rssi != 0)
+  {
+    if (pm25int < 57)
+      tft.drawXBitmap(5, 215, Icono_wifi_on_BIG, 20, 20, TFT_BLACK);
+    else
+      tft.drawXBitmap(5, 215, Icono_wifi_on_BIG, 20, 20, TFT_WHITE);
+    Serial.print(F(" RSSI: "));
+    Serial.print(rssi);
+    rssi = rssi + 130;
+    Serial.print(F("  norm: "));
+    Serial.println(rssi);
+    tft.drawString(String(rssi), 30, 220);
+  }
+#endif
+
 #endif
 }
 #endif
