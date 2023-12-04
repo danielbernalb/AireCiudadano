@@ -11,27 +11,36 @@
 // Modificado libreria WifiManager para compatibilidad
 // Modificado PubSubClient.cpp : para quitar warning
 
+// Novedades:
+// 1. Reporte del PM1 al servidor
+// 2. Posibilidad de uso de dos sensores PMS7003:
+// PM25: promedio de la medición de los dos sensores PMS7003
+// PM25raw: promedio de las dos medición RAW de los dos sensores
+// PM251: valor de la medición (sin ajuste o con ajuste) del sensor 1 PMS7003
+// PM251: valor de la medición (sin ajuste o con ajuste) del sensor 2 PMS7003
+
 #include <Arduino.h>
 #include "main.hpp"
 
 ////////////////////////////////
 // Modo de comunicaciones del sensor:
-#define Wifi false       // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
-#define WPA2 false       // Set to true to WPA2 enterprise networks (IEEE 802.1X)
-#define Rosver false     // Set to true URosario version
-#define Rosver2 false    // Level 2 Urosario version
-#define Bluetooth true   // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
-#define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
-#define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
-#define ESP8285 false    // Set to true in case you use a ESP8285 switch
-#define CO2sensor true   // Set to true for CO2 sensors: SCD30 and SenseAir S8
-#define SHT4x true       // Set to true for SHT4x sensor
+#define Wifi       true   // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
+#define WPA2       false  // Set to true to WPA2 enterprise networks (IEEE 802.1X)
+#define Rosver     false  // Set to true URosario version
+#define Rosver2    false  // Level 2 Urosario version
+#define Bluetooth  false  // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
+#define SDyRTC     false  // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
+#define SaveSDyRTC false  // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
+#define ESP8285    false  // Set to true in case you use a ESP8285 switch
+#define CO2sensor  false  // Set to true for CO2 sensors: SCD30 and SenseAir S8
+#define SHT4x      true   // Set to true for SHT4x sensor
+#define TwoPMS     false  // Set to true if you want 2 PMS7003 sensors
 
 #define SiteAltitude 0   // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
 //#define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
 
 // Escoger modelo de pantalla (pasar de false a true) o si no hay escoger ninguna (todas false):
-#define Tdisplaydisp true
+#define Tdisplaydisp  false
 #define OLED66display false
 #define OLED96display false
 
@@ -39,13 +48,13 @@
 #define TTGO_TQ false
 
 // Definiciones opcionales para version Wifi
-#define BrownoutOFF false   // Colocar en true en boards con problemas de RESET por Brownout o bajo voltaje
-#define ESP8266SH false     // Colocar para PMS en pin 0 - Hardware Serial
-#define PreProgSensor false // Variables de sensor preprogramadas:
-                            // Latitude: char sensor_lat[10] = "xx.xxxx";
-                            // Longitude: char sensor_lon[10] = "xx.xxxx";
-                            // Valores de configuración: char ConfigValues[9] = "000xxxxx";
-                            // Nombre estación: char aireciudadano_device_name[36] = "xxxxxxxxxxxxxx";
+#define BrownoutOFF   false   // Colocar en true en boards con problemas de RESET por Brownout o bajo voltaje
+#define ESP8266SH     false   // Colocar para PMS en pin 0 - Hardware Serial
+#define PreProgSensor false   // Variables de sensor preprogramadas:
+                              // Latitude: char sensor_lat[10] = "xx.xxxx";
+                              // Longitude: char sensor_lon[10] = "xx.xxxx";
+                              // Valores de configuración: char ConfigValues[9] = "000xxxxx";
+                              // Nombre estación: char aireciudadano_device_name[36] = "xxxxxxxxxxxxxx";
 
 // Fin definiciones opcionales Wifi
 
@@ -57,11 +66,11 @@ bool SHT31sen = false;      // Sensor SHT31 / SHT4x humedad y temperatura
 bool AM2320sen = false;     // Sensor AM2320 humedad y temperatura
 bool SCD30sen = false;      // Sensor CO2 SCD30 Sensirion
 bool S8sen = false;         // Sensor CO2 SenseAir S8
-bool TDisplay = false;      // Set to true if Board TTGO T-Display is used
-bool OLED66 = false;        // Set to true if you use a OLED Diplay 0.66 inch 64x48
-bool OLED96 = false;        // Set to true if you use a OLED Diplay 0.96 inch 128x64
+bool TDisplay = false;      // Board TTGO T-Display is used
+bool OLED66 = false;        // OLED Diplay 0.66 inch 64x48
+bool OLED96 = false;        // OLED Diplay 0.96 inch 128x64
 //bool ExtAnt = false;        // External antenna
-bool AmbInOutdoors = false; // Set to true if your sensor is indoors measuring outside environment, false if is outdoors
+bool AmbInOutdoors = false; // Indoors measuring outside environment, false if is outdoors
 bool SDflag = false;
 
 uint8_t CustomValue = 0;
@@ -142,15 +151,36 @@ Preferences preferences;
 #endif
 
 // Measurements
-float PM25_value = 0;           // PM25 measured value
-float PM25_value_ori = 0;       // PM25 original measured value in PMS adjust TRUE
-float PM25_accumulated = 0;     // Accumulates pm25 measurements for a MQTT period
-float PM25_accumulated_ori = 0; // Accumulates pm25 measurements for a MQTT period in PMS Adjust TRUE
+float PM25_value = 0;            // PM25 measured value
+float PM251_value = 0;           // PM25 sensor 1 measured value
+float PM252_value = 0;           // PM25 sensor 2 measured value
+float PM25_value_ori = 0;        // PM25 original measured value in PMS adjust TRUE
+float PM251_value_ori = 0;       
+float PM252_value_ori = 0;       
+float PM25_accumulated = 0;      // Accumulates pm25 measurements for a MQTT period
+float PM251_accumulated = 0;     
+float PM252_accumulated = 0;     
+float PM25_accumulated_ori = 0;  // Accumulates pm25 measurements for a MQTT period in PMS Adjust TRUE
+float PM251_accumulated_ori = 0; 
+float PM252_accumulated_ori = 0; 
+float PM1_value = 0;             // PM1 measured value
+float PM11_value = 0;
+float PM12_value = 0;
+float PM1_accumulated = 0;
+float PM11_accumulated = 0;
+float PM12_accumulated = 0;
 float temperature;              // Read temperature as Celsius
 float humidity;                 // Read humidity in %
 int PM25_samples = 0;           // Counts de number of samples for a MQTT period
 int pm25int;                    // PM25 publicado
 int pm25intori;
+int pm251int;
+int pm252int;
+int pm251intori;
+int pm252intori;
+int pm1int;
+int pm11int;
+int pm12int;
 
 int temp;
 int humi;
@@ -347,8 +377,15 @@ PMS::DATA data;
 // #define PMS_TX 16 // PMS TX pin --- No hace nada, no lee
 // #define PMS_TX 14 // PMS TX pin --- Bien pero SPI de SD card usa ese pin
 #if !(SaveSDyRTC || SDyRTC || Rosver)
+#if !TwoPMS
 #define PMS_TX 14 // PMS TX pin
 #define PMS_RX 16 // PMS RX pin
+#else
+#define PMS_TX1 14 // PMS TX pin
+#define PMS_RX1 16 // PMS RX pin
+#define PMS_TX2 12 // PMS TX pin
+#define PMS_RX2 2  // PMS RX pin
+#endif
 #else
 #define PMS_TX 0  // PMS TX pin
 #define PMS_RX 16 // PMS RX pin
@@ -358,11 +395,19 @@ PMS::DATA data;
 #define PMS_RX 2 // PMS RX pin
 #endif
 
+#if !TwoPMS
 SoftwareSerial pmsSerial(PMS_TX, PMS_RX); // SoftwareSerial(rxPin, txPin)
-
 PMS pms(pmsSerial);
 PMS::DATA data;
-// bool PMSflag = false;
+#else
+SoftwareSerial pmsSerial1(PMS_TX1, PMS_RX1);
+PMS pms1(pmsSerial1);
+PMS::DATA data;
+
+SoftwareSerial pmsSerial2(PMS_TX2, PMS_RX2);
+PMS pms2(pmsSerial2);
+PMS::DATA data2;
+#endif
 
 #else // ESP8266 Hardware Serial
 
@@ -1071,9 +1116,34 @@ void loop()
 #endif
 
         // Accumulates samples
+#if !TwoPMS
         PM25_accumulated += PM25_value;
+        PM1_accumulated += PM1_value;
+#else
+        PM251_accumulated += PM251_value;
+        PM252_accumulated += PM252_value;
+        PM11_accumulated += PM11_value;
+        PM12_accumulated += PM12_value;
+//  Serial.print("PM251_accumulated: ");
+//  Serial.println(PM251_accumulated);
+//  Serial.print("PM252_accumulated: ");
+//  Serial.println(PM252_accumulated);  
+//  Serial.print("PM12_accumulated: ");
+//  Serial.println(PM12_accumulated);  
+#endif
         if (AdjPMS == true)
+        {
+#if !TwoPMS
           PM25_accumulated_ori += PM25_value_ori;
+#else
+          PM251_accumulated_ori += PM251_value_ori;
+          PM252_accumulated_ori += PM252_value_ori;
+//  Serial.print("PM251_accumulated_ori: ");
+//  Serial.println(PM251_accumulated_ori);
+//  Serial.print("PM25_samples: ");
+//  Serial.println(PM25_samples);  
+#endif
+        }
         PM25_samples++;
         Con_loop_times++;
       }
@@ -1212,6 +1282,13 @@ void loop()
       // Reset samples after sending them to the MQTT server
       PM25_accumulated = 0.0;
       PM25_accumulated_ori = 0.0;
+      PM251_accumulated = 0.0;
+      PM251_accumulated_ori = 0.0;
+      PM252_accumulated = 0.0;
+      PM252_accumulated_ori = 0.0;
+      PM1_accumulated = 0.0;
+      PM11_accumulated = 0.0;
+      PM12_accumulated = 0.0;
       PM25_samples = 0.0;
     }
   }
@@ -2397,15 +2474,48 @@ void Send_Message_Cloud_App_MQTT()
   // Print info
   float pm25f;
   float pm25fori;
+  float pm1f;
+#if TwoPMS
+  float pm251f;
+  float pm252f;
+  float pm251fori;
+  float pm252fori;
+  float pm11f;
+  float pm12f;
+#endif
   int8_t RSSI;
   int8_t inout;
 
+#if !TwoPMS
   Serial.print(F("Sending MQTT message to the send topic: "));
   Serial.println(MQTT_send_topic);
   pm25f = PM25_accumulated / PM25_samples;
   pm25int = round(pm25f);
   pm25fori = PM25_accumulated_ori / PM25_samples;
   pm25intori = round(pm25fori);
+  pm1f = PM1_accumulated / PM25_samples;
+  pm1int = round(pm1f);
+#else
+  pm251f = PM251_accumulated / PM25_samples;
+  pm251int = round(pm251f);
+  pm251fori = PM251_accumulated_ori / PM25_samples;
+  pm251intori = round(pm251fori);
+  pm252f = PM252_accumulated / PM25_samples;
+  pm252int = round(pm252f);
+  pm252fori = PM252_accumulated_ori / PM25_samples;
+  pm252intori = round(pm252fori);
+  pm25f = (pm251f + pm252f) / 2;
+  pm25int = round(pm25f);
+  pm25fori = (pm251fori + pm252fori) / 2;
+  pm25intori = round(pm25fori);
+  pm11f = PM11_accumulated / PM25_samples;
+  pm11int = round(pm11f);
+  pm12f = PM12_accumulated / PM25_samples;
+  pm12int = round(pm12f);
+  pm1f = (pm11f + pm12f) / 2;
+  pm1int = round(pm1f);
+#endif
+
   ReadHyT();
 
   RSSI = WiFi.RSSI();
@@ -2448,10 +2558,10 @@ void Send_Message_Cloud_App_MQTT()
     else
       nox = round(noxIndex);
 #if !Rosver
-    sprintf(MQTT_message, "{id: %s, PM25: %d, VOC: %d, NOx: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, voc, nox, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
+    sprintf(MQTT_message, "{id: %s, PM25: %d, PM1: %d, VOC: %d, NOx: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, pm1int, voc, nox, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
     // sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"VOC\": %d, \"NOx\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, voc, nox, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId); // for Telegraf
 #else
-    sprintf(MQTT_message, "{id: %s, PM25: %d, VOC: %d, NOx: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %llu}", aireciudadano_device_id.c_str(), pm25int, voc, nox, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
+    sprintf(MQTT_message, "{id: %s, PM25: %d, PM1: %d, VOC: %d, NOx: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %llu}", aireciudadano_device_id.c_str(), pm25int, pm1int, voc, nox, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
 #endif
 #endif
   }
@@ -2459,17 +2569,27 @@ void Send_Message_Cloud_App_MQTT()
   {
     if (AdjPMS == true)
 #if !Rosver
-    sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
+#if !TwoPMS
+    sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
     //sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId); // for Telegraf
 #else
-    sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %llu}", aireciudadano_device_id.c_str(), pm25int, pm25intori, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
+    sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM251: %d, PM252: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm251int, pm252int, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
+    //sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId); // for Telegraf
+#endif
+#else
+    sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %llu}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
 #endif
     else
 #if !Rosver
-    sprintf(MQTT_message, "{id: %s, PM25: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
+#if !TwoPMS
+    sprintf(MQTT_message, "{id: %s, PM25: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
     // sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId); // for Telegraf
 #else
-    sprintf(MQTT_message, "{id: %s, PM25: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %llu}", aireciudadano_device_id.c_str(), pm25int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
+    sprintf(MQTT_message, "{id: %s, PM25: %d, PM251: %d, PM252: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, pm251int, pm252int, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
+    // sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25int2, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId); // for Telegraf
+#endif
+#else
+    sprintf(MQTT_message, "{id: %s, PM25: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %llu}", aireciudadano_device_id.c_str(), pm25int, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
 #endif
   }
   Serial.print(MQTT_message);
@@ -3082,7 +3202,7 @@ if (PMSsen == true)
 #if !ESP8266
 
 #if !TTGO_TQ
-    Serial1.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX, PMS_RX);
+  Serial1.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX, PMS_RX);
 #else
   Serial2.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX, PMS_RX);
 #endif
@@ -3090,11 +3210,16 @@ if (PMSsen == true)
 #else
 
 #if !ESP8266SH
+#if !TwoPMS
   pmsSerial.begin(9600); // Software serial begin for PMS sensor
+#else
+  pmsSerial1.begin(9600); // Software serial begin for PMS1 sensor
+  pmsSerial2.begin(9600); // Software serial begin for PMS2 sensor
 #endif
-                         //  Serial.println(F("Test5"));
+#endif
 #endif
 
+#if !TwoPMS
     delay(1000);
 
     if (pms.readUntil(data))
@@ -3114,6 +3239,32 @@ if (PMSsen == true)
     {
       Serial.println(F("Could not find Plantower sensor!"));
     }
+#else
+    delay(500);
+
+    if (pms1.readUntil(data))
+    {
+      Serial.println(F("Plantower1 sensor found!"));
+      PMSsen = true;
+#if ESP8285
+      digitalWrite(LEDPIN, LOW); // turn the LED off by making the voltage LOW
+      delay(750);                // wait for a 750 msecond
+      digitalWrite(LEDPIN, HIGH);
+#endif
+#if (Bluetooth || SDyRTC || Rosver)
+      AdjPMS = true; // Por defecto se deja con ajuste, REVISAR!!!!!!
+#endif
+    }
+    else
+      Serial.println(F("Could not find Plantower1 sensor!"));
+
+    delay(500);
+
+    if (pms2.readUntil(data))
+      Serial.println(F("Plantower2 sensor found!"));
+    else
+      Serial.println(F("Could not find Plantower2 sensor!"));   
+#endif
 
 #if !Rosver
 #if Wifi
@@ -3208,6 +3359,7 @@ void Read_Sensor()
     } while (ret != SPS30_ERR_OK);
 
     PM25_value = val.MassPM2;
+    PM1_value = val.MassPM1;
 
     if (!err_sensor)
     {
@@ -3243,6 +3395,7 @@ void Read_Sensor()
       Serial.print(F("SEN5X PM2.5: "));
       Serial.print(PM25_value);
       Serial.print(F(" ug/m3   "));
+      PM1_value = massConcentrationPm1p0;
       Serial.print(F(" Humi % = "));
       if (isnan(ambientHumidity))
         Serial.print(F(" n/a"));
@@ -3275,12 +3428,14 @@ void Read_Sensor()
   if (PMSsen == true)
 #endif
   {
+#if !TwoPMS
     if (pms.readUntil(data))
     {
       PM25_value = data.PM_AE_UG_2_5;
       Serial.print(F("PMS PM2.5: "));
       Serial.print(PM25_value);
       Serial.print(F(" ug/m3   "));
+      PM1_value = data.PM_AE_UG_1_0; 
       if (AdjPMS == true)
       {
         PM25_value_ori = PM25_value;
@@ -3298,6 +3453,53 @@ void Read_Sensor()
     {
       Serial.println(F("No data by Plantower sensor!"));
     }
+#else
+    if (pms1.readUntil(data))
+    {
+      PM251_value = data.PM_AE_UG_2_5;
+      Serial.print(F("PMS1 PM2.5: "));
+      Serial.print(PM251_value);
+      Serial.print(F(" ug/m3   "));
+      PM11_value = data.PM_AE_UG_1_0; 
+      if (AdjPMS == true)
+      {
+        PM251_value_ori = PM251_value;
+        // PM25_value = ((562 * PM25_value_ori) / 1000) - 1; // Ecuación de ajuste resultado de 13 intercomparaciones entre PMS7003 y SPS30 por meses
+        // PM25_value = ((553 * PM25_value_ori) / 1000) + 1.3; // Segundo ajuste
+        PM251_value = ((630 * PM251_value_ori) / 1000) + 1.56; // Tercer ajuste a los que salio en Lima y pruebas aqui
+        Serial.print(F("Adjust1: "));
+        Serial.print(PM251_value);
+        Serial.print(F(" ug/m3   //   "));
+      }
+      else
+        Serial.print(F("   "));
+    }
+    else
+      Serial.println(F("No data by Plantower1 sensor!"));
+
+    if (pms2.readUntil(data))
+    {
+      PM252_value = data.PM_AE_UG_2_5;
+      Serial.print(F("PMS2 PM2.5: "));
+      Serial.print(PM252_value);
+      Serial.print(F(" ug/m3   "));
+      PM12_value = data.PM_AE_UG_1_0;
+      if (AdjPMS == true)
+      {
+        PM252_value_ori = PM252_value;
+        // PM25_value = ((562 * PM25_value_ori) / 1000) - 1; // Ecuación de ajuste resultado de 13 intercomparaciones entre PMS7003 y SPS30 por meses
+        // PM25_value = ((553 * PM25_value_ori) / 1000) + 1.3; // Segundo ajuste
+        PM252_value = ((630 * PM252_value_ori) / 1000) + 1.56; // Tercer ajuste a los que salio en Lima y pruebas aqui
+        Serial.print(F("Adjust2: "));
+        Serial.print(PM252_value);
+        Serial.println(F(" ug/m3"));
+      }
+      else
+        Serial.println(F(""));
+    }
+    else
+      Serial.println(F("No data by Plantower2 sensor!"));
+#endif
   }
   else
     NoSensor = true;
@@ -3471,7 +3673,7 @@ void GetDeviceInfo()
   ret = sps30.GetProductName(buf, 32);
   if (ret == SPS30_ERR_OK)
   {
-    Serial.print(F("Product name  : ")); //     !!!!!!!!!!!!!!!!!!debe compararse con “00080000”
+    Serial.print(F("Product name  : "));
 
     if (buf[7] == '0')
       if (buf[6] == '0')
@@ -4433,14 +4635,14 @@ void Aireciudadano_Characteristics()
   // SEN5Xsen = 2
   // PMSsen = 4
   // AdjPMS = 8
-  // SHT31sen = 16
+  // SHTXXsen = 16
   // AM2320sen =32
   // SDflag = 64
   //        = 128
   // TDisplay = 256
   // OLED66 = 512
   // OLED96 = 1024
-  //        = 2048
+  // TwoSensor = 2048
   // AmbInOutdoors (Indoors) = 4096
   // WPA2 = 8192
   // ESP8266 = 16384
@@ -4470,6 +4672,9 @@ void Aireciudadano_Characteristics()
     IDn = IDn + 512;
   if (OLED96)
     IDn = IDn + 1024;
+#if TwoPMS
+    IDn = IDn + 2048;       // Solo para PMS, si se quiere para SEN5X pasarla a var y setearla en codigo
+#endif
   if (AmbInOutdoors)
     IDn = IDn + 4096;
 #if WPA2
