@@ -29,6 +29,7 @@
 #define Rosver     false  // Set to true URosario version
 #define Rosver2    false  // Level 2 Urosario version
 #define Bluetooth  false  // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
+#define Mobile     true   // Set to true in case 2G/4G module for trasmision via mobile network
 #define SDyRTC     false  // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false  // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
 #define ESP8285    false  // Set to true in case you use a ESP8285 switch
@@ -191,6 +192,7 @@ float longitudef = 0.0;
 bool err_wifi = false;
 bool err_MQTT = false;
 bool err_sensor = false;
+bool err_mobile = false;
 bool FlagDATAicon = false;
 bool NoSensor = false;
 
@@ -630,6 +632,41 @@ const char *customHtml = R"(
 
 #endif
 #endif
+
+#if Mobile
+
+// Select your modem:
+//#define TINY_GSM_MODEM_SIM7070
+ #define TINY_GSM_MODEM_SIM800
+
+// Set serial for debug console (to the Serial Monitor, default speed 115200)
+#define SerialMon Serial
+
+#define SIM_TX 13
+#define SIM_RX 12
+
+SoftwareSerial SerialAT(SIM_TX, SIM_RX);  // RX, TX
+
+// Define the serial console for debug prints, if needed
+#define TINY_GSM_DEBUG SerialMon
+
+// Add a reception delay, if needed.
+// This may be needed for a fast processor at a slow baud rate.
+// #define TINY_GSM_YIELD() { delay(2); }
+
+#define PWR_PIN 15      // GPIO pin used for POWER PIN
+
+// Your GPRS credentials, if any
+//const char apn[]      = "web.colombiamovil.com.co";
+const char apn[] = "internet.comcel.com.co";
+
+#include <TinyGsmClient.h>
+
+TinyGsm modem(SerialAT);
+TinyGsmClient client(modem);
+
+#endif
+
 #if ESP8285
 #define LEDPIN 13
 #else
@@ -663,7 +700,7 @@ void setup()
 #endif
   Serial.println(F(""));
 
-#if (Wifi || Rosver)
+#if (Wifi || Rosver || Mobile)
 
 #if !ESP8266
   Serial.print(F("CPU0 reset reason:"));
@@ -743,10 +780,7 @@ void setup()
   Serial.println(eepromConfig.aireciudadano_device_name);
   strcpy(aireciudadano_device_nameTemp, eepromConfig.aireciudadano_device_name);
 #endif
-  // #if !(SDyRTC || Rosver)
-  // if (SDflag == false)
   Read_EEPROM(); // Read EEPROM config values //MIRAR SDflag   ////////////////////TEST
-// #endif
 #if PreProgSensor
   strncpy(eepromConfig.aireciudadano_device_name, aireciudadano_device_nameTemp, sizeof(eepromConfig.aireciudadano_device_name));
   Serial.print(F("T2:"));
@@ -769,10 +803,6 @@ void setup()
 
   // Get device id
   Get_AireCiudadano_DeviceId();
-
-//#if SDyRTC
-//  SDflag = true;
-//#endif
 
 #if Bluetooth
   Bluetooth_loop_time = eepromConfig.BluetoothTime;
@@ -887,6 +917,20 @@ void setup()
   }
   if (SDflag == false)
   {
+
+    
+#if (Mobile && Wifi)
+
+    // Set GSM module baud rate
+    SerialAT.begin(115200);
+
+    modemPowerOn();
+
+    Connect_Mobile();
+    Init_MQTT();     //MIRAR EN LA LIBRERIA MANEJO DE ERRORES
+
+#else
+#if Wifi    
     // Attempt to connect to WiFi network:
     Connect_WiFi();
 
@@ -901,6 +945,9 @@ void setup()
       digitalWrite(LEDPIN, HIGH);
 #endif
     }
+#endif
+#endif
+
   }
 #endif
 
@@ -1308,11 +1355,12 @@ void loop()
       // Setup_Sensor();  // Init pm25 sensors
     }
 
-#if Wifi
+#if (Wifi || Mobile)
 
     if (SDflag == false)
     {
 
+#if (Wifi && !Mobile)
       if (WiFi.status() != WL_CONNECTED)
       {
         Serial.println(F("--- err_wifi"));
@@ -1323,6 +1371,32 @@ void loop()
       {
         err_wifi = false;
       }
+#endif
+
+#if Mobile
+
+      if (!modem.isNetworkConnected())
+      {
+        Serial.println(F("--- err_mobile_network"));
+        err_mobile = true;
+        //MobileNetworkReconnect();
+        Connect_Mobile();
+      }
+      else
+      {
+        err_mobile = false;
+        Serial.println(F("Mobile network connected"));
+        if (!modem.isGprsConnected())
+        {
+          Serial.println(F("--- err_mobile_gprs"));
+          err_mobile = true;
+          MobileGprsReconnect();
+        }
+        else
+          err_mobile = false;
+      }
+
+#endif
 
       // Reconnect MQTT if needed
       if ((!MQTT_client.connected()) && (!err_wifi))
@@ -1333,7 +1407,11 @@ void loop()
       }
 
       // Reconnect MQTT if needed
+#if (Wifi && !Mobile)
       if ((err_MQTT) && (!err_wifi))
+#elif (Mobile)
+      if ((err_MQTT) && (!err_mobile))
+#endif
       {
         Serial.println(F("--- MQTT reconnect"));
         // Attempt to connect to MQTT broker
@@ -1665,6 +1743,138 @@ void Connect_WiFi()
   Print_WiFi_Status();
 #endif
 }
+
+#if Mobile
+
+void Connect_Mobile()
+{
+
+  // !!!!!!!!!!!
+  // Set your reset, enable, power pins here
+  // !!!!!!!!!!!
+  Serial.println("");
+  Serial.println("Mobile Start, wait...");
+  delay(5000);
+
+  // Restart takes quite some time
+  // To skip it, call init() instead of restart()
+  Serial.println("Initializing modem...");
+  modem.restart();
+  // modem.init();
+
+  String modemInfo = modem.getModemInfo();
+  Serial.print("Modem Info: ");
+  Serial.println(modemInfo);
+
+  Serial.print("Waiting for network...");
+  if (!modem.waitForNetwork())
+  {
+    Serial.println(" fail");
+    delay(10000);
+    return;
+  }
+  Serial.println(" success");
+
+  if (modem.isNetworkConnected())
+  {
+    Serial.println("Network connected");
+  }
+
+  // GPRS connection parameters are usually set after network registration
+  Serial.print(F("Connecting to "));
+  Serial.print(apn);
+  if (!modem.gprsConnect(apn))
+  {
+    Serial.println(" fail");
+    delay(10000);
+    return;
+  }
+  Serial.println(" success");
+
+  if (modem.isGprsConnected())
+  {
+    Serial.println("GPRS connected");
+  }
+
+  // Make sure we're still registered on the network
+  if (!modem.isNetworkConnected())
+  {
+    Serial.println("Network disconnected");
+    if (!modem.waitForNetwork(180000L, true))
+    {
+      Serial.println(" fail");
+      delay(10000);
+      return;
+    }
+    if (modem.isNetworkConnected())
+    {
+      Serial.println("Network re-connected");
+      if (!modem.isGprsConnected())
+      {
+        Serial.println("GPRS disconnected!");
+        Serial.print(F("Connecting to "));
+        Serial.print(apn);
+        if (!modem.gprsConnect(apn))
+        {
+          Serial.println(" fail");
+          delay(10000);
+          return;
+        }
+        if (modem.isGprsConnected())
+          Serial.println("GPRS reconnected");
+      }
+    }
+  }
+}
+
+void MobileNetworkReconnect()
+{
+  SerialMon.println("GPRS disconnected!");
+  SerialMon.print(F("Connecting to "));
+  SerialMon.print(apn);
+
+  if (!modem.waitForNetwork(180000L, true))
+  {
+    SerialMon.println(" network fail");
+    delay(10000);
+    return;
+  }
+  if (modem.isNetworkConnected())
+    SerialMon.println("Network re-connected");
+}
+
+void MobileGprsReconnect()
+{
+  if (!modem.gprsConnect(apn))
+  {
+    SerialMon.println(" gprs fail");
+    delay(10000);
+    return;
+  }
+  if (modem.isGprsConnected())
+  {
+    SerialMon.println("GPRS reconnected");
+    err_mobile = false;
+  }
+}
+
+void modemPowerOn()
+{
+  pinMode(PWR_PIN, OUTPUT);
+  digitalWrite(PWR_PIN, LOW);
+  delay(2000); // Datasheet Ton mintues = 1S
+  digitalWrite(PWR_PIN, HIGH);
+}
+
+void modemPowerOff()
+{
+  pinMode(PWR_PIN, OUTPUT);
+  digitalWrite(PWR_PIN, LOW);
+  delay(1500); // Datasheet Ton mintues = 1.2S
+  digitalWrite(PWR_PIN, HIGH);
+}
+
+#endif
 
 void Print_WiFi_Status()
 { // Print wifi status on serial monitor
@@ -2152,6 +2362,9 @@ void Start_Captive_Portal()
   wifiManager.addParameter(&date_time);
 #endif
 #else
+//#if Mobile
+//  wifiManager.addParameter(&custom_mobile);
+//#endif
   wifiManager.addParameter(&custom_endhtml);
 #endif
 
@@ -2464,7 +2677,7 @@ void MQTT_Reconnect()
       err_MQTT = true;
       Serial.print(F("failed, rc="));
       Serial.print(MQTT_client.state());
-      Serial.println(F(" try again in 5 seconds"));
+      Serial.println(F(" try again later"));
     }
   }
 }
@@ -4436,7 +4649,14 @@ void Get_AireCiudadano_DeviceId()
   if (eepromConfig.ConfigValues[4] == '0')
   {
     SDflag = false;
-    Serial.println(F("Mode: Wifi"));
+#if Wifi
+    Serial.print(F("Mode: Wifi"));
+#endif
+#if Mobile
+    Serial.println(F(" & Mobile"));
+#else
+    Serial.println(F(""));
+#endif
   }
   else
   {
@@ -4638,7 +4858,7 @@ void Aireciudadano_Characteristics()
   // SHTXXsen = 16
   // AM2320sen =32
   // SDflag = 64
-  //        = 128
+  // Mobile = 128
   // TDisplay = 256
   // OLED66 = 512
   // OLED96 = 1024
@@ -4665,6 +4885,9 @@ void Aireciudadano_Characteristics()
     IDn = IDn + 64;
 #if SaveSDyRTC
     IDn = IDn + 64;
+#endif
+#if Mobile
+    IDn = IDn + 128;
 #endif
   if (TDisplay)
     IDn = IDn + 256;

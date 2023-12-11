@@ -12,7 +12,8 @@
         "functional": "cpp",
         "tuple": "cpp",
         "type_traits": "cpp",
-        "utility": "cpp"
+        "utility": "cpp",
+        "*.tpp": "cpp"
     },
     "idf.portWin": "COM56",
     "workbench.colorTheme": "Visual Studio 2017 Light - C++"
