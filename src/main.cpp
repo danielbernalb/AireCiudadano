@@ -2893,8 +2893,13 @@ void Firmware_Update()
   Serial.println("Firmware WI66");
   t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI66.bin");
 #elif SoundMeter
+#if !SoundAM
   Serial.println("Firmware WISP SoundMeter");
   t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISMeter.bin");
+#else
+  Serial.println("Firmware WISP SoundMeter AM");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISMeteram.bin");
+#endif
 #else
   Serial.println("Firmware WISP");
   t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISP.bin");
