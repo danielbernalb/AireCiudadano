@@ -28,7 +28,7 @@
 #define SHT4x true       // Set to true for CO2 sensors: SCD30 and SenseAir S8
 #define SoundMeter true  // set to true for Sound Meter
 #define Influxver true   // Set to true for InfluxDB version
-#define SoundAM false     // Set to true to Sound meter airplane mode 
+#define SoundAM true     // Set to true to Sound meter airplane mode 
 
 #define SiteAltitude 0 // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
 // #define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
@@ -146,15 +146,19 @@ Preferences preferences;
 
 // Measurements
 float PM25_value = 0;           // PM25 measured value
+float PM25_valuesam =0;         // PM25 fir SoundAM
 float PM25_value_ori = 0;       // PM25 original measured value in PMS adjust TRUE
 float PM25_accumulated = 0;     // Accumulates pm25 measurements for a MQTT period
+float PM25_accumulatedsam = 0;  // Accumulates pm25 measurements for a MQTT period of Sam samples
 float PM25_accumulated_ori = 0; // Accumulates pm25 measurements for a MQTT period in PMS Adjust TRUE
 float temperature;              // Read temperature as Celsius
 float humidity;                 // Read humidity in %
 int PM25_samples = 0;           // Counts de number of samples for a MQTT period
+int SP_samples = 0;             // Counts de number of samples for a MQTT period
 int pm25int;                    // PM25 publicado
 int pm25intori;
 float dBAmax = 0;
+float dBAmaxsam = 0;
 
 int temp;
 int humi;
@@ -178,7 +182,8 @@ unsigned int Con_loop_times = 0;
 unsigned int SDyRTC_loop_time;
 
 // MQTT loop: time between MQTT measurements sent to the cloud
-unsigned long MQTT_loop_start;          // holds a timestamp for each cloud loop start
+unsigned long MQTT_loop_start;
+unsigned long MQTT_loop_startsam;
 unsigned long lastReconnectAttempt = 0; // MQTT reconnections
 
 // Errors loop: time between error condition recovery
@@ -499,10 +504,12 @@ char MQTT_message[256];
 PubSubClient MQTT_client(wifi_client);
 char received_payload[384];
 String MQTT_send_topic;
+String MQTT_send_topicsam;
 String MQTT_receive_topic;
 
 #if Influxver
 byte Influxseconds = 60;
+byte Influxsecondssam = 60;
 #endif
 
 // #define MQTT_VERSION MQTT_VERSION_3_1
@@ -813,6 +820,9 @@ void setup()
   MQTT_send_topic = "measurement"; // measurement are sent to this topic
 #else
   MQTT_send_topic = "measurementinflux"; // topic para InfluxDB
+#if SoundAM
+  MQTT_send_topicsam = "measurementinfsam"; // topic para InfluxDB
+#endif
 #endif
   MQTT_receive_topic = "config/" + aireciudadano_device_id; // Config messages will be received in config/id
 #endif
@@ -879,6 +889,7 @@ void setup()
   errors_loop_start = millis();
 #if Wifi
   MQTT_loop_start = millis();
+  MQTT_loop_startsam = millis();
 #endif
 
 #if (SDyRTC || SaveSDyRTC || Rosver)
@@ -1081,9 +1092,15 @@ void loop()
 
         // Accumulates samples
         PM25_accumulated += PM25_value;
+#if SoundAM
+        PM25_accumulatedsam += PM25_valuesam;
+#endif
         if (AdjPMS == true)
           PM25_accumulated_ori += PM25_value_ori;
         PM25_samples++;
+#if SoundAM
+        SP_samples++;
+#endif
         Con_loop_times++;
       }
     }
@@ -1238,6 +1255,24 @@ void loop()
       PM25_samples = 0.0;
       dBAmax = 0.0;
     }
+#if SoundAM 
+    if ((millis() - MQTT_loop_startsam) >= (1000 * Influxsecondssam))
+    {
+      // New timestamp for the loop start time
+      MQTT_loop_startsam = millis();
+
+      // Message the MQTT broker in the cloud app to send the measured values
+      if ((!err_wifi) && (SP_samples > 0))
+      {
+        Send_Message_Cloud_App_MQTTsam();
+      }
+
+      // Reset samples after sending them to the MQTT server
+      PM25_accumulatedsam = 0.0;
+      SP_samples = 0.0;
+      dBAmaxsam = 0.0;
+    }
+#endif
   }
 #endif
 
@@ -2438,24 +2473,12 @@ void Send_Message_Cloud_App_MQTT()
   float pm25fori;
   int8_t RSSI;
   int8_t inout;
-#if Influxver 
   int8_t dBAmaxint;
-#endif
-//  long pm25SP;
 
   Serial.print(F("Sending MQTT message to the send topic: "));
   Serial.println(MQTT_send_topic);
   pm25f = PM25_accumulated / PM25_samples;
-//#if SoundMeter
-//   Serial.print("pm25f1: ");
-//   Serial.println(pm25f);
-//   pm25SP = (long) (pm25f * 10L);
-//   pm25f = (float) pm25SP / 10.0;
-//   Serial.print("pm25f2: ");
-//   Serial.println(pm25f);
-//#endif
   pm25int = round(pm25f);
-// Serial.println(pm25int);
   pm25fori = PM25_accumulated_ori / PM25_samples;
   pm25intori = round(pm25fori);
 #if Influxver
@@ -2562,9 +2585,74 @@ void Send_Message_Cloud_App_MQTT()
   FlagLED = true;
 #if Influxver
   Influxseconds = 60;
+  Influxsecondssam = 60;
 //  Serial.print("Influxseconds = ");
 //  Serial.println(Influxseconds);
 #endif
+}
+
+void Send_Message_Cloud_App_MQTTsam()
+{// Send measurements to the cloud application by MQTT
+  // Print info
+  float pm25f;
+  int8_t RSSI;
+  int8_t inout;
+  int8_t dBAmaxintsam;
+
+  Serial.print(F("Sending MQTT message to the send topic: "));
+  Serial.println(MQTT_send_topicsam);
+  pm25f = PM25_accumulatedsam / SP_samples;
+
+  pm25int = round(pm25f);
+
+  dBAmaxintsam = round(dBAmaxsam);
+
+  RSSI = WiFi.RSSI();
+
+  Serial.print(F("Signal strength (RSSI):"));
+  Serial.print(RSSI);
+  Serial.println(F(" dBm"));
+
+  if (AmbInOutdoors)
+    inout = 1;
+  else
+    inout = 0;
+
+#if !Influxver
+      sprintf(MQTT_message, "{id: %s, noisedba: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, noisepeak: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, RSSI, latitudef, longitudef, inout, IDn, dBAmaxintsam, chipId);
+#else
+      sprintf(MQTT_message, "{\"id\": \"%s\", \"noisedba\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"noisepeak\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, RSSI, latitudef, longitudef, inout, IDn, dBAmaxintsam, chipId); // for Telegraf
+#endif
+  
+  Serial.print(MQTT_message);
+  Serial.println();
+
+#if ESP8285
+  digitalWrite(LEDPIN, LOW); // turn the LED off by making the voltage LOW
+  delay(750);                // wait for a 750 msecond
+  digitalWrite(LEDPIN, HIGH);
+#endif
+
+  if (OLED66 == true || OLED96 == true || TDisplay == true)
+    FlagDATAicon = true;
+
+// send message, the Print interface can be used to set the message contents
+
+  MQTT_client.publish(MQTT_send_topicsam.c_str(), MQTT_message);
+
+#if !ESP8266
+  digitalWrite(LEDPIN, HIGH);
+#else
+  digitalWrite(LEDPIN, LOW);
+#endif
+  FlagLED = true;
+#if Influxver
+  Influxseconds = 60;
+  Influxsecondssam = 60;
+//  Serial.print("Influxseconds = ");
+//  Serial.println(Influxseconds);
+#endif
+
 }
 
 void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int length)
@@ -3558,7 +3646,11 @@ void Read_SoundMeter()
     Serial.print(" dBA    ");
     Serial.print("Max: ");
     Serial.print(dBAmax);
+#if !SoundAM
     Serial.println(" dBA");
+#else
+    Serial.print(" dBA    ");
+#endif
   }
 #else
     frame = SerialESP.readStringUntil('\n');
@@ -3572,37 +3664,55 @@ void Read_SoundMeter()
     Serial.print(" dBA    ");
     Serial.print("Max: ");
     Serial.print(dBAmax);
+#if !SoundAM
     Serial.println(" dBA");
+#else
+    Serial.print(" dBA    ");
+#endif
+
 #endif
 
 #if SoundAM
 
-  if (PM25_value > 70)
+    PM25_valuesam = PM25_value;
+    if (PM25_valuesam > 255)
+      PM25_valuesam = 255;
+    if (PM25_valuesam > dBAmaxsam)
+      dBAmaxsam = PM25_valuesam;
+    Serial.print("Max AM: ");
+    Serial.print(dBAmaxsam);
+    Serial.println(" dBA");
+    
+//    Serial.print("PM25_valuesam: ");
+//    Serial.print(PM25_valuesam);
+//    Serial.println(" dBA");
+
+  if (PM25_valuesam > 70)
   {
     dBActual = 2;
-    if (dBActual < Influxseconds)
-      Influxseconds = 2;
+    if (dBActual < Influxsecondssam)
+      Influxsecondssam = 2;
   }
-  else if (PM25_value > 65)
+  else if (PM25_valuesam > 65)
   {
     dBActual = 5;
-    if (dBActual < Influxseconds)
-      Influxseconds = 8;
+    if (dBActual < Influxsecondssam)
+      Influxsecondssam = 8;
   }
-    else if (PM25_value > 60)
+    else if (PM25_valuesam > 60)
   {
     dBActual = 10;
-    if (dBActual < Influxseconds)
-      Influxseconds = 30;
+    if (dBActual < Influxsecondssam)
+      Influxsecondssam = 30;
   }
   else
   {
     dBActual = 60;
-    if (dBActual < Influxseconds)
-      Influxseconds = 60;
+    if (dBActual < Influxsecondssam)
+      Influxsecondssam = 60;
   }
-  Serial.print("Influxseconds = ");
-  Serial.println(Influxseconds);
+  Serial.print("Influxsecondssam = ");
+  Serial.println(Influxsecondssam);
 
 #endif
 

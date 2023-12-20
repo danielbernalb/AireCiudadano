@@ -20,6 +20,7 @@ void Read_CO2sensor();
 void Read_SoundMeter();
 void Evaluate_PM25_Value();
 void Send_Message_Cloud_App_MQTT();
+void Send_Message_Cloud_App_MQTTsam();
 void MQTT_Reconnect();
 void Init_MQTT();
 void Check_WiFi_Server();
