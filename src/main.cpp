@@ -897,7 +897,6 @@ void setup()
 
 // Initialize the GadgetBle Library for Bluetooth
 #elif Bluetooth
-//  provider.begin(Bluetooth_loop_time);
   provider.begin(Bluetooth_loop_time);
   Serial.print("Sensirion Provider Lib initialized with deviceId = ");
   Serial.println(provider.getDeviceIdString());
@@ -935,12 +934,14 @@ void setup()
   }
 #endif
 
-  // Initialize and warm up PM25 sensor
+  // Initialize sensors
 
-#if !CO2sensor
-  Setup_Sensor();
-#else
+#if CO2sensor
   Setup_CO2sensor();
+#elif SoundMeter
+  Setup_SoundMeter();
+#else
+  Setup_Sensor();  
 #endif
 
   // Init control loops
@@ -1165,6 +1166,9 @@ void loop()
 //  Serial.print("PM12_accumulated: ");
 //  Serial.println(PM12_accumulated);  
 #endif
+#if SoundAM
+        PM25_accumulatedsam += PM25_valuesam;
+#endif
         if (AdjPMS == true)
         {
 #if !TwoPMS
@@ -1179,6 +1183,9 @@ void loop()
 #endif
         }
         PM25_samples++;
+#if SoundAM
+        SP_samples++;
+#endif
         Con_loop_times++;
       }
     }
@@ -2569,7 +2576,9 @@ void Send_Message_Cloud_App_MQTT()
 #endif
   int8_t RSSI;
   int8_t inout;
+#if SoundMeter
   int8_t dBAmaxint;
+#endif
 
 #if !TwoPMS
   Serial.print(F("Sending MQTT message to the send topic: "));
@@ -2801,7 +2810,7 @@ void Send_Message_Cloud_App_MQTTsam()
   if (OLED66 == true || OLED96 == true || TDisplay == true)
     FlagDATAicon = true;
 
-  // send message, the Print interface can be used to set the message contents
+// send message, the Print interface can be used to set the message contents
 
   MQTT_client.publish(MQTT_send_topicsam.c_str(), MQTT_message);
 
@@ -3895,7 +3904,10 @@ void Read_SoundMeter()
 {
 //Serial.println("Read Sound Meter ESP_MEMS");
   String frame;
+#if SoundAM
   byte dBActual;
+#endif
+
 #if !ESP8266
   if (Serial2.available() != 0)
   {
