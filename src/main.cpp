@@ -36,9 +36,9 @@
 #define CO2sensor  false  // Set to true for CO2 sensors: SCD30 and SenseAir S8
 #define SHT4x      true   // Set to true for SHT4x sensor
 #define TwoPMS     false  // Set to true if you want 2 PMS7003 sensors
-#define SoundMeter true   // set to true for Sound Meter
-#define Influxver  true   // Set to true for InfluxDB version
-#define SoundAM    true   // Set to true to Sound meter airplane mode 
+#define SoundMeter false  // set to true for Sound Meter
+#define Influxver  false  // Set to true for InfluxDB version
+#define SoundAM    false  // Set to true to Sound meter airplane mode 
 
 #define SiteAltitude 0   // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
 //#define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
@@ -563,7 +563,7 @@ String MQTT_send_topic;
 String MQTT_send_topicsam;
 String MQTT_receive_topic;
 
-#if Influxver
+#if SoundMeter
 byte Influxseconds = 60;
 byte Influxsecondssam = 60;
 #endif
@@ -2720,7 +2720,7 @@ void Send_Message_Cloud_App_MQTT()
 #else
 //#if Rosver ////////////////////////////////!!!!!!!!!!!!!!!!!!!!
 #if !Influxver
-    sprintf(MQTT_message, "{id: %s, PM25: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %llu}", aireciudadano_device_id.c_str(), pm25int, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
+    sprintf(MQTT_message, "{id: %s, PM25: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
 #else
 //    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %llu}", aireciudadano_device_id.c_str(), pm25int, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId); // for Telegraf
     sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId); // for Telegraf
