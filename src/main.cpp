@@ -18,7 +18,7 @@
 // PM25raw: promedio de las dos medición RAW de los dos sensores
 // PM251: valor de la medición (sin ajuste o con ajuste) del sensor 1 PMS7003
 // PM251: valor de la medición (sin ajuste o con ajuste) del sensor 2 PMS7003
-// SoundMeter integrado con opcion SoundAM
+// 3. SoundMeter integrado con opcion SoundAM (Aeropuerto)
 
 #include <Arduino.h>
 #include "main.hpp"
@@ -40,7 +40,7 @@
 #define Influxver false  // Set to true for InfluxDB version
 #define SoundAM false    // Set to true to Sound meter airplane mode
 
-#define SiteAltitude 0 // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
+#define SiteAltitude 0   // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
 // #define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
 
 // Escoger modelo de pantalla (pasar de false a true) o si no hay escoger ninguna (todas false):
@@ -62,18 +62,18 @@
 
 // Fin definiciones opcionales Wifi
 
-bool SPS30sen = false;  // Sensor Sensirion SPS30
-bool SEN5Xsen = false;  // Sensor Sensirion SEN5X
-bool PMSsen = false;    // Sensor Plantower PMS
-bool AdjPMS = false;    // PMS sensor adjust
-bool SHT31sen = false;  // Sensor SHT31 / SHT4x humedad y temperatura
-bool AM2320sen = false; // Sensor AM2320 humedad y temperatura
-bool SCD30sen = false;  // Sensor CO2 SCD30 Sensirion
-bool S8sen = false;     // Sensor CO2 SenseAir S8
-bool TDisplay = false;  // Board TTGO T-Display is used
-bool OLED66 = false;    // OLED Diplay 0.66 inch 64x48
-bool OLED96 = false;    // OLED Diplay 0.96 inch 128x64
-// bool ExtAnt = false;        // External antenna
+bool SPS30sen = false;      // Sensor Sensirion SPS30
+bool SEN5Xsen = false;      // Sensor Sensirion SEN5X
+bool PMSsen = false;        // Sensor Plantower PMS
+bool AdjPMS = false;        // PMS sensor adjust
+bool SHT31sen = false;      // Sensor SHT31 / SHT4x humedad y temperatura
+bool AM2320sen = false;     // Sensor AM2320 humedad y temperatura
+bool SCD30sen = false;      // Sensor CO2 SCD30 Sensirion
+bool S8sen = false;         // Sensor CO2 SenseAir S8
+bool TDisplay = false;      // Board TTGO T-Display is used
+bool OLED66 = false;        // OLED Diplay 0.66 inch 64x48
+bool OLED96 = false;        // OLED Diplay 0.96 inch 128x64
+// bool ExtAnt = false;     // External antenna
 bool AmbInOutdoors = false; // Indoors measuring outside environment, false if is outdoors
 bool SDflag = false;
 
