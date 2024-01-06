@@ -19,6 +19,7 @@
 // PM251: valor de la medición (sin ajuste o con ajuste) del sensor 1 PMS7003
 // PM251: valor de la medición (sin ajuste o con ajuste) del sensor 2 PMS7003
 // 3. SoundMeter integrado con opcion SoundAM (Aeropuerto)
+// 4. Probar medicion HyT de PMSx003T con TwoPMS true
 
 #include <Arduino.h>
 #include "main.hpp"
@@ -34,13 +35,13 @@
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
 #define ESP8285 false    // Set to true in case you use a ESP8285 switch
 #define CO2sensor false  // Set to true for CO2 sensors: SCD30 and SenseAir S8
-#define SHT4x true       // Set to true for SHT4x sensor
+#define SHT4x false      // Set to true for SHT4x sensor
 #define TwoPMS false     // Set to true if you want 2 PMS7003 sensors
 #define SoundMeter false // set to true for Sound Meter
 #define Influxver false  // Set to true for InfluxDB version
 #define SoundAM false    // Set to true to Sound meter airplane mode
 
-#define SiteAltitude 0   // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
+#define SiteAltitude 0 // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
 // #define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
 
 // Escoger modelo de pantalla (pasar de false a true) o si no hay escoger ninguna (todas false):
@@ -62,17 +63,17 @@
 
 // Fin definiciones opcionales Wifi
 
-bool SPS30sen = false;      // Sensor Sensirion SPS30
-bool SEN5Xsen = false;      // Sensor Sensirion SEN5X
-bool PMSsen = false;        // Sensor Plantower PMS
-bool AdjPMS = false;        // PMS sensor adjust
-bool SHT31sen = false;      // Sensor SHT31 / SHT4x humedad y temperatura
-bool AM2320sen = false;     // Sensor AM2320 humedad y temperatura
-bool SCD30sen = false;      // Sensor CO2 SCD30 Sensirion
-bool S8sen = false;         // Sensor CO2 SenseAir S8
-bool TDisplay = false;      // Board TTGO T-Display is used
-bool OLED66 = false;        // OLED Diplay 0.66 inch 64x48
-bool OLED96 = false;        // OLED Diplay 0.96 inch 128x64
+bool SPS30sen = false;  // Sensor Sensirion SPS30
+bool SEN5Xsen = false;  // Sensor Sensirion SEN5X
+bool PMSsen = false;    // Sensor Plantower PMS
+bool AdjPMS = false;    // PMS sensor adjust
+bool SHT31sen = false;  // Sensor SHT31 / SHT4x humedad y temperatura
+bool AM2320sen = false; // Sensor AM2320 humedad y temperatura
+bool SCD30sen = false;  // Sensor CO2 SCD30 Sensirion
+bool S8sen = false;     // Sensor CO2 SenseAir S8
+bool TDisplay = false;  // Board TTGO T-Display is used
+bool OLED66 = false;    // OLED Diplay 0.66 inch 64x48
+bool OLED96 = false;    // OLED Diplay 0.96 inch 128x64
 // bool ExtAnt = false;     // External antenna
 bool AmbInOutdoors = false; // Indoors measuring outside environment, false if is outdoors
 bool SDflag = false;
@@ -3507,8 +3508,8 @@ if (PMSsen == true)
 #endif
 #endif
 #if !SHT4x
-  Serial.print(F("SHT31 test: "));
-  if (!sht31.begin(0x44))
+    Serial.print(F("SHT31 test: "));
+    if (!sht31.begin(0x44))
 #elif SHT4x
   Serial.print(F("SHT4x test: "));
   if (!sht4.begin())
@@ -4281,8 +4282,28 @@ void ReadHyT()
       Serial.println(F("   Failed to read temperature AM2320"));
   }
 #endif
-}
+  else if (data.HUMI != 0)
+  {
+    temperature = 0.0;
+    humidity = 0.0;
+    humidity = data.HUMI;
+    temperature = data.TEMP;
 
+    if (!isnan(humidity))
+    {
+      Serial.print(F("PMSx003T Humi % = "));
+      Serial.print(humidity);
+      humi = round(humidity);
+    }
+    
+    if (!isnan(temperature))
+    {
+      Serial.print(F("   Temp *C = "));
+      Serial.println(temperature);
+      temp = round(temperature);
+    }
+  }
+}
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
