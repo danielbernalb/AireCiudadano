@@ -2982,13 +2982,6 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
     Firmware_Update();
   }
 
-  // If factory reset has been enabled, just do it
-  if ((jsonBuffer["factory_reset"]) && (jsonBuffer["factory_reset"] == "ON"))
-  {
-    Wipe_EEPROM(); // Wipe EEPROM
-    ESP.restart();
-  }
-
   // save the new values if the flag was set
   if (write_eeprom)
   {
@@ -2996,10 +2989,6 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
     Write_EEPROM();
     ESP.restart();
   }
-
-  // If reboot, just do it, without cleaning the EEPROM
-  //  if ((jsonBuffer["reboot"]) && (jsonBuffer["reboot"] == "ON"))
-  //    ESP.restart();
 }
 
 void Firmware_Update()
