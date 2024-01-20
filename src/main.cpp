@@ -36,7 +36,7 @@
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
 #define ESP8285 false    // Set to true in case you use an ESP8285 switch
-#define ESP32S3 false    // Set to true in case you use an ESP32S3
+#define ESP32S3 true     // Set to true in case you use an ESP32S3
 #define CO2sensor false  // Set to true for CO2 sensors: SCD30 and SenseAir S8
 #define TwoPMS false     // Set to true if you want 2 PMS7003 sensors
 #define SoundMeter false // set to true for Sound Meter
@@ -1313,7 +1313,7 @@ void loop()
     // MQTT loop
 #if !Influxver
     if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 60000))
-    //  if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 5000))
+    //  if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 3000))
     //  if ((millis() - MQTT_loop_start) >= (1 * 60000))
 #else
     if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 1000 * Influxseconds))
