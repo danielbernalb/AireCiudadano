@@ -22,6 +22,7 @@
 // 4. Probar medicion HyT de PMSx003T con TwoPMS true
 // 5. ESP32S3 board
 // 6. SHT31 y SHT4X funcionales sin seleccion de cada modelo
+// 7. LedNeoPixel multicolor
 
 #include <Arduino.h>
 #include "main.hpp"
@@ -30,18 +31,17 @@
 // Modo de comunicaciones del sensor:
 #define Wifi true        // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
 #define WPA2 false       // Set to true to WPA2 enterprise networks (IEEE 802.1X)
-#define Rosver false     // Set to true URosario version
-#define Rosver2 false    // Level 2 Urosario version
+//#define Rosver false     // Set to true URosario version
 #define Bluetooth false  // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
 #define ESP8285 false    // Set to true in case you use an ESP8285 switch
-#define ESP32S3 true     // Set to true in case you use an ESP32S3
 #define CO2sensor false  // Set to true for CO2 sensors: SCD30 and SenseAir S8
-#define TwoPMS false     // Set to true if you want 2 PMS7003 sensors
+#define TwoPMS true     // Set to true if you want 2 PMS7003 sensors
 #define SoundMeter false // set to true for Sound Meter
 #define Influxver false  // Set to true for InfluxDB version
 #define SoundAM false    // Set to true to Sound meter airplane mode
+#define LedNeo false      // Set to true for Led Neo multicolor
 
 #define SiteAltitude 0 // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
 // #define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
@@ -62,6 +62,27 @@
                             // Longitude: char sensor_lon[10] = "xx.xxxx";
                             // Valores de configuración: char ConfigValues[9] = "000xxxxx";
                             // Nombre estación: char aireciudadano_device_name[36] = "xxxxxxxxxxxxxx";
+
+#ifdef ESP32S3def
+#define ESP32S3 true     // Set to true in case you use an ESP32S3
+#else
+#define ESP32S3 false     // Set to true in case you use an ESP32S3
+#endif
+
+#ifdef ESP32C3def
+#define ESP32C3 true     // Set to true in case you use an ESP32S3
+#else
+#define ESP32C3 false     // Set to true in case you use an ESP32S3
+#endif
+
+#ifdef Rosverdef
+#define Rosver true     // Set to true in case you use an ESP32S3
+#else
+#define Rosver false     // Set to true in case you use an ESP32S3
+#endif
+
+
+
 
 // Fin definiciones opcionales Wifi
 
@@ -135,12 +156,8 @@ char wifi_passwpa2[24];
 bool ConfigPortalSave = false;
 
 #if PreProgSensor
-// const char *ssid = "Techotyva";
-// const char *password = "Layuyux31";
-const char *ssid = "TPred";
-const char *password = "apt413sago16";
-// const char *ssid = "Rosa";
-// const char *password = "Rudysicha";
+const char *ssid = "TPxxx";
+const char *password = "aptxxxxx";
 char aireciudadano_device_nameTemp[30] = {0};
 #endif
 
@@ -364,6 +381,8 @@ float noxIndex;
 
 #if !TTGO_TQ
 
+#if !TwoPMS
+
 PMS pms(Serial1);
 PMS::DATA data;
 // bool PMSflag = false;
@@ -375,7 +394,26 @@ PMS::DATA data;
 #define PMS_RX 15 // PMS RX pin
 #endif
 
-#else
+#else     // esTwoPMS test AirGra
+
+#include <SoftwareSerial.h>
+
+#define PMS_TX1 31 // PMS TX pin
+#define PMS_RX1 30 // PMS RX pin
+#define PMS_TX2 13 // PMS TX pin      
+#define PMS_RX2 12  // PMS RX pin
+
+SoftwareSerial pmsSerial1(PMS_TX1, PMS_RX1);
+PMS pms1(pmsSerial1);
+PMS::DATA data;
+
+SoftwareSerial pmsSerial2(PMS_TX2, PMS_RX2);
+PMS pms2(pmsSerial2);
+PMS::DATA data2;
+
+#endif
+
+#else   // Es TTGO_TQ
 
 PMS pms(Serial2);
 PMS::DATA data;
@@ -385,7 +423,7 @@ PMS::DATA data;
 
 #endif
 
-#else
+#else   // es ESP8266
 
 #if !ESP8266SH
 
@@ -667,6 +705,13 @@ const char *customHtml = R"(
 
 bool FlagLED = false;
 
+#if LedNeo
+#define PinLedNeo 48
+#define LedBrightness 100       // Min 00, normal 150, max 255
+#include <Adafruit_NeoPixel.h> //Libreria necesaria, instalarla desde el gestor de librerias
+Adafruit_NeoPixel LED_RGB(1, PinLedNeo, NEO_GRBW + NEO_KHZ800);  // Creamos el objeto que manejará el led rgb PinLedNeo
+#endif
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // SETUP
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -685,11 +730,7 @@ void setup()
     delay(500); // wait 0.5 seconds for connection
   }
 
-#if Rosver2
-  Serial.setDebugOutput(false);
-#else
   Serial.setDebugOutput(true);
-#endif
   Serial.println(F(""));
 
 #if (Wifi || Rosver)
@@ -699,21 +740,15 @@ void setup()
   print_reset_reason(rtc_get_reset_reason(0));
 #else
   uint16_t Resetvar = 0;
-#if !Rosver2
   Serial.print(F("CPU reset reason: "));
-#endif
   rst_info *rinfo = ESP.getResetInfoPtr();
-#if !Rosver2
   Serial.println(rinfo->reason);
-#endif
   Resetvar = rinfo->reason;
   ResetFlag = true;
   if (Resetvar == 1 || Resetvar == 2 || Resetvar == 3 || Resetvar == 4)
   {
     ResetFlag = false;
-#if !Rosver2
     Serial.print(F("Resetvar: false"));
-#endif
   }
   else
   {
@@ -722,10 +757,8 @@ void setup()
     delay(1900);
 #endif
   }
-#if !Rosver2
   Serial.print(F("Resetvar: "));
   Serial.println(Resetvar);
-#endif
 #endif
 
 #endif
@@ -785,6 +818,40 @@ void setup()
   digitalWrite(LEDPIN, LOW);
 #else
   digitalWrite(LEDPIN, HIGH);
+#endif
+
+#if LedNeo
+  LED_RGB.begin();            // Inicia el objeto que hemos creado asociado a la librería NeoPixel 
+  LED_RGB.setBrightness(LedBrightness)    ; // Para el brillo del led
+
+  LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(0, 255, 0)));   // Encendemos el led verde
+  LED_RGB.show(); // Enciende el color
+  delay(500);
+  
+  LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(180, 180, 0))); // Encendemos el led amarillo
+  LED_RGB.show(); // Enciende el color
+  delay(500);
+  
+  LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(255, 125, 0))); // Encendemos el led naranja
+  LED_RGB.show(); // Enciende el color
+  delay(500);
+
+  LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(255, 0, 0)));   // Encendemos el led rojo
+  LED_RGB.show(); // Enciende el color
+  delay(500);
+
+  LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(128, 0, 255))); // Encendemos el led morado
+  LED_RGB.show(); // Enciende el color
+  delay(500);
+
+  LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(128, 128, 128))); // Encendemos el led blanco bajo brillo
+  LED_RGB.show(); // Enciende el color
+  delay(500);
+
+  LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(0, 0, 0)));     // Apagado
+  LED_RGB.show(); // Enciende el color
+  delay(500);
+
 #endif
 
   aireciudadano_device_id = eepromConfig.aireciudadano_device_name;
@@ -1330,6 +1397,10 @@ void loop()
 
 #if SaveSDyRTC
       Write_SD();
+#endif
+
+#if LedNeo
+      LedNeoAverage(pm25int);
 #endif
 
       // Reset samples after sending them to the MQTT server
@@ -2031,11 +2102,7 @@ void Start_Captive_Portal()
 
   wifi_server.stop();
 
-#if Rosver2
-  wifiManager.setDebugOutput(false);
-#else
   wifiManager.setDebugOutput(true);
-#endif
 
   wifiManager.disconnect();
 
@@ -3389,10 +3456,17 @@ if (PMSsen == true)
 
 #if !ESP8266
 
+#if !TwoPMS
+
 #if !TTGO_TQ
     Serial1.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX, PMS_RX);
 #else
   Serial2.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX, PMS_RX);
+#endif
+
+#else
+  pmsSerial1.begin(9600); // Software serial begin for PMS1 sensor
+  pmsSerial2.begin(9600); // Software serial begin for PMS2 sensor
 #endif
 
 #else
@@ -5302,11 +5376,13 @@ void Suspend_Device()
   // esp_sleep_enable_ext1_wakeup(GPIO_SEL_0, ESP_EXT1_WAKEUP_ALL_LOW);
 
   // set top button for wake up
+#if !ESP32C3        // REVISAR!!!!!!!!!!!!!!!!!!!!!!!!!!
   esp_sleep_enable_ext0_wakeup(GPIO_NUM_35, 0); // Top button
   // esp_sleep_enable_ext0_wakeup(GPIO_NUM_0, 0); // Bottom button
 
   delay(200);
   esp_deep_sleep_start();
+#endif
 }
 
 void print_reset_reason(RESET_REASON reason)
@@ -5851,6 +5927,44 @@ void pageEnd()
   u8g2.nextPage();
 }
 
+#endif
+
+#if LedNeo
+
+void LedNeoAverage(int average)
+{
+  if (average < 13)
+  {
+    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(0, 255, 0))); // Encendemos el led verde
+    Serial.println("Led RGB Verde");
+  }
+  else if (average < 36)
+  {
+    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(180, 180, 0))); // Encendemos el led amarillo
+    Serial.println("Led RGB Amarillo");
+  }
+  else if (average < 56)
+  {
+    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(255, 125, 0))); // Encendemos el led naranja
+    Serial.println("Led RGB Naranja");
+  }
+  else if (average < 151)
+  {
+    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(255, 0, 0))); // Encendemos el led rojo
+    Serial.println("Led RGB Rojo");
+  }
+  else if (average < 251)
+  {
+    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(128, 0, 255))); // Encendemos el led morado
+    Serial.println("Led RGB Morado");
+  }
+  else
+  {
+    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(128, 128, 128))); // Encendemos el led blanco bajo brillo
+    Serial.println("Led RGB Cafe = Blanco");
+  }
+  LED_RGB.show(); // Enciende el color
+}
 #endif
 
 #if Bluetooth
