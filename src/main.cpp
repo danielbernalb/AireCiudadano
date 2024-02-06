@@ -12,10 +12,29 @@
 // Modificado PubSubClient.cpp : para quitar warning
 
 #include <Arduino.h>
-#include "main.hpp"
 
 ////////////////////////////////
-bool FlagLED = false;
+
+#ifdef ESP32S3def
+#define ESP32S3 true     // Set to true in case you use an ESP32S3
+#else
+#define ESP32S3 false     // Set to true in case you use an ESP32S3
+#endif
+
+#ifdef ESP32C3def
+#define ESP32C3 true     // Set to true in case you use an ESP32S3
+#else
+#define ESP32C3 false     // Set to true in case you use an ESP32S3
+#endif
+
+#ifdef Rosverdef
+#define Rosver true     // Set to true in case you use an ESP32S3
+#else
+#define Rosver false     // Set to true in case you use an ESP32S3
+#endif
+
+#define LEDPIN 10
+
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // SETUP
@@ -34,26 +53,7 @@ void setup()
   {
     delay(500); // wait 0.5 seconds for connection
   }
-  pinMode(10, OUTPUT);
-
-#if !ESP8266
-  Serial.println(F("CPU0 reset reason:"));
-  print_reset_reason(rtc_get_reset_reason(0));
-#else
-  uint16_t Resetvar = 0;
-  Serial.print(F("CPU reset reason: "));
-  rst_info *rinfo = ESP.getResetInfoPtr();
-  Serial.println(rinfo->reason);
-  Resetvar = rinfo->reason;
-  ResetFlag = true;
-  if (Resetvar == 1 || Resetvar == 2 || Resetvar == 3 || Resetvar == 4)
-  {
-    ResetFlag = false;
-    Serial.print(F("Resetvar: false"));
-  }
-  Serial.print(F("Resetvar: "));
-  Serial.println(Resetvar);
-#endif
+  pinMode(LEDPIN, OUTPUT);
 
   delay(1000);
 }
@@ -63,10 +63,10 @@ void setup()
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 void loop()
 {
-  digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
+  digitalWrite(LEDPIN, HIGH);   // turn the LED on (HIGH is the voltage level)
   Serial.println("HIGH");
   delay(1000);                       // wait for a second
-  digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
+  digitalWrite(LEDPIN, LOW);    // turn the LED off by making the voltage LOW
   Serial.println("LOW");
   delay(1000);                       // wait for a second
 }
