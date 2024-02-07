@@ -5,34 +5,34 @@
 ////////////////////////////////
 
 // Select your modem:
-//#define TINY_GSM_MODEM_SIM800
+// #define TINY_GSM_MODEM_SIM800
 #define TINY_GSM_MODEM_SIM7600
 
 // Set serial for debug console (to the Serial Monitor, default speed 115200)
 #define SerialMon Serial
 
 #include <SoftwareSerial.h>
-SoftwareSerial SerialAT(13, 12);  // RX, TX
+SoftwareSerial SerialAT(13, 12); // RX, TX
 
 // See all AT commands, if wanted
-//#define DUMP_AT_COMMANDS
+// #define DUMP_AT_COMMANDS
 
 // Define the serial console for debug prints, if needed
 #define TINY_GSM_DEBUG SerialMon
 
-#define PWRKEY 16      // GPIO pin used for PWRKEY
+#define PWRKEY 16 // GPIO pin used for PWRKEY
 #define LED_PIN 2
 
 // Your GPRS credentials, if any
-//const char apn[] = "web.colombiamovil.com.co";
-//const char apn[] = "internet.comcel.com.co";
+// const char apn[] = "web.colombiamovil.com.co";
+// const char apn[] = "internet.comcel.com.co";
 const char apn[] = "internet.movistar.com.co";
 
 // MQTT details
-const char* broker = "sensor.aireciudadano.com";
+const char *broker = "sensor.aireciudadano.com";
 
-const char* topicac = "measurement";
-const char* topic = "config/";
+const char *topicac = "measurement";
+const char *topic = "config/";
 
 String MQTT_send_topic;
 String MQTT_receive_topic;
@@ -53,7 +53,8 @@ float latitudef = 4.6987;
 float longitudef = -74.0987;
 int inout = 1;
 
-void setup() {
+void setup()
+{
   // Set console baud rate
   SerialMon.begin(115200);
   delay(100);
@@ -78,58 +79,68 @@ void setup() {
   SerialMon.println(modemInfo);
 
   SerialMon.print("Waiting for network...");
-  if (!modem.waitForNetwork()) {
+  if (!modem.waitForNetwork())
+  {
     SerialMon.println(" fail");
     delay(10000);
     return;
   }
   SerialMon.println(" success");
 
-  if (modem.isNetworkConnected()) {
+  if (modem.isNetworkConnected())
+  {
     SerialMon.println("Network connected");
   }
 
   // GPRS connection parameters are usually set after network registration
   SerialMon.print(F("Connecting to "));
   SerialMon.print(apn);
-  if (!modem.gprsConnect(apn)) {
+  if (!modem.gprsConnect(apn))
+  {
     SerialMon.println(" fail");
     delay(10000);
     return;
   }
   SerialMon.println(" success");
 
-  if (modem.isGprsConnected()) {
+  if (modem.isGprsConnected())
+  {
     SerialMon.println("GPRS connected");
   }
 
   // Make sure we're still registered on the network
-  if (!modem.isNetworkConnected()) {
+  if (!modem.isNetworkConnected())
+  {
     SerialMon.println("Network disconnected");
-    if (!modem.waitForNetwork(180000L, true)) {
+    if (!modem.waitForNetwork(180000L, true))
+    {
       SerialMon.println(" fail");
       delay(10000);
       return;
     }
-    if (modem.isNetworkConnected()) {
+    if (modem.isNetworkConnected())
+    {
       SerialMon.println("Network re-connected");
     }
 
-    if (!modem.isGprsConnected()) {
+    if (!modem.isGprsConnected())
+    {
       SerialMon.println("GPRS disconnected!");
       SerialMon.print(F("Connecting to "));
       SerialMon.print(apn);
-      if (!modem.gprsConnect(apn)) {
+      if (!modem.gprsConnect(apn))
+      {
         SerialMon.println(" fail");
         delay(10000);
         return;
       }
-      if (modem.isGprsConnected()) {
+      if (modem.isGprsConnected())
+      {
         SerialMon.println("GPRS reconnected");
       }
     }
   }
-  MQTT_send_topic = "measurement"; // measurement are sent to this topic
+  MQTT_send_topic = "measurement";                          // measurement are sent to this topic
   MQTT_receive_topic = "config/" + aireciudadano_device_id; // Config messages will be received in config/id
 
   Init_MQTT();
@@ -138,7 +149,8 @@ void setup() {
   delay(1000);
 }
 
-void loop() {
+void loop()
+{
   if (modem.isNetworkConnected())
     SerialMon.println("Network connected");
   else
@@ -149,8 +161,16 @@ void loop() {
   else
     SerialMon.println("GPRS disconnected!");
 
-  Send_Message_Cloud_App_MQTT();
-  delay(60000);
+  if (!MQTT_client.connected())
+  {
+    SerialMon.println("MQTT NOT CONNECTED");
+    MQTT_Reconnect();
+  }
+  else
+  {
+    Send_Message_Cloud_App_MQTT();
+    delay(60000);
+  }
 }
 
 void Send_Message_Cloud_App_MQTT()
@@ -173,23 +193,6 @@ void Send_Message_Cloud_App_MQTT()
   digitalWrite(LED_PIN, HIGH);
 }
 
-
-boolean mqttConnect() {
-  SerialMon.print("Connecting to ");
-  SerialMon.print(broker);
-
-  // Connect to MQTT Broker
-  boolean status = MQTT_client.connect(aireciudadano_device_id.c_str());
-
-  if (status == false) {
-    SerialMon.println(" fail");
-    return false;
-  }
-  SerialMon.println(" success");
-  MQTT_client.subscribe(topicac);
-  return MQTT_client.connected();
-}
-
 void Init_MQTT()
 { // MQTT Init function
   Serial.print(F("Attempting to connect to the MQTT broker "));
@@ -197,16 +200,17 @@ void Init_MQTT()
   Serial.print(F(":"));
   Serial.println(F("80"));
 
-//  MQTT_client.setBufferSize(1024);
+  //  MQTT_client.setBufferSize(1024);
 
   MQTT_client.setServer("sensor.aireciudadano.com", 80);
-//  MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
+  MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
 
   MQTT_client.connect(aireciudadano_device_id.c_str());
 
   if (!MQTT_client.connected())
   {
     Serial.println("MQTT_Reconnect");
+    MQTT_Reconnect();
   }
   else
   {
@@ -215,4 +219,42 @@ void Init_MQTT()
     Serial.print(F("MQTT connected - Receive topic: "));
     Serial.println(MQTT_receive_topic);
   }
+}
+
+void MQTT_Reconnect()
+{ // MQTT reconnect function
+  // Try to reconnect only if it has been more than 5 sec since last attemp
+  Serial.print(F("Attempting MQTT connection..."));
+  // Attempt to connect
+  if (MQTT_client.connect(aireciudadano_device_id.c_str()))
+  {
+    Serial.println(F("MQTT connected"));
+    // Once connected resubscribe
+    MQTT_client.subscribe(MQTT_receive_topic.c_str());
+    Serial.print(F("MQTT connected - Receive topic: "));
+    Serial.println(MQTT_receive_topic);
+  }
+  else
+  {
+    Serial.print(F("failed, rc="));
+    Serial.print(MQTT_client.state());
+    Serial.println(F(" try again in 5 seconds"));
+    delay(5000);
+
+    if (MQTT_client.connect(aireciudadano_device_id.c_str()))
+    {
+      Serial.println(F("MQTT connected"));
+      // Once connected resubscribe
+      MQTT_client.subscribe(MQTT_receive_topic.c_str());
+      Serial.print(F("MQTT connected - Receive topic: "));
+      Serial.println(MQTT_receive_topic);
+    }
+  }
+}
+
+void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int length)
+{                               // callback function to receive configuration messages from the cloud application by MQTT
+  memcpy(received_payload, payload, length);
+  Serial.print(F("Message arrived: "));
+  Serial.println(received_payload);
 }
