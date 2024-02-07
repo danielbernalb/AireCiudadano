@@ -1,73 +1,218 @@
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// AireCiudadano medidor Fijo - Medidor de PM2.5 abierto, medición opcional de humedad y temperatura.
-// Más información en: aireciudadano.com
-// Este firmware es un fork del proyecto Anaire (https://www.anaire.org/) recomendado para la medición de CO2.
-// 26/03/2023 info@aireciudadano.com
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// Pendientes:
-// Revisar todas las versiones y pruebas para pasar a v2.0
-// MODIFICACIONES EXTERNAS:
-// Modificado libreria WifiManager para compatibilidad
-// Modificado PubSubClient.cpp : para quitar warning
 
 #include <Arduino.h>
+#include "main.hpp"
 
 ////////////////////////////////
 
-#ifdef ESP32S3def
-#define ESP32S3 true     // Set to true in case you use an ESP32S3
-#else
-#define ESP32S3 false     // Set to true in case you use an ESP32S3
-#endif
+// Select your modem:
+//#define TINY_GSM_MODEM_SIM800
+#define TINY_GSM_MODEM_SIM7600
 
-#ifdef ESP32C3def
-#define ESP32C3 true     // Set to true in case you use an ESP32S3
-#else
-#define ESP32C3 false     // Set to true in case you use an ESP32S3
-#endif
+// Set serial for debug console (to the Serial Monitor, default speed 115200)
+#define SerialMon Serial
 
-#ifdef Rosverdef
-#define Rosver true     // Set to true in case you use an ESP32S3
-#else
-#define Rosver false     // Set to true in case you use an ESP32S3
-#endif
+#include <SoftwareSerial.h>
+SoftwareSerial SerialAT(13, 12);  // RX, TX
 
-#define LEDPIN 10
+// See all AT commands, if wanted
+//#define DUMP_AT_COMMANDS
 
+// Define the serial console for debug prints, if needed
+#define TINY_GSM_DEBUG SerialMon
 
-///////////////////////////////////////////////////////////////////////////////////////////////////
-// SETUP
-///////////////////////////////////////////////////////////////////////////////////////////////////
+#define PWRKEY 16      // GPIO pin used for PWRKEY
+#define LED_PIN 2
 
-void setup()
-{
-  // Initialize serial port for serial monitor in Arduino IDE
-#if !ESP8266SH
-  Serial.begin(115200);
-#else
-  Serial.begin(9600);
-#endif
+// Your GPRS credentials, if any
+//const char apn[] = "web.colombiamovil.com.co";
+//const char apn[] = "internet.comcel.com.co";
+const char apn[] = "internet.movistar.com.co";
+
+// MQTT details
+const char* broker = "sensor.aireciudadano.com";
+
+const char* topicac = "measurement";
+const char* topic = "config/";
+
+String MQTT_send_topic;
+String MQTT_receive_topic;
+
+#include <TinyGsmClient.h>
+#include <PubSubClient.h>
+
+char MQTT_message[256];
+char received_payload[384];
+
+TinyGsm modem(SerialAT);
+TinyGsmClient client(modem);
+PubSubClient MQTT_client(client);
+
+String aireciudadano_device_id = "AireCiudadano_TestMQTT";
+int pm25int = 0;
+float latitudef = 4.6987;
+float longitudef = -74.0987;
+int inout = 1;
+
+void setup() {
+  // Set console baud rate
+  SerialMon.begin(115200);
   delay(100);
-  while (!Serial)
-  {
-    delay(500); // wait 0.5 seconds for connection
-  }
-  pinMode(LEDPIN, OUTPUT);
 
+  pinMode(LED_PIN, OUTPUT);
+
+  // Set GSM module baud rate
+  SerialAT.begin(115200);
+
+  SerialMon.println("");
+  SerialMon.println("Wait...");
+
+  // Restart takes quite some time
+  SerialMon.println("Initializing modem...");
+  modem.restart();
+  // modem.init();
+
+  delay(5000);
+
+  String modemInfo = modem.getModemInfo();
+  SerialMon.print("Modem Info: ");
+  SerialMon.println(modemInfo);
+
+  SerialMon.print("Waiting for network...");
+  if (!modem.waitForNetwork()) {
+    SerialMon.println(" fail");
+    delay(10000);
+    return;
+  }
+  SerialMon.println(" success");
+
+  if (modem.isNetworkConnected()) {
+    SerialMon.println("Network connected");
+  }
+
+  // GPRS connection parameters are usually set after network registration
+  SerialMon.print(F("Connecting to "));
+  SerialMon.print(apn);
+  if (!modem.gprsConnect(apn)) {
+    SerialMon.println(" fail");
+    delay(10000);
+    return;
+  }
+  SerialMon.println(" success");
+
+  if (modem.isGprsConnected()) {
+    SerialMon.println("GPRS connected");
+  }
+
+  // Make sure we're still registered on the network
+  if (!modem.isNetworkConnected()) {
+    SerialMon.println("Network disconnected");
+    if (!modem.waitForNetwork(180000L, true)) {
+      SerialMon.println(" fail");
+      delay(10000);
+      return;
+    }
+    if (modem.isNetworkConnected()) {
+      SerialMon.println("Network re-connected");
+    }
+
+    if (!modem.isGprsConnected()) {
+      SerialMon.println("GPRS disconnected!");
+      SerialMon.print(F("Connecting to "));
+      SerialMon.print(apn);
+      if (!modem.gprsConnect(apn)) {
+        SerialMon.println(" fail");
+        delay(10000);
+        return;
+      }
+      if (modem.isGprsConnected()) {
+        SerialMon.println("GPRS reconnected");
+      }
+    }
+  }
+  MQTT_send_topic = "measurement"; // measurement are sent to this topic
+  MQTT_receive_topic = "config/" + aireciudadano_device_id; // Config messages will be received in config/id
+
+  Init_MQTT();
+
+  SerialMon.println("Start Loop:");
   delay(1000);
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////////////
-// CONTROL LOOP
-///////////////////////////////////////////////////////////////////////////////////////////////////
-void loop()
-{
-  digitalWrite(LEDPIN, HIGH);   // turn the LED on (HIGH is the voltage level)
-  Serial.println("HIGH");
-  delay(1000);                       // wait for a second
-  digitalWrite(LEDPIN, LOW);    // turn the LED off by making the voltage LOW
-  Serial.println("LOW");
-  delay(1000);                       // wait for a second
+void loop() {
+  if (modem.isNetworkConnected())
+    SerialMon.println("Network connected");
+  else
+    SerialMon.println("Network disconnected");
+
+  if (modem.isGprsConnected())
+    SerialMon.println("GPRS connected!");
+  else
+    SerialMon.println("GPRS disconnected!");
+
+  Send_Message_Cloud_App_MQTT();
+  delay(60000);
 }
 
+void Send_Message_Cloud_App_MQTT()
+{ // Send measurements to the cloud application by MQTT
+  if (pm25int == 61)
+    pm25int = 0;
+  else
+    pm25int = pm25int + 1;
+
+  sprintf(MQTT_message, "{id: %s, PM25: %d, latitude: %f, longitude: %f, inout: %d}", aireciudadano_device_id.c_str(), pm25int, latitudef, longitudef, inout);
+
+  MQTT_client.publish(MQTT_send_topic.c_str(), MQTT_message);
+
+  Serial.print("Mensaje enviado: ");
+  Serial.println(MQTT_message);
+  Serial.println("");
+
+  digitalWrite(LED_PIN, LOW);
+  delay(500);
+  digitalWrite(LED_PIN, HIGH);
+}
+
+
+boolean mqttConnect() {
+  SerialMon.print("Connecting to ");
+  SerialMon.print(broker);
+
+  // Connect to MQTT Broker
+  boolean status = MQTT_client.connect(aireciudadano_device_id.c_str());
+
+  if (status == false) {
+    SerialMon.println(" fail");
+    return false;
+  }
+  SerialMon.println(" success");
+  MQTT_client.subscribe(topicac);
+  return MQTT_client.connected();
+}
+
+void Init_MQTT()
+{ // MQTT Init function
+  Serial.print(F("Attempting to connect to the MQTT broker "));
+  Serial.print(F("sensor.aireciudadano.com"));
+  Serial.print(F(":"));
+  Serial.println(F("80"));
+
+//  MQTT_client.setBufferSize(1024);
+
+  MQTT_client.setServer("sensor.aireciudadano.com", 80);
+//  MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
+
+  MQTT_client.connect(aireciudadano_device_id.c_str());
+
+  if (!MQTT_client.connected())
+  {
+    Serial.println("MQTT_Reconnect");
+  }
+  else
+  {
+    // Once connected resubscribe
+    MQTT_client.subscribe(MQTT_receive_topic.c_str());
+    Serial.print(F("MQTT connected - Receive topic: "));
+    Serial.println(MQTT_receive_topic);
+  }
+}
