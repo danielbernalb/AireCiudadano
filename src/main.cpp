@@ -24,9 +24,9 @@ SoftwareSerial SerialAT(13, 12); // RX, TX
 #define LED_PIN 2
 
 // Your GPRS credentials, if any
-// const char apn[] = "web.colombiamovil.com.co";
+const char apn[] = "web.colombiamovil.com.co";
 // const char apn[] = "internet.comcel.com.co";
-const char apn[] = "internet.movistar.com.co";
+// const char apn[] = "internet.movistar.com.co";
 
 // MQTT details
 const char *broker = "sensor.aireciudadano.com";
@@ -38,9 +38,12 @@ String MQTT_send_topic;
 String MQTT_receive_topic;
 
 #include <TinyGsmClient.h>
+
+// MQTT
 #include <PubSubClient.h>
 
 char MQTT_message[256];
+// PubSubClient MQTT_client(wifi_client);
 char received_payload[384];
 
 TinyGsm modem(SerialAT);
@@ -48,7 +51,7 @@ TinyGsmClient client(modem);
 PubSubClient MQTT_client(client);
 
 String aireciudadano_device_id = "AireCiudadano_TestMQTT";
-int pm25int = 0;
+int pm25int = 2;
 float latitudef = 4.6987;
 float longitudef = -74.0987;
 int inout = 1;
@@ -163,11 +166,13 @@ void loop()
 
   if (!MQTT_client.connected())
   {
-    SerialMon.println("MQTT NOT CONNECTED");
-    MQTT_Reconnect();
+    SerialMon.println("MQTT disconnected!");
+    Reconnect_MQTT();
   }
   else
   {
+    SerialMon.println("MQTT connected!");
+    //    Reconnect_MQTT();                   // No funciono
     Send_Message_Cloud_App_MQTT();
     delay(60000);
   }
@@ -185,6 +190,8 @@ void Send_Message_Cloud_App_MQTT()
   MQTT_client.publish(MQTT_send_topic.c_str(), MQTT_message);
 
   Serial.print("Mensaje enviado: ");
+  Serial.print(MQTT_send_topic.c_str());
+  Serial.print(", ");
   Serial.println(MQTT_message);
   Serial.println("");
 
@@ -203,14 +210,14 @@ void Init_MQTT()
   //  MQTT_client.setBufferSize(1024);
 
   MQTT_client.setServer("sensor.aireciudadano.com", 80);
-  MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
+  //  MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
 
   MQTT_client.connect(aireciudadano_device_id.c_str());
 
   if (!MQTT_client.connected())
   {
     Serial.println("MQTT_Reconnect");
-    MQTT_Reconnect();
+    Reconnect_MQTT();
   }
   else
   {
@@ -221,39 +228,25 @@ void Init_MQTT()
   }
 }
 
-void MQTT_Reconnect()
-{ // MQTT reconnect function
-  // Try to reconnect only if it has been more than 5 sec since last attemp
-  Serial.print(F("Attempting MQTT connection..."));
-  // Attempt to connect
-  if (MQTT_client.connect(aireciudadano_device_id.c_str()))
-  {
-    Serial.println(F("MQTT connected"));
-    // Once connected resubscribe
-    MQTT_client.subscribe(MQTT_receive_topic.c_str());
-    Serial.print(F("MQTT connected - Receive topic: "));
-    Serial.println(MQTT_receive_topic);
-  }
-  else
-  {
-    Serial.print(F("failed, rc="));
-    Serial.print(MQTT_client.state());
-    Serial.println(F(" try again in 5 seconds"));
-    delay(5000);
+void Reconnect_MQTT()
+{ // MQTT Init function
+  MQTT_client.setServer("sensor.aireciudadano.com", 80);
+  MQTT_client.connect(aireciudadano_device_id.c_str());
 
-    if (MQTT_client.connect(aireciudadano_device_id.c_str()))
-    {
-      Serial.println(F("MQTT connected"));
-      // Once connected resubscribe
-      MQTT_client.subscribe(MQTT_receive_topic.c_str());
-      Serial.print(F("MQTT connected - Receive topic: "));
-      Serial.println(MQTT_receive_topic);
-    }
+  while (!MQTT_client.connected())
+  {
+    delay(5000);
+    MQTT_client.setServer("sensor.aireciudadano.com", 80);
+    MQTT_client.connect(aireciudadano_device_id.c_str());
   }
+  // Once connected resubscribe
+  MQTT_client.subscribe(MQTT_receive_topic.c_str());
+  Serial.print(F("MQTT connected - Receive topic: "));
+  Serial.println(MQTT_receive_topic);
 }
 
 void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int length)
-{                               // callback function to receive configuration messages from the cloud application by MQTT
+{ // callback function to receive configuration messages from the cloud application by MQTT
   memcpy(received_payload, payload, length);
   Serial.print(F("Message arrived: "));
   Serial.println(received_payload);
