@@ -69,10 +69,10 @@
 #define ESP32S3 false     // Set to true in case you use an ESP32S3
 #endif
 
-#ifdef ESP32C3def
-#define ESP32C3 true     // Set to true in case you use an ESP32S3
+#ifdef ESP32C3AGdef
+#define ESP32C3AG true     // Set to true in case you use an ESP32C3 version AirGrad
 #else
-#define ESP32C3 false     // Set to true in case you use an ESP32S3
+#define ESP32C3AG false     // Set to true in case you use an ESP32C3 version AirGrad
 #endif
 
 #ifdef Rosverdef
@@ -384,7 +384,7 @@ PMS pms(Serial1);
 PMS::DATA data;
 // bool PMSflag = false;
 #if !Tdisplaydisp
-#if !ESP32C3
+#if !ESP32C3AG
 #define PMS_TX 17 // PMS TX pin
 #define PMS_RX 16 // PMS RX pin
 #else
@@ -397,22 +397,24 @@ PMS::DATA data;
 #define PMS_RX 15 // PMS RX pin
 #endif
 
-#else     // esTwoPMS test AirGra
+#else     // esTwoPMS test AirGrad
 
-//#include <SoftwareSerial.h>
-#include <HardwareSerial.h>
+#include <SoftwareSerial.h>
+//#include <HardwareSerial.h>
 
 #define PMS_TX1 20 // PMS TX pin
 #define PMS_RX1 21 // PMS RX pin
 #define PMS_TX2 0 // PMS TX pin      
 #define PMS_RX2 1  // PMS RX pin
 
-//SoftwareSerial pmsSerial1(PMS_TX1, PMS_RX1);
-PMS pms1(Serial0);
+SoftwareSerial pmsSerial1(PMS_TX1, PMS_RX1);    //SoftwareSerial
+//PMS pms1(Serial0);    // HardwareSerial
+PMS pms1(pmsSerial1);   //SoftwareSerial
 PMS::DATA data;
 
-//SoftwareSerial pmsSerial2(PMS_TX2, PMS_RX2);
-PMS pms2(Serial1);
+SoftwareSerial pmsSerial2(PMS_TX2, PMS_RX2);    //SoftwareSerial
+//PMS pms2(Serial1);    // HardwareSerial
+PMS pms2(pmsSerial2);   // SoftwareSerial
 PMS::DATA data2;
 
 #endif
@@ -703,7 +705,7 @@ const char *customHtml = R"(
 #endif
 #if ESP8285
 #define LEDPIN 13
-#elif ESP32C3
+#elif ESP32C3AG
 #define LEDPIN 10
 #else
 #define LEDPIN 2
@@ -822,6 +824,11 @@ void setup()
   pinMode(LEDPIN, OUTPUT);
 #if !ESP8266
   digitalWrite(LEDPIN, LOW);
+#if ESP32C3AG
+  digitalWrite(LEDPIN, HIGH);
+  delay(500);
+  digitalWrite(LEDPIN, LOW);
+#endif
 #else
   digitalWrite(LEDPIN, HIGH);
 #endif
@@ -3465,24 +3472,20 @@ if (PMSsen == true)
 #if !TwoPMS
 
 #if !TTGO_TQ
-    Serial1.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX, PMS_RX);  // Serial1.begin(9600, SERIAL_8N1, 20, 21); Probado en AirGra PM1
-                                                                // Serial1.begin(9600, SERIAL_8N1, 0, 1); Probado en AirGra PM2
+  Serial1.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX, PMS_RX);
 #else
   Serial2.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX, PMS_RX);
 #endif
 
 #else
-//  pmsSerial1.begin(PMS::BAUD_RATE); // Software serial begin for PMS1 sensor
-//  pmsSerial2.begin(PMS::BAUD_RATE); // Software serial begin for PMS2 sensor
-
-    Serial0.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX1, PMS_RX1);
-    Serial1.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX2, PMS_RX2);
-
-    delay(100);
-    pms1.activeMode();
-    pms2.activeMode();
-    delay(100);
-
+  pmsSerial1.begin(PMS::BAUD_RATE); // SoftwareSerial PMS1
+  pmsSerial2.begin(PMS::BAUD_RATE); // SoftwareSerial PMS2
+//    Serial0.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX1, PMS_RX1);    //Opción HardwareSerial PMS1
+//    Serial1.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX2, PMS_RX2);    //Opción HardwareSerial PMS2
+  delay(100);
+  pms1.activeMode();
+  pms2.activeMode();
+  delay(100);
 #endif
 
 #else
@@ -5392,7 +5395,7 @@ void Suspend_Device()
   // esp_sleep_enable_ext1_wakeup(GPIO_SEL_0, ESP_EXT1_WAKEUP_ALL_LOW);
 
   // set top button for wake up
-#if !ESP32C3        // REVISAR!!!!!!!!!!!!!!!!!!!!!!!!!!
+#if !ESP32C3AG        // REVISAR!!! para el caso ESP32C3AG
   esp_sleep_enable_ext0_wakeup(GPIO_NUM_35, 0); // Top button
   // esp_sleep_enable_ext0_wakeup(GPIO_NUM_0, 0); // Bottom button
 
