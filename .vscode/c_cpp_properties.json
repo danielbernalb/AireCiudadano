@@ -10,6 +10,7 @@
             "includePath": [
                 "c:/Users/DBB/Documents/PlatformIO/aireciudadano_temp/src",
                 "C:/Users/DBB/.platformio/packages/framework-arduinoespressif8266/libraries/SoftwareSerial/src",
+                "c:/Users/DBB/Documents/PlatformIO/aireciudadano_temp/.pio/libdeps/esp8266/StreamDebugger",
                 "c:/Users/DBB/Documents/PlatformIO/aireciudadano_temp/.pio/libdeps/esp8266/ArduinoJson/src",
                 "c:/Users/DBB/Documents/PlatformIO/aireciudadano_temp/.pio/libdeps/esp8266/TinyGSM/src",
                 "c:/Users/DBB/Documents/PlatformIO/aireciudadano_temp/.pio/libdeps/esp8266/PubSubClient/src",
@@ -61,6 +62,7 @@
                 "path": [
                     "c:/Users/DBB/Documents/PlatformIO/aireciudadano_temp/src",
                     "C:/Users/DBB/.platformio/packages/framework-arduinoespressif8266/libraries/SoftwareSerial/src",
+                    "c:/Users/DBB/Documents/PlatformIO/aireciudadano_temp/.pio/libdeps/esp8266/StreamDebugger",
                     "c:/Users/DBB/Documents/PlatformIO/aireciudadano_temp/.pio/libdeps/esp8266/ArduinoJson/src",
                     "c:/Users/DBB/Documents/PlatformIO/aireciudadano_temp/.pio/libdeps/esp8266/TinyGSM/src",
                     "c:/Users/DBB/Documents/PlatformIO/aireciudadano_temp/.pio/libdeps/esp8266/PubSubClient/src",

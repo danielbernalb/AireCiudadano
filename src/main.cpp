@@ -15,7 +15,7 @@
 SoftwareSerial SerialAT(13, 12); // RX, TX
 
 // See all AT commands, if wanted
-// #define DUMP_AT_COMMANDS
+//#define DUMP_AT_COMMANDS
 
 // Define the serial console for debug prints, if needed
 #define TINY_GSM_DEBUG SerialMon
@@ -45,7 +45,14 @@ char MQTT_message[256];
 // PubSubClient MQTT_client(wifi_client);
 char received_payload[384];
 
+#ifdef DUMP_AT_COMMANDS
+#include <StreamDebugger.h>
+StreamDebugger debugger(SerialAT, SerialMon);
+TinyGsm modem(debugger);
+#else
 TinyGsm modem(SerialAT);
+#endif
+
 TinyGsmClient client(modem);
 PubSubClient MQTT_client(client);
 
@@ -110,6 +117,8 @@ void setup()
     SerialMon.println("GPRS connected");
   }
 
+  Serial.println("NEW IP ADDRESS : " + modem.getLocalIP());
+
   // Make sure we're still registered on the network
   if (!modem.isNetworkConnected())
   {
@@ -163,6 +172,8 @@ void loop()
   else
     SerialMon.println("GPRS disconnected!");
 
+  Serial.println("NEW IP ADDRESS : " + modem.getLocalIP());
+
   if (!MQTT_client.connected())
   {
     SerialMon.println("MQTT disconnected!");
@@ -197,6 +208,8 @@ void Send_Message_Cloud_App_MQTT()
   digitalWrite(LED_PIN, LOW);
   delay(500);
   digitalWrite(LED_PIN, HIGH);
+
+// modem.gprsDisconnect();
 }
 
 void Init_MQTT()
