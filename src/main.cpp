@@ -23,31 +23,36 @@
 // 5. ESP32S3 board
 // 6. SHT31 y SHT4X funcionales sin seleccion de cada modelo
 // 7. LedNeoPixel multicolor
+// 8. Compatabilidad con ESP32C3 AirGrad soble PMS5003T
+// 9. SoundMeter Bluetooth
+// 10. LTR390 UV sensor
 
 #include <Arduino.h>
 #include "main.hpp"
 
 ////////////////////////////////
 // Modo de comunicaciones del sensor:
-#define Wifi true        // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
+#define Wifi false        // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
 #define WPA2 false       // Set to true to WPA2 enterprise networks (IEEE 802.1X)
 //#define Rosver false     // Set to true URosario version
-#define Bluetooth false  // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
+#define Bluetooth true  // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
 #define ESP8285 false    // Set to true in case you use an ESP8285 switch
 #define CO2sensor false  // Set to true for CO2 sensors: SCD30 and SenseAir S8
-#define TwoPMS true     // Set to true if you want 2 PMS7003 sensors
+#define TwoPMS false     // Set to true if you want 2 PMS7003 sensors
 #define SoundMeter false // set to true for Sound Meter
 #define Influxver false  // Set to true for InfluxDB version
 #define SoundAM false    // Set to true to Sound meter airplane mode
 #define LedNeo false      // Set to true for Led Neo multicolor
 
+#define LTR390UV true
+
 #define SiteAltitude 0 // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
 // #define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
 
 // Escoger modelo de pantalla (pasar de false a true) o si no hay escoger ninguna (todas false):
-#define Tdisplaydisp false
+#define Tdisplaydisp true
 #define OLED66display false
 #define OLED96display false
 
@@ -121,8 +126,10 @@ uint8_t Swver;
 struct MyConfigStruct
 {
 #if Bluetooth
-#if !CO2sensor
+#if CO2sensor
   uint16_t BluetoothTime = 10; // Bluetooth Time
+#elif (SoundMeter || LTR390UV)
+  uint16_t BluetoothTime = 2; // Bluetooth Time
 #else
   uint16_t BluetoothTime = 10; // Bluetooth Time
 #endif
@@ -484,7 +491,11 @@ PMS::DATA data;
 
 #if SoundMeter
 #if !ESP8266
+#if Tdisplaydisp
+#define ESP32_RX 27 // ESP_MEMS TX pin
+#else
 #define ESP32_RX 16 // ESP_MEMS TX pin
+#endif
 #else
 #define ESP8266_RX 14 // ESP_MEMS TX pin
 SoftwareSerial SerialESP(ESP8266_RX, 16);
@@ -718,6 +729,11 @@ bool FlagLED = false;
 #define LedBrightness 100       // Min 00, normal 150, max 255
 #include <Adafruit_NeoPixel.h> //Libreria necesaria, instalarla desde el gestor de librerias
 Adafruit_NeoPixel LED_RGB(1, PinLedNeo, NEO_GRBW + NEO_KHZ800);  // Creamos el objeto que manejará el led rgb PinLedNeo
+#endif
+
+#if LTR390UV
+#include <bb_ltr390.h>
+LTR390 ltr;
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1018,6 +1034,8 @@ void setup()
   Setup_CO2sensor();
 #elif SoundMeter
   Setup_SoundMeter();
+#elif LTR390UV
+  Setup_UV();
 #else
   Setup_Sensor();
 #endif
@@ -1186,6 +1204,8 @@ void loop()
     Read_CO2sensor();
 #elif SoundMeter
     Read_SoundMeter();
+#elif LTR390UV
+    Read_UV();
 #else
     Read_Sensor();
 #endif
@@ -1340,18 +1360,23 @@ void loop()
     Serial.print(pm25int);
     Serial.println(F(" ppm"));
 #elif SoundMeter
-    Serial.print(F("SP level Aw: "));
+    Serial.print(F("SPL: "));
     Serial.print(PM25f, 1);
     Serial.print(F(" dBA    Max: "));
     Serial.print(dBAmax, 1);
     Serial.println(F(" dBA"));
+#elif LTR390UV
+    Serial.print(F("UV Index: "));
+    Serial.println(pm25int);
 #else
     Serial.print(F("PM2.5: "));
     Serial.print(pm25int);
     Serial.print(F(" ug/m3"));
     Serial.print(F("   "));
 #endif
+#if !(SoundMeter || LTR390UV)
     ReadHyT();
+#endif
     Write_Bluetooth();
 #if SaveSDyRTC
     Write_SD();
@@ -1986,7 +2011,7 @@ void Check_WiFi_Server()                    // Server access by http when you pu
             client.println("------");
             client.println("<br>");
 #if SoundMeter
-            client.print("SP level Aw: ");
+            client.print("SPL: ");
             client.print(PM25_value); //!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #else
             client.print("PM2.5: ");
@@ -3959,12 +3984,14 @@ void Setup_SoundMeter()
 {
   Serial.println("Config Sound Meter ESP_MEMS");
 #if !ESP8266
-  Serial2.begin(115200, SERIAL_8N1, ESP32_RX, 17);
+  Serial2.begin(9600, SERIAL_8N1, ESP32_RX, 17);
 #else
   SerialESP.begin(9600);
 #endif
-#if !SoundAM
+#if !Bluetooth
+#if !(SoundAM || LTR390UV)
   Influxseconds = 60;
+#endif
 #endif
 }
 
@@ -3985,7 +4012,7 @@ void Read_SoundMeter()
       PM25_value = 255;
     if (PM25_value > dBAmax)
       dBAmax = PM25_value;
-    Serial.print("SP level Aw: ");
+    Serial.print("SPL: ");
     Serial.print(PM25_value);
     Serial.print(" dBA    ");
     Serial.print("Max: ");
@@ -4003,7 +4030,7 @@ void Read_SoundMeter()
     PM25_value = 255;
   if (PM25_value > dBAmax)
     dBAmax = PM25_value;
-  Serial.print("SP level Aw: ");
+  Serial.print("SPL: ");
   Serial.print(PM25_value);
   Serial.print(" dBA    ");
   Serial.print("Max: ");
@@ -4061,6 +4088,29 @@ void Read_SoundMeter()
 #endif
 }
 
+#endif
+
+#if LTR390UV
+
+void Setup_UV()
+{
+  if (ltr.init(-1, -1, 0) == LTR390_SUCCESS)  // found a supported device
+    Serial.println("LTR390 init success!");
+  else
+    Serial.println("LTR390 not init");
+}
+
+void Read_UV()
+{
+    if (ltr.start(true) == LTR390_SUCCESS) { // start sampling
+        ltr.getSample();
+        PM25_value = ltr.getUVI();
+        Serial.print("UV index:");
+        Serial.println(PM25_value);
+  }
+  else
+        Serial.print("LTR390 not connected");
+}
 #endif
 
 /**
@@ -4667,13 +4717,23 @@ void Update_Display()
   if (toggleLive)
   {
 #if Bluetooth
-#if !CO2sensor
-    if (pm25int < 57)
+#if SoundMeter
+    if (pm25int < 86)
+      tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_BLACK);
+    else
+      tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_WHITE);
+#elif CO2sensor
+    if (pm25int < 801)
+      tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_BLACK);
+    else
+      tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_WHITE);
+#elif LTR390UV
+    if (pm25int < 7)
       tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_BLACK);
     else
       tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_WHITE);
 #else
-    if (pm25int < 801)
+    if (pm25int < 57)
       tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_BLACK);
     else
       tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_WHITE);
@@ -5288,8 +5348,9 @@ void displayBatteryLevel(int colour)
   // Measure the battery voltage
   battery_voltage = ((float)analogRead(ADC_PIN) / 4095.0) * 2.0 * 3.3 * (vref / 1000.0);
 
-  Serial.print(F("battery voltage: "));
-  Serial.println(battery_voltage);
+  Serial.print(F("Battery voltage: "));
+  Serial.print(battery_voltage);
+  Serial.println(F(" V"));
 
   //  tft.drawString(String(battery_voltage), 42, 218);
 
@@ -5589,7 +5650,7 @@ void displayAverage(int average)
 {
   tft.setTextSize(1);
 
-#if !CO2sensor
+#if !(SoundMeter || CO2sensor || LTR390UV)
   if (average < 13)
   {
     tft.fillScreen(TFT_GREEN);
@@ -5706,7 +5767,7 @@ void displayAverage(int average)
   }
 #endif
 
-#else
+#elif CO2sensor
 
   if (average < 600)
   {
@@ -5793,6 +5854,208 @@ void displayAverage(int average)
   else
     tft.drawString("ppm", 72, 218);
     // tft.drawString("ug/m3", 72, 268);
+
+#if Wifi
+  int rssi;
+  rssi = WiFi.RSSI();
+
+  if (rssi != 0)
+  {
+    if (pm25int < 57)
+      tft.drawXBitmap(5, 215, Icono_wifi_on_BIG, 20, 20, TFT_BLACK);
+    else
+      tft.drawXBitmap(5, 215, Icono_wifi_on_BIG, 20, 20, TFT_WHITE);
+    Serial.print(F(" RSSI: "));
+    Serial.print(rssi);
+    rssi = rssi + 130;
+    Serial.print(F("  norm: "));
+    Serial.println(rssi);
+    tft.drawString(String(rssi), 30, 220);
+  }
+#endif
+
+#elif LTR390UV
+
+  if (average < 3)
+  {
+    tft.fillScreen(TFT_GREEN);
+    tft.setTextColor(TFT_BLACK, TFT_GREEN);
+#if Bluetooth
+    displayBatteryLevel(TFT_BLACK);
+#endif
+    tft.drawXBitmap(27, 10, SmileFaceGoodBig, 80, 80, TFT_BLACK);
+    tft.setFreeFont(FF92);
+    tft.drawString("GOOD", 34, 97);
+  }
+  else if (average < 6)
+  {
+    tft.fillScreen(TFT_YELLOW);
+    tft.setTextColor(TFT_BLACK, TFT_YELLOW);
+    delay(50);
+#if Bluetooth
+    displayBatteryLevel(TFT_BLACK);
+#endif
+    tft.drawXBitmap(27, 10, SmileFaceModerateBig, 80, 80, TFT_BLACK);
+    tft.setFreeFont(FF90);
+    tft.drawString("MODERATE", 18, 97);
+  }
+  else if (average < 8)
+  {
+    tft.fillScreen(TFT_ORANGE);
+    tft.setTextColor(TFT_BLACK, TFT_ORANGE);
+#if Bluetooth
+    displayBatteryLevel(TFT_BLACK);
+#endif
+    tft.drawXBitmap(27, 10, SmileFaceUnhealthySGroupsBig, 80, 80, TFT_BLACK);
+    tft.setFreeFont(FF92);
+    tft.drawString("HIGH", 34, 97);
+  }
+  else if (average < 11)
+  {
+    tft.fillScreen(TFT_RED);
+    tft.setTextColor(TFT_WHITE, TFT_RED);
+#if Bluetooth
+    displayBatteryLevel(TFT_WHITE);
+#endif
+    tft.drawXBitmap(27, 10, SmileFaceUnhealthyBig, 80, 80, TFT_WHITE);
+    tft.setFreeFont(FF90);
+    tft.drawString("VERY HIGH", 13, 97);
+  }
+  else
+  {
+    tft.fillScreen(TFT_VIOLET);
+    tft.setTextColor(TFT_WHITE, TFT_VIOLET);
+#if Bluetooth
+    displayBatteryLevel(TFT_WHITE);
+#endif
+    tft.drawXBitmap(27, 10, SmileFaceVeryUnhealthyBig, 80, 80, TFT_WHITE);
+    tft.setFreeFont(FF90);
+    tft.drawString("EXTREME", 23, 97);
+  }
+
+  // Draw PM25 number
+  tft.setTextSize(1);
+  tft.setFreeFont(FF95);
+
+  if (average < 10)
+    tft.drawString(String(average), 45, 116);
+  else if (average < 100)
+    tft.drawString(String(average), 21, 116);
+  else
+    tft.drawString(String(average), 0, 116);
+
+  // Draw PM25 units
+  tft.setTextSize(1);
+  tft.setFreeFont(FF90);
+  tft.drawString("UV index", 28, 197);
+  tft.drawString(String(round(PM25_value), 0), 107, 197);
+
+#if Wifi
+  int rssi;
+  rssi = WiFi.RSSI();
+
+  if (rssi != 0)
+  {
+    if (pm25int < 8)
+      tft.drawXBitmap(5, 215, Icono_wifi_on_BIG, 20, 20, TFT_BLACK);
+    else
+      tft.drawXBitmap(5, 215, Icono_wifi_on_BIG, 20, 20, TFT_WHITE);
+    Serial.print(F(" RSSI: "));
+    Serial.print(rssi);
+    rssi = rssi + 130;
+    Serial.print(F("  norm: "));
+    Serial.println(rssi);
+    tft.drawString(String(rssi), 30, 220);
+  }
+#endif
+
+#else
+  if (average < 55)
+  {
+    tft.fillScreen(TFT_GREEN);
+    tft.setTextColor(TFT_BLACK, TFT_GREEN);
+#if Bluetooth
+    displayBatteryLevel(TFT_BLACK);
+#endif
+    tft.drawXBitmap(27, 10, SmileFaceGoodBig, 80, 80, TFT_BLACK);
+    tft.setFreeFont(FF92);
+    tft.drawString("GOOD", 34, 97);
+  }
+  else if (average < 70)
+  {
+    tft.fillScreen(TFT_YELLOW);
+    tft.setTextColor(TFT_BLACK, TFT_YELLOW);
+    delay(50);
+#if Bluetooth
+    displayBatteryLevel(TFT_BLACK);
+#endif
+    tft.drawXBitmap(27, 10, SmileFaceModerateBig, 80, 80, TFT_BLACK);
+    tft.setFreeFont(FF90);
+    tft.drawString("MODERATE", 18, 97);
+  }
+  else if (average < 85)
+  {
+    tft.fillScreen(TFT_ORANGE);
+    tft.setTextColor(TFT_BLACK, TFT_ORANGE);
+#if Bluetooth
+    displayBatteryLevel(TFT_BLACK);
+#endif
+    tft.drawXBitmap(27, 10, SmileFaceUnhealthySGroupsBig, 80, 80, TFT_BLACK);
+    tft.setFreeFont(FF92);
+    tft.drawString("LOUD", 37, 97);
+  }
+  else if (average < 95)
+  {
+    tft.fillScreen(TFT_RED);
+    tft.setTextColor(TFT_WHITE, TFT_RED);
+#if Bluetooth
+    displayBatteryLevel(TFT_WHITE);
+#endif
+    tft.drawXBitmap(27, 10, SmileFaceUnhealthyBig, 80, 80, TFT_WHITE);
+    tft.setFreeFont(FF90);
+    tft.drawString("UNHEALTHY", 13, 97);
+  }
+  else if (average < 105)
+  {
+    tft.fillScreen(TFT_VIOLET);
+    tft.setTextColor(TFT_WHITE, TFT_VIOLET);
+#if Bluetooth
+    displayBatteryLevel(TFT_WHITE);
+#endif
+    tft.drawXBitmap(27, 10, SmileFaceVeryUnhealthyBig, 80, 80, TFT_WHITE);
+    tft.setFreeFont(FF90);
+    tft.drawString("VERY UNHEAL", 5, 97);
+  }
+  else
+  {
+    tft.fillScreen(TFT_BROWN);
+    tft.setTextColor(TFT_WHITE, TFT_BROWN);
+#if Bluetooth
+    displayBatteryLevel(TFT_WHITE);
+#endif
+    tft.drawXBitmap(27, 10, SmileFaceHazardousBig, 80, 80, TFT_WHITE);
+    tft.setFreeFont(FF90);
+    tft.drawString("HAZARDOUS", 13, 97);
+  }
+
+  // Draw PM25 number
+  tft.setTextSize(1);
+  tft.setFreeFont(FF95);
+
+  if (average < 10)
+    tft.drawString(String(average), 45, 116);
+  else if (average < 100)
+    tft.drawString(String(average), 21, 116);
+  else
+    tft.drawString(String(average), 0, 116);
+
+  // Draw PM25 units
+  tft.setTextSize(1);
+  tft.setFreeFont(FF90);
+  tft.drawString("SPL: ", 40, 197);
+  tft.drawString(String(round(PM25_value), 0), 93, 197);
+
+  tft.drawString("dBA", 85, 218);
 
 #if Wifi
   int rssi;
@@ -5995,20 +6258,29 @@ void Write_Bluetooth()
   provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
   provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
   provider.commitSample(Bluetooth_loop_time);
-  Serial.print("Bluetooth frame: PM2.5(ug/m3):");
-
+#if !(SoundMeter || LTR390UV)
+  Serial.print("Bluetooth frame PM2.5(ug/m3):");
+#elif SoundMeter
+  Serial.print("Bluetooth frame SPL(dBA): ");
+  Serial.println(pm25int);
+#elif LTR390UV
+  Serial.print("Bluetooth frame UV Index: ");
+  Serial.println(pm25int);
+#endif
 #else
   provider.writeValueToCurrentSample(pm25int, SignalType::CO2_PARTS_PER_MILLION);
   provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
   provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
   provider.commitSample(Bluetooth_loop_time);
-  Serial.print("Bluetooth frame: CO2(ppm):");
+  Serial.print("Bluetooth frame CO2(ppm):");
 #endif
+#if !(SoundMeter || LTR390UV)
   Serial.print(pm25int);
   Serial.print(", temp(°C):");
   Serial.print(temp);
   Serial.print(", humidity(%):");
   Serial.println(humi);
+#endif
 }
 #endif
 
