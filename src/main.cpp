@@ -41,7 +41,6 @@ String MQTT_receive_topic;
 
 // MQTT
 #include <PubSubClient.h>
-
 char MQTT_message[256];
 // PubSubClient MQTT_client(wifi_client);
 char received_payload[384];
@@ -51,7 +50,7 @@ TinyGsmClient client(modem);
 PubSubClient MQTT_client(client);
 
 String aireciudadano_device_id = "AireCiudadano_TestMQTT";
-int pm25int = 2;
+int pm25int = 4;
 float latitudef = 4.6987;
 float longitudef = -74.0987;
 int inout = 1;
