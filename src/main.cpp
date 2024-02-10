@@ -6,16 +6,17 @@
 
 // Select your modem:
 // #define TINY_GSM_MODEM_SIM800
-#define TINY_GSM_MODEM_SIM7600
+#define TINY_GSM_MODEM_A7670
 
 // Set serial for debug console (to the Serial Monitor, default speed 115200)
 #define SerialMon Serial
 
-#include <SoftwareSerial.h>
-SoftwareSerial SerialAT(13, 12); // RX, TX
+// #include <SoftwareSerial.h>
+// SoftwareSerial SerialAT(13, 12); // RX, TX
+#define SerialAT Serial2
 
 // See all AT commands, if wanted
-//#define DUMP_AT_COMMANDS
+// #define DUMP_AT_COMMANDS
 
 // Define the serial console for debug prints, if needed
 #define TINY_GSM_DEBUG SerialMon
@@ -162,27 +163,89 @@ void setup()
 
 void loop()
 {
-  if (modem.isNetworkConnected())
-    SerialMon.println("Network connected");
-  else
+  if (!modem.isNetworkConnected())
+  {
     SerialMon.println("Network disconnected");
+    if (!modem.waitForNetwork(180000L, true))
+    {
+      SerialMon.println(" fail");
+      delay(10000);
+      return;
+    }
+    if (modem.isNetworkConnected())
+    {
+      SerialMon.println("Network re-connected");
+      Serial.println("IP ADDRESS network reconnected: " + modem.getLocalIP());
+    }
+    /*
 
-  if (modem.isGprsConnected())
-    SerialMon.println("GPRS connected!");
+    // and make sure GPRS/EPS is still connected
+    if (!modem.isGprsConnected())
+    {
+      SerialMon.println("GPRS disconnected!");
+      SerialMon.print(F("Connecting to "));
+      SerialMon.print(apn);
+      if (!modem.gprsConnect(apn))
+      {
+        SerialMon.println(" fail");
+        delay(10000);
+        return;
+      }
+      if (modem.isGprsConnected())
+      {
+        SerialMon.println("GPRS reconnected");
+        Serial.println("IP ADDRESS gprs reconnected: " + modem.getLocalIP());
+      }
+    }
+    else
+    {
+    Serial.println("GPRS connected");
+    Serial.println("IP ADDRESS gprs: " + modem.getLocalIP());
+    }
+
+    */
+  }
   else
-    SerialMon.println("GPRS disconnected!");
+  {
+    SerialMon.println("Network connected");
+    Serial.println("IP ADDRESS network connected: " + modem.getLocalIP());
+  }
 
-  Serial.println("NEW IP ADDRESS : " + modem.getLocalIP());
+      // and make sure GPRS/EPS is still connected
+    if (!modem.isGprsConnected())
+    {
+      SerialMon.println("GPRS disconnected!");
+      SerialMon.print(F("Connecting to "));
+      SerialMon.print(apn);
+      if (!modem.gprsConnect(apn))
+      {
+        SerialMon.println(" fail");
+        delay(10000);
+        return;
+      }
+      if (modem.isGprsConnected())
+      {
+        SerialMon.println("GPRS reconnected");
+        Serial.println("IP ADDRESS gprs reconnected: " + modem.getLocalIP());
+      }
+    }
+    else
+    {
+    Serial.println("GPRS connected");
+    Serial.println("IP ADDRESS gprs: " + modem.getLocalIP());
+    }
+
 
   if (!MQTT_client.connected())
   {
     SerialMon.println("MQTT disconnected!");
+    // Reconnect every 10 seconds
     Reconnect_MQTT();
   }
   else
   {
     SerialMon.println("MQTT connected!");
-    //    Reconnect_MQTT();                   // No funciono
+    Serial.println("IP ADDRESS mqtt connected: " + modem.getLocalIP());
     Send_Message_Cloud_App_MQTT();
     delay(60000);
   }
@@ -209,7 +272,7 @@ void Send_Message_Cloud_App_MQTT()
   delay(500);
   digitalWrite(LED_PIN, HIGH);
 
-// modem.gprsDisconnect();
+  modem.gprsDisconnect();
 }
 
 void Init_MQTT()
@@ -222,7 +285,7 @@ void Init_MQTT()
   //  MQTT_client.setBufferSize(1024);
 
   MQTT_client.setServer("sensor.aireciudadano.com", 80);
-  //  MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
+  MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
 
   MQTT_client.connect(aireciudadano_device_id.c_str());
 
@@ -255,6 +318,7 @@ void Reconnect_MQTT()
   MQTT_client.subscribe(MQTT_receive_topic.c_str());
   Serial.print(F("MQTT connected - Receive topic: "));
   Serial.println(MQTT_receive_topic);
+  Serial.println("IP ADDRESS mqtt reconnected: " + modem.getLocalIP());
 }
 
 void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int length)
