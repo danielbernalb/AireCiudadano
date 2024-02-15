@@ -46,7 +46,8 @@
 #define SoundAM false    // Set to true to Sound meter airplane mode
 #define LedNeo false      // Set to true for Led Neo multicolor
 
-#define LTR390UV true
+#define LTR390UV false
+#define NoxVoxTd true
 
 #define SiteAltitude 0 // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
 // #define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
@@ -491,10 +492,18 @@ PMS::DATA data;
 
 #if SoundMeter
 #if !ESP8266
+#if !Bluetooth
 #if Tdisplaydisp
 #define ESP32_RX 27 // ESP_MEMS TX pin
 #else
 #define ESP32_RX 16 // ESP_MEMS TX pin
+#endif
+#else
+#if !Tdisplaydisp
+#define ESP32_RX 16 // ESP_MEMS TX pin
+#else
+#define ESP32_RX 33 // ESP_MEMS TX pin
+#endif
 #endif
 #else
 #define ESP8266_RX 14 // ESP_MEMS TX pin
@@ -541,10 +550,14 @@ float hpa;
 // #include <BLEUtils.h>
 NimBLELibraryWrapper lib;
 
-#if !CO2sensor
-DataProvider provider(lib, DataType::T_RH_VOC_PM25);
-#else
+#if (LTR390 || SoundMeter)
+DataProvider provider(lib, DataType::PM10_PM25_PM40_PM100);
+#elif CO2sensor
 DataProvider provider(lib, DataType::T_RH_CO2_ALT);
+#elif NoxVoxTd
+DataProvider provider(lib, DataType::T_RH_VOC_NOX_PM25);
+#else
+DataProvider provider(lib, DataType::T_RH_VOC_PM25);
 #endif
 #endif
 
@@ -749,6 +762,13 @@ void setup()
   Serial.begin(9600);
 #endif
   delay(100);
+#if Tdisplaydisp
+  // Out for power on and off sensors
+  pinMode(OUT_EN, OUTPUT);
+  // Off sensors
+  digitalWrite(OUT_EN, LOW); // step-up off
+#endif
+
   while (!Serial)
   {
     delay(500); // wait 0.5 seconds for connection
@@ -961,8 +981,6 @@ void setup()
 #endif
 
 #if Tdisplaydisp
-  // Out for power on and off sensors
-  pinMode(OUT_EN, OUTPUT);
   // On sensors
   digitalWrite(OUT_EN, HIGH); // step-up on
   delay(100);
@@ -3984,7 +4002,15 @@ void Setup_SoundMeter()
 {
   Serial.println("Config Sound Meter ESP_MEMS");
 #if !ESP8266
+#if !Bluetooth
   Serial2.begin(9600, SERIAL_8N1, ESP32_RX, 17);
+#else
+#if !Tdisplaydisp
+  Serial2.begin(9600, SERIAL_8N1, ESP32_RX, 17);
+#else
+  Serial2.begin(9600, SERIAL_8N1, ESP32_RX, 25);    // Pin RX 33 para Bluetooth, RX no puede ser pin 17 porque así no funciona Serial2
+#endif
+#endif
 #else
   SerialESP.begin(9600);
 #endif
@@ -4728,7 +4754,7 @@ void Update_Display()
     else
       tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_WHITE);
 #elif LTR390UV
-    if (pm25int < 7)
+    if (pm25int < 8)
       tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_BLACK);
     else
       tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_WHITE);
@@ -5721,6 +5747,7 @@ void displayAverage(int average)
 
   // Draw PM25 number
   tft.setTextSize(1);
+#if !NoxVoxTd
   tft.setFreeFont(FF95);
 
   if (average < 10)
@@ -5747,6 +5774,42 @@ void displayAverage(int average)
   else
     tft.drawString("ug/m3", 72, 218);
     // tft.drawString("ug/m3", 72, 268);
+
+#else
+  tft.setFreeFont(FF97);
+
+  if (average < 10)
+    tft.drawString(String(average), 55, 115);
+  else if (average < 100)
+    tft.drawString(String(average), 35, 115);
+  else
+    tft.drawString(String(average), 18, 115);
+
+  // Draw PM25 units
+  tft.setTextSize(1);
+  tft.setFreeFont(FF92);
+  tft.drawString("PM2.5: ", 10, 165);
+  tft.drawString(String(round(PM25_value), 0), 90, 165);
+  tft.drawString("Voc: ", 34, 181);
+  tft.drawString(String(round(vocIndex), 0), 90, 181);
+  tft.drawString("Nox: ", 33, 197);
+  tft.drawString(String(round(noxIndex), 0), 90, 197);
+  
+  tft.setTextSize(1);
+  tft.setFreeFont(FF90);
+
+  if (temp != 0 || humi != 0)
+  {
+    // Draw temperature
+    tft.drawString("T" + String(temp), 60, 220);
+
+    // Draw humidity
+    tft.drawString("H" + String(humi), 95, 220);
+  }
+  else
+    tft.drawString("ug/m3", 72, 218);
+    // tft.drawString("ug/m3", 72, 268);
+#endif
 
 #if Wifi
   int rssi;
@@ -5949,6 +6012,7 @@ void displayAverage(int average)
   tft.setFreeFont(FF90);
   tft.drawString("UV index", 28, 197);
   tft.drawString(String(round(PM25_value), 0), 107, 197);
+  tft.drawString("r: " + String(ltr.uv()), 60, 220);
 
 #if Wifi
   int rssi;
@@ -6253,28 +6317,50 @@ void LedNeoAverage(int average)
 void Write_Bluetooth()
 { // Write measurements to Bluetooth
 
-#if !CO2sensor
+#if SoundMeter
+  provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
+  provider.commitSample(Bluetooth_loop_time);
+  Serial.print("Bluetooth frame SPL(dBA): ");
+  Serial.println(pm25int);
+#elif LTR390UV
+  provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
+  provider.commitSample(Bluetooth_loop_time);
+  Serial.print("Bluetooth frame UV Index: ");
+  Serial.println(pm25int);
+#elif CO2sensor
+  provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
+  provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
+  provider.writeValueToCurrentSample(pm25int, SignalType::CO2_PARTS_PER_MILLION);
+  provider.commitSample(Bluetooth_loop_time);
+  Serial.print("Bluetooth frame CO2(ppm): ");
+  Serial.print(pm25int);
+  Serial.print(", temp(°C): ");
+  Serial.print(temp);
+  Serial.print(", humidity(%): ");
+  Serial.println(humi);
+#elif NoxVoxTd
+  provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
+  provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
+  //provider.writeValueToCurrentSample(vocIndex, SignalType::VOC_INDEX);
+  //provider.writeValueToCurrentSample(noxIndex, SignalType::NOX_INDEX);
+  provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
+  provider.commitSample(Bluetooth_loop_time);
+  Serial.print("Bluetooth frame PM2.5(ug/m3): ");
+  Serial.print(pm25int);
+  Serial.print(", Voc Index: ");
+  Serial.print(vocIndex);
+  Serial.print(", Nox index: ");
+  Serial.print(noxIndex);
+  Serial.print(", temp(°C): ");
+  Serial.print(temp);
+  Serial.print(", humidity(%): ");
+  Serial.println(humi);
+#else
   provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
   provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
   provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
   provider.commitSample(Bluetooth_loop_time);
-#if !(SoundMeter || LTR390UV)
   Serial.print("Bluetooth frame PM2.5(ug/m3):");
-#elif SoundMeter
-  Serial.print("Bluetooth frame SPL(dBA): ");
-  Serial.println(pm25int);
-#elif LTR390UV
-  Serial.print("Bluetooth frame UV Index: ");
-  Serial.println(pm25int);
-#endif
-#else
-  provider.writeValueToCurrentSample(pm25int, SignalType::CO2_PARTS_PER_MILLION);
-  provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
-  provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
-  provider.commitSample(Bluetooth_loop_time);
-  Serial.print("Bluetooth frame CO2(ppm):");
-#endif
-#if !(SoundMeter || LTR390UV)
   Serial.print(pm25int);
   Serial.print(", temp(°C):");
   Serial.print(temp);
