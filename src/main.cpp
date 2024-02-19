@@ -27,15 +27,18 @@
 // 9. SoundMeter Bluetooth
 // 10. LTR390 UV sensor
 
+// Pendiente ajuste SPS30
+// Arreglo bluetooth SEN50 y revision reset cuando se bajan datos desde la app: quedo con ese error porque ninguna version lo corrige por el momento
+
 #include <Arduino.h>
 #include "main.hpp"
 
 ////////////////////////////////
 // Modo de comunicaciones del sensor:
-#define Wifi false        // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
+#define Wifi true        // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
 #define WPA2 false       // Set to true to WPA2 enterprise networks (IEEE 802.1X)
 //#define Rosver false     // Set to true URosario version
-#define Bluetooth true  // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
+#define Bluetooth false  // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
 #define ESP8285 false    // Set to true in case you use an ESP8285 switch
@@ -47,13 +50,13 @@
 #define LedNeo false      // Set to true for Led Neo multicolor
 
 #define LTR390UV false
-#define NoxVoxTd true
+#define NoxVoxTd false
 
 #define SiteAltitude 0 // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
 // #define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
 
 // Escoger modelo de pantalla (pasar de false a true) o si no hay escoger ninguna (todas false):
-#define Tdisplaydisp true
+#define Tdisplaydisp false
 #define OLED66display false
 #define OLED96display false
 
@@ -183,6 +186,7 @@ Preferences preferences;
 
 // Measurements
 float PM25_value = 0;     // PM25 measured value
+float PM25_valueold;
 float PM251_value = 0;    // PM25 sensor 1 measured value
 float PM252_value = 0;    // PM25 sensor 2 measured value
 float PM25_value_ori = 0; // PM25 original measured value in PMS adjust TRUE
@@ -355,6 +359,7 @@ int vref = 1100;
 SPS30 sps30;
 #define SP30_COMMS Wire
 #define DEBUG 0
+byte failpm = 0;
 
 #include <SensirionI2CSen5x.h>
 
@@ -555,7 +560,8 @@ DataProvider provider(lib, DataType::PM10_PM25_PM40_PM100);
 #elif CO2sensor
 DataProvider provider(lib, DataType::T_RH_CO2_ALT);
 #elif NoxVoxTd
-DataProvider provider(lib, DataType::T_RH_VOC_NOX_PM25);
+//DataProvider provider(lib, DataType::T_RH_VOC_NOX_PM25); // Por error al bajar los datos con nox: assert failed: void ByteArray<SIZE>
+DataProvider provider(lib, DataType::T_RH_VOC_PM25);
 #else
 DataProvider provider(lib, DataType::T_RH_VOC_PM25);
 #endif
@@ -3693,23 +3699,47 @@ void Read_Sensor()
         if (error_cnt++ > 3)
         {
           ErrtoMess((char *)"Error during reading values: ", ret);
-          // return(false);
+          Serial.print("Error during reading values: ");
+          Serial.println(ret);
         }
-        delay(1000);
       }
       // if other error
       else if (ret != SPS30_ERR_OK)
       {
         ErrtoMess((char *)"Error during reading values: ", ret);
-        // return(false);
+        Serial.print("Error during reading values: ");
+        Serial.println(ret);
       }
+      if (failpm > 14)
+      {
+        failpm = 0;
+        Serial.print(F("Reset lectura sensor erronea 1"));
+        ESP.restart();
+      }
+      else
+        failpm = failpm + 1;
+      delay(1000);        
     } while (ret != SPS30_ERR_OK);
 
+    PM25_valueold = PM25_value;
     PM25_value = val.MassPM2;
     PM1_value = val.MassPM1;
 
     if (!err_sensor)
     {
+      if((PM25_value == 0 && PM1_value == 0) || (PM25_value == PM25_valueold))
+      {   // Recuperación de error en 0
+        if (failpm > 20)
+        {
+          failpm = 0;
+          Serial.print(F("Reset lectura sensor erronea 2"));
+          ESP.restart();
+        }
+        else
+          failpm = failpm + 1; 
+      }
+      else
+        failpm = 0;
       // Provide the sensor values for Tools -> Serial Monitor or Serial Plotter
       Serial.print(F("SPS30 PM2.5: "));
       Serial.print(PM25_value);
@@ -3735,9 +3765,28 @@ void Read_Sensor()
       Setup_Sensor();
       Serial.println(F("Reinit I2C"));
       delay(10);
+      if (failpm > 20)
+      {
+        failpm = 0;
+        ESP.restart();
+      }
+      else
+        failpm = failpm + 1;
     }
     else
     {
+      if(PM25_value == 0 && PM1_value == 0)
+      {   // Recuperación de error en 0
+        if (failpm > 20)
+        {
+          failpm = 0;
+          ESP.restart();
+        }
+        else
+          failpm = failpm + 1; 
+      }
+      else
+        failpm = 0;
       PM25_value = massConcentrationPm2p5;
       Serial.print(F("SEN5X PM2.5: "));
       Serial.print(PM25_value);
@@ -3758,12 +3807,18 @@ void Read_Sensor()
       temp = round(ambientTemperature);
       Serial.print(F("   VocIndex:"));
       if (isnan(vocIndex))
+      {
         Serial.print(F(" n/a"));
+        vocIndex = 0;
+      }
       else
         Serial.print(vocIndex);
       Serial.print(F("   NoxIndex:"));
       if (isnan(noxIndex))
+      {
         Serial.println(F(" n/a"));
+        noxIndex = 0;
+      }
       else
         Serial.println(noxIndex);
     }
@@ -3778,6 +3833,7 @@ void Read_Sensor()
 #if !TwoPMS
     if (pms.readUntil(data))
     {
+      failpm = 0;
       PM25_value = data.PM_AE_UG_2_5;
       Serial.print(F("PMS PM2.5: "));
       Serial.print(PM25_value);
@@ -3799,10 +3855,18 @@ void Read_Sensor()
     else
     {
       Serial.println(F("No data by Plantower sensor!"));
+        if (failpm > 20)
+        {
+          failpm = 0;
+          ESP.restart();
+        }
+        else
+          failpm = failpm + 1; 
     }
 #else
     if (pms1.readUntil(data))
     {
+      failpm = 0;
       PM251_value = data.PM_AE_UG_2_5;
       Serial.print(F("PMS1 PM2.5: "));
       Serial.print(PM251_value);
@@ -3822,10 +3886,20 @@ void Read_Sensor()
         Serial.print(F("   "));
     }
     else
+    {
       Serial.println(F("No data by Plantower1 sensor!"));
+        if (failpm > 20)
+        {
+          failpm = 0;
+          ESP.restart();
+        }
+        else
+          failpm = failpm + 1; 
+    }
 
     if (pms2.readUntil(data))
     {
+      failpm= 0;
       PM252_value = data.PM_AE_UG_2_5;
       Serial.print(F("PMS2 PM2.5: "));
       Serial.print(PM252_value);
@@ -3845,7 +3919,16 @@ void Read_Sensor()
         Serial.println(F(""));
     }
     else
+    {
       Serial.println(F("No data by Plantower2 sensor!"));
+      if (failpm > 20)
+      {
+        failpm = 0;
+        ESP.restart();
+      }
+      else
+        failpm = failpm + 1; 
+    }
 #endif
   }
   else
@@ -6339,18 +6422,20 @@ void Write_Bluetooth()
   Serial.print(", humidity(%): ");
   Serial.println(humi);
 #elif NoxVoxTd
+uint16_t vocint = round(vocIndex);
+uint16_t noxint = round(noxIndex);
   provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
   provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
-  //provider.writeValueToCurrentSample(vocIndex, SignalType::VOC_INDEX);
-  //provider.writeValueToCurrentSample(noxIndex, SignalType::NOX_INDEX);
+  provider.writeValueToCurrentSample(vocint, SignalType::VOC_INDEX);
+//  provider.writeValueToCurrentSample(noxint, SignalType::NOX_INDEX);
   provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
   provider.commitSample(Bluetooth_loop_time);
   Serial.print("Bluetooth frame PM2.5(ug/m3): ");
   Serial.print(pm25int);
   Serial.print(", Voc Index: ");
-  Serial.print(vocIndex);
+  Serial.print(vocint);
   Serial.print(", Nox index: ");
-  Serial.print(noxIndex);
+  Serial.print(noxint);
   Serial.print(", temp(°C): ");
   Serial.print(temp);
   Serial.print(", humidity(%): ");
