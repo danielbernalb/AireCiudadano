@@ -2221,27 +2221,22 @@ void Start_Captive_Portal()
 
   if (eepromConfig.ConfigValues[7] == '0')
   {
-    const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM model:</label><br/><input type='radio' name='customSenPM' value='0' checked> None<br><input type='radio' name='customSenPM' value='1'> Sensirion SPS30<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> Plantower PMS raw NOT recommended<br><input type='radio' name='customSenPM' value='4'> Plantower PMS adjust RECOMMENDED";
+    const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0' checked> None<br><input type='radio' name='customSenPM' value='1'> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> Plantower PMS adjusted";
     new (&custom_sensorPM_type) WiFiManagerParameter(custom_senPM_str);
   }
   else if (eepromConfig.ConfigValues[7] == '1')
   {
-    const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM model:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1' checked> Sensirion SPS30<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> Plantower PMS raw NOT recommended<br><input type='radio' name='customSenPM' value='4'> Plantower PMS adjust RECOMMENDED";
+    const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1' checked> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> Plantower PMS adjusted";
     new (&custom_sensorPM_type) WiFiManagerParameter(custom_senPM_str);
   }
   else if (eepromConfig.ConfigValues[7] == '2')
   {
-    const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM model:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1'> Sensirion SPS30<br><input type='radio' name='customSenPM' value='2' checked> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> Plantower PMS raw NOT recommended<br><input type='radio' name='customSenPM' value='4'> Plantower PMS adjust RECOMMENDED";
+    const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1'> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2' checked> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> Plantower PMS adjusted";
     new (&custom_sensorPM_type) WiFiManagerParameter(custom_senPM_str);
   }
   else if (eepromConfig.ConfigValues[7] == '3')
   {
-    const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM model:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1'> Sensirion SPS30<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3' checked> Plantower PMS raw NOT recommended<br><input type='radio' name='customSenPM' value='4'> Plantower PMS adjust RECOMMENDED";
-    new (&custom_sensorPM_type) WiFiManagerParameter(custom_senPM_str);
-  }
-  else if (eepromConfig.ConfigValues[7] == '4')
-  {
-    const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM model:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1'> Sensirion SPS30<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> Plantower PMS raw NOT recommended<br><input type='radio' name='customSenPM' value='4' checked> Plantower PMS adjust RECOMMENDED";
+    const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1'> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3' checked> Plantower PMS adjusted";
     new (&custom_sensorPM_type) WiFiManagerParameter(custom_senPM_str);
   }
 
@@ -2249,17 +2244,17 @@ void Start_Captive_Portal()
 
   if (eepromConfig.ConfigValues[6] == '0')
   {
-    const char *custom_senHYT_str = "<br/><br/><label for='customSenHYT'>Sensor HYT type:</label><br/><input type='radio' name='customSenHYT' value='0' checked> None<br><input type='radio' name='customSenHYT' value='1'> Sensirion SHT31/SHT4x<br><input type='radio' name='customSenHYT' value='2'> AM2320";
+    const char *custom_senHYT_str = "<br/><br/><label for='customSenHYT'>Sensor HyT:</label><br/><input type='radio' name='customSenHYT' value='0' checked> None or integrated (SEN54/5-PMSx003T)<br><input type='radio' name='customSenHYT' value='1'> Sensirion SHT31/SHT4x<br><input type='radio' name='customSenHYT' value='2'> AM2320";
     new (&custom_sensorHYT_type) WiFiManagerParameter(custom_senHYT_str);
   }
   else if (eepromConfig.ConfigValues[6] == '1')
   {
-    const char *custom_senHYT_str = "<br/><br/><label for='customSenHYT'>Sensor HYT type:</label><br/><input type='radio' name='customSenHYT' value='0'> None<br><input type='radio' name='customSenHYT' value='1' checked> Sensirion SHT31/SHT4x<br><input type='radio' name='customSenHYT' value='2'> AM2320";
+    const char *custom_senHYT_str = "<br/><br/><label for='customSenHYT'>Sensor HyT:</label><br/><input type='radio' name='customSenHYT' value='0'> None or integrated (SEN54/5-PMSx003T)<br><input type='radio' name='customSenHYT' value='1' checked> Sensirion SHT31/SHT4x<br><input type='radio' name='customSenHYT' value='2'> AM2320";
     new (&custom_sensorHYT_type) WiFiManagerParameter(custom_senHYT_str);
   }
   else if (eepromConfig.ConfigValues[6] == '2')
   {
-    const char *custom_senHYT_str = "<br/><br/><label for='customSenHYT'>Sensor HYT type:</label><br/><input type='radio' name='customSenHYT' value='0'> None<br><input type='radio' name='customSenHYT' value='1'> Sensirion SHT31/SHT4x<br><input type='radio' name='customSenHYT' value='2' checked> AM2320";
+    const char *custom_senHYT_str = "<br/><br/><label for='customSenHYT'>Sensor HyT:</label><br/><input type='radio' name='customSenHYT' value='0'> None or integrated (SEN54/5-PMSx003T)<br><input type='radio' name='customSenHYT' value='1'> Sensirion SHT31/SHT4x<br><input type='radio' name='customSenHYT' value='2' checked> AM2320";
     new (&custom_sensorHYT_type) WiFiManagerParameter(custom_senHYT_str);
   }
 
@@ -2267,22 +2262,22 @@ void Start_Captive_Portal()
 
   if (eepromConfig.ConfigValues[5] == '0')
   {
-    const char *custom_display_str = "<br/><br/><label for='customDisplay'>Display model:</label><br/><input type='radio' name='customDisplay' value='0' checked> Without display<br><input type='radio' name='customDisplay' value='1'> TTGO T-Display<br><input type='radio' name='customDisplay' value='2'> OLED 0.96 inch - 128x64p<br><input type='radio' name='customDisplay' value='3'> OLED 0.66 inch - 64x48p";
+    const char *custom_display_str = "<br/><br/><label for='customDisplay'>Display:</label><br/><input type='radio' name='customDisplay' value='0' checked> None<br><input type='radio' name='customDisplay' value='1'> TTGO T-Display<br><input type='radio' name='customDisplay' value='2'> OLED 0.96 inch - 128x64p<br><input type='radio' name='customDisplay' value='3'> OLED 0.66 inch - 64x48p";
     new (&custom_display_type) WiFiManagerParameter(custom_display_str);
   }
   else if (eepromConfig.ConfigValues[5] == '1')
   {
-    const char *custom_display_str = "<br/><br/><label for='customDisplay'>Display model:</label><br/><input type='radio' name='customDisplay' value='0'> Without display<br><input type='radio' name='customDisplay' value='1' checked> TTGO T-Display<br><input type='radio' name='customDisplay' value='2'> OLED 0.96 inch - 128x64p<br><input type='radio' name='customDisplay' value='3'> OLED 0.66 inch - 64x48p";
+    const char *custom_display_str = "<br/><br/><label for='customDisplay'>Display:</label><br/><input type='radio' name='customDisplay' value='0'> None<br><input type='radio' name='customDisplay' value='1' checked> TTGO T-Display<br><input type='radio' name='customDisplay' value='2'> OLED 0.96 inch - 128x64p<br><input type='radio' name='customDisplay' value='3'> OLED 0.66 inch - 64x48p";
     new (&custom_display_type) WiFiManagerParameter(custom_display_str);
   }
   else if (eepromConfig.ConfigValues[5] == '2')
   {
-    const char *custom_display_str = "<br/><br/><label for='customDisplay'>Display model:</label><br/><input type='radio' name='customDisplay' value='0'> Without display<br><input type='radio' name='customDisplay' value='1'> TTGO T-Display<br><input type='radio' name='customDisplay' value='2' checked> OLED 0.96 inch - 128x64p<br><input type='radio' name='customDisplay' value='3'> OLED 0.66 inch - 64x48p";
+    const char *custom_display_str = "<br/><br/><label for='customDisplay'>Display:</label><br/><input type='radio' name='customDisplay' value='0'> None<br><input type='radio' name='customDisplay' value='1'> TTGO T-Display<br><input type='radio' name='customDisplay' value='2' checked> OLED 0.96 inch - 128x64p<br><input type='radio' name='customDisplay' value='3'> OLED 0.66 inch - 64x48p";
     new (&custom_display_type) WiFiManagerParameter(custom_display_str);
   }
   else if (eepromConfig.ConfigValues[5] == '3')
   {
-    const char *custom_display_str = "<br/><br/><label for='customDisplay'>Display model:</label><br/><input type='radio' name='customDisplay' value='0'> Without display<br><input type='radio' name='customDisplay' value='1'> TTGO T-Display<br><input type='radio' name='customDisplay' value='2'> OLED 0.96 inch - 128x64p<br><input type='radio' name='customDisplay' value='3' checked> OLED 0.66 inch - 64x48p";
+    const char *custom_display_str = "<br/><br/><label for='customDisplay'>Display:</label><br/><input type='radio' name='customDisplay' value='0'> None<br><input type='radio' name='customDisplay' value='1'> TTGO T-Display<br><input type='radio' name='customDisplay' value='2'> OLED 0.96 inch - 128x64p<br><input type='radio' name='customDisplay' value='3' checked> OLED 0.66 inch - 64x48p";
     new (&custom_display_type) WiFiManagerParameter(custom_display_str);
   }
 
