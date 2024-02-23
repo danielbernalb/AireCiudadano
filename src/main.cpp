@@ -32,9 +32,11 @@
 // 14. MinVer es como Rosver pero para cualquier sensor y sin SD
 // 15. Json lib actualizada a v7
 // 16. ESP8285 flag en platformio.ini
-// 17. Ver 2.5
+// 17. En Test_Sensor se identifica SEN54 y 55 con HyT y PMS7003T para parpadeo de HyT
+// 18. Ver 2.5
 
-//Revisar si en Test_Sensor se identifica SEN54 y 55 con HyT y PMS7003T para parpadeo de HyT
+// SPS30 ajust revisar, esta muy alto. Compararlo con SEN5X y PMS
+// Conectividad movil
 
 #include <Arduino.h>
 #include "main.hpp"
@@ -54,13 +56,13 @@
 #define LedNeo false     // Set to true for Led Neo multicolor
 
 #define LTR390UV false
-#define NoxVoxTd true
+#define NoxVoxTd false
 
 #define SiteAltitude 0 // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
 // #define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
 
 // Escoger modelo de pantalla (pasar de false a true) o si no hay escoger ninguna (todas false):
-#define Tdisplaydisp true
+#define Tdisplaydisp false
 #define OLED66display false
 #define OLED96display false
 
