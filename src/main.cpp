@@ -41,6 +41,7 @@
 // Constantes de Ajuste de sensores programables: pendiente e intercepto
 // Verificar nueva libreria Bluettoh que parece compatible con Sensirion UPT Core@^0.3.0
 // Revisar mqtt.loop para que se haga menos veces sin dañar la RX del mensaje del servidor, sobre todo en MobData
+// Revisar identificacion mas facil con IDn, version firmware - sensor - etc para los ajustes de intercepto y pendiente
 
 #include <Arduino.h>
 #include "main.hpp"
