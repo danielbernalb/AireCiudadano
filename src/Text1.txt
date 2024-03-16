@@ -1,3 +1,4 @@
+Archivo con todos los cambios y partes comentadas del A7670 library, 10:30pm 15 marzo 2024
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // AireCiudadano medidor Fijo - Medidor de PM2.5 abierto, medición opcional de humedad y temperatura.
 // Más información en: aireciudadano.com
@@ -35,12 +36,11 @@
 // 17. En Test_Sensor se identifica SEN54 y 55 con HyT y PMS7003T para parpadeo de HyT
 // 18. Ver 2.5
 // 19. SPS30 ajuste resultado de intercomparacion con SEN y PMS
-// 20. MinVer con SD
 
+// MinVer con SD
 // Conectividad movil
 // Constantes de Ajuste de sensores programables: pendiente e intercepto
 // Verificar nueva libreria Bluettoh que parece compatible con Sensirion UPT Core@^0.3.0
-// Revisar mqtt.loop para que se haga menos veces sin dañar la RX del mensaje del servidor, sobre todo en MobData
 
 #include <Arduino.h>
 #include "main.hpp"
@@ -277,6 +277,7 @@ bool NoSensor = false;
 // Measurements loop: time between measurements
 unsigned int measurements_loop_duration = 1000; // 1 second
 unsigned long measurements_loop_start;          // holds a timestamp for each control loop start
+unsigned long measurements_loop_A7670;          // holds a timestamp for each control loop start
 
 unsigned int Bluetooth_loop_time;
 unsigned int Con_loop_times = 0;
@@ -685,7 +686,9 @@ String MQTT_send_topic;
 String MQTT_send_topicsam;
 String MQTT_receive_topic;
 
+//#if FlagA7670
 byte contmqtt = 0;
+//#endif
 
 #if SoundMeter
 byte Influxseconds = 60;
@@ -805,7 +808,10 @@ LTR390 ltr;
 
 #if MobData
 
+#if !FlagA7670
+
 // Select your modem:
+//#define TINY_GSM_MODEM_SIM7600
 #define TINY_GSM_MODEM_A7670
 
 // Set serial for debug console (to the Serial Monitor, default speed 115200)
@@ -822,6 +828,7 @@ SoftwareSerial SerialAT(13, 12);  // RX, TX     // Si se usan 2 PMSx003 habria c
 
 // Define the serial console for debug prints, if needed
 #define TINY_GSM_DEBUG SerialMon
+//#define TINY_GSM_DEBUG SerialAT
 
 // Your GPRS credentials, if any
 const char apn[] = "web.colombiamovil.com.co";
@@ -840,6 +847,44 @@ TinyGsm modem(SerialAT);
 
 TinyGsmClient client(modem);
 PubSubClient MQTT_client(client);
+
+#else
+
+//////////////////////////////////////////
+/*
+#include <StreamDebugger.h>
+#include <A76XX.h>
+
+// dump all communication with the module to the standard serial port
+//#define DEBUG_AT true
+#define DEBUG_AT true
+
+// ESP8266
+SoftwareSerial SerialAT(13, 12);  // RX, TX
+
+// Use the correct `Serial` object to connect to the simcom module
+#if DEBUG_AT
+StreamDebugger debugger(SerialAT, Serial);
+#else
+#define SerialAT SerialAT
+#endif
+
+// MQTT detailed
+const int   keepalive     = 120;
+const bool  clean_session = true;
+const bool  use_ssl       = false;
+
+// replace with your apn
+//const char* apn = "web.colombiamovil.com.co";
+const char* apn = "internet.movistar.com.co";
+
+A76XX modem(debugger);
+//A76XXMQTTClient mqtt_client2(modem, aireciudadano_device_id.c_str(), use_ssl);
+A76XXMQTTClient mqtt_client2(modem, "AireCiudadanoIni", use_ssl);
+*/
+//////////////////////////////////////////
+
+#endif
 
 #endif
 
@@ -1145,17 +1190,28 @@ void setup()
   if (FlagMobData == true)
   {
 #if MobData
+//    SerialAT.begin(115200);
     SerialAT.begin(19200);
     delay(10);
     // Attempt to connect to Mobile Data network:
 connectstart:
     Serial.println("Connect MobData routine");
-    Connect_MobData();                // Setup Connect Mob Data
-
+//#if !FlagA7670
+    //Connect_MobData();                // Setup Connect Mob Data
+    //Connect_MobData3();                // Setup Connect Mob Data
+    Connect_MobDataOK();                // Setup Connect Mob Data
+//#else
+//    Connect_MobData2();                // Setup Connect Mob Data
+//#endif
     // Attempt to connect to MQTT broker
     Serial.println("Init MQTT routine");
     FlagMQTTcon = false;
-    Init_MQTT();
+//#if !FlagA7670
+//    Init_MQTT();
+    Init_MQTT2();
+//#else
+//    Init_MQTT_MobData();
+//#endif
     if (FlagMQTTcon == false)
       goto connectstart;      
 #endif
@@ -1181,6 +1237,10 @@ connectstart:
   MQTT_loop_start = millis();
   MQTT_loop_startsam = millis();
 #endif
+
+//#if FlagA7670
+//  measurements_loop_A7670 = millis();
+//#endif
 
 #if (SDyRTC || SaveSDyRTC || Rosver || MinVerSD)
 #if !WPA2
@@ -1523,12 +1583,15 @@ void loop()
       PM25f = PM25_accumulated / PM25_samples;
       pm25int = round(PM25f);
       Serial.print(F("PM2.5: "));
+//      Serial.println(pm25int);
       Serial.print(pm25int);
       Serial.print("   ");
 #if !SoundMeter
       ReadHyT();
 #endif
+//#if SaveSDyRTC
       Write_SD();
+//#endif
       PM25_accumulated = 0.0;
       PM25_samples = 0.0;
       Con_loop_times = 0;
@@ -1551,7 +1614,13 @@ void loop()
       MQTT_loop_start = millis();
 
 #if MobData
+
+//#if !FlagA7670
       MobDataConnected();     // MobDataConnected revision!!!!!!!!
+//#else
+//      MobDataConnected2();
+//#endif
+
 #endif
 
       // Message the MQTT broker in the cloud app to send the measured values
@@ -1735,11 +1804,73 @@ void loop()
     }
     else if (!err_MQTT)
     {
-      MQTT_client.loop();               // Ocurre cada lectura de Sensor, osea cada 1seg
+      MQTT_client.loop();                     // Ocurre cada lectura de Sensor, osea cada 1seg
       Serial.println("MQTT_client.loop");
     }
+
+/*
+
+    else if (!err_MQTT)
+    {
+    A76XXURC_t urc = modem.listen(100);     ///////////////////////////////////////
+
+    switch (urc) {
+      case A76XXURC_t::MQTT_MESSAGE_RX : {
+          MQTTMessage_t msg = mqtt_client2.getMessage();
+          Serial.println("Received message ...");
+          Serial.print("  topic: ");   Serial.println(msg.topic);
+          Serial.print("  payload: "); Serial.println(msg.payload);
+          break;
+        }
+      default : {
+          Serial.println("MQTT default1");
+        }
+    }
+
+      /*
+      if (contmqtt > 5)
+        {
+        MQTT_client.loop();
+        Serial.print("MQTT_client.loop: ");
+        Serial.println(contmqtt);
+        contmqtt = 0;
+        }
+      else
+        contmqtt++;  
+      */
+//    }
+
   }
 #endif
+
+/*
+#if FlagA7670
+
+  // Measurement loop
+  if ((millis() - measurements_loop_A7670) >= 100)
+  {
+    measurements_loop_A7670 = millis();
+//       Serial.println("millis3: ");
+//    Serial.println(millis);
+    A76XXURC_t urc = modem.listen(100);     ///////////////////////////////////////
+
+    switch (urc) {
+      case A76XXURC_t::MQTT_MESSAGE_RX : {
+          MQTTMessage_t msg = mqtt_client2.getMessage();
+          Serial.println("Received message ...");
+          Serial.print("  topic: ");   Serial.println(msg.topic);
+          Serial.print("  payload: "); Serial.println(msg.payload);
+          break;
+        }
+      default : {
+          Serial.println("MQTT default2");
+        }
+    }
+//       Serial.print("millis4: ");
+//    Serial.println(millis);
+  }
+#endif
+*/
 
 // Process Bluetooth events
 #if Bluetooth
@@ -1911,6 +2042,7 @@ void Connect_WiFi()
   WiFi.setOutputPower(20.5);        // Default 17dB
 #endif
 #endif
+
 
 #if !ESP8266
 
@@ -2846,7 +2978,6 @@ MQTT_client.setKeepAlive(350);
     MQTT_client.subscribe(MQTT_receive_topic.c_str());
     Serial.print(F("MQTT connected - Receive topic: "));
     Serial.println(MQTT_receive_topic);
-    FlagMQTTcon = true; 
 #if !ESP8266
     digitalWrite(LEDPIN, HIGH);
     delay(1000);
@@ -2862,6 +2993,117 @@ MQTT_client.setKeepAlive(350);
 #endif
   }
 }
+
+void Init_MQTT2()
+{ // MQTT Init function
+  Serial.print("MonTiny: 2 Attempting to connect to the MQTT broker ");
+  Serial.print("sensor.aireciudadano.com");
+  Serial.print(":");
+  Serial.println("80");
+
+#if !ESP8266
+//  MQTT_client.setBufferSize(512); // to receive messages up to 512 bytes length (default is 256)
+#else
+  MQTT_client.setBufferSize(1024);    // PROBAR!!!!!!!!!!!!!!!!!!!!!
+#endif
+
+  MQTT_client.setServer("sensor.aireciudadano.com", 80);
+  MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
+
+  MQTT_client.connect(aireciudadano_device_id.c_str());
+
+  if (!MQTT_client.connected())
+  {
+    Serial.println("MONTiny: MQTT_Reconnect 2");
+    MQTT_Reconnect();
+  }
+  else
+  {
+    // Once connected resubscribe
+    MQTT_client.subscribe(MQTT_receive_topic.c_str());
+    Serial.print("MONTiny: MQTT connected - Receive topic: ");
+    Serial.println(MQTT_receive_topic);
+    FlagMQTTcon = true;
+  }
+}
+
+/*    Rutina inconveniente por quedarse en while
+void MQTT_Reconnect2()
+{ // MQTT Init function
+
+  MQTT_client.setServer("sensor.aireciudadano.com", 80);
+
+  MQTT_client.connect(aireciudadano_device_id.c_str());
+
+  while (!MQTT_client.connected())
+  {
+    delay(5000);
+    MQTT_client.setServer("sensor.aireciudadano.com", 80);
+    MQTT_client.connect(aireciudadano_device_id.c_str());
+  }
+  // Once connected resubscribe
+  MQTT_client.subscribe(MQTT_receive_topic.c_str());
+  Serial.print("MONTiny: MQTT connected - Receive topic: ");
+  Serial.println(MQTT_receive_topic);
+}
+
+*/
+
+/*
+
+#if FlagA7670
+void Init_MQTT_MobData()
+{ // MQTT Init function
+
+  Serial.print(F("Attempting to connect to the MQTT broker "));
+  //  Serial.print(eepromConfig.MQTT_server);
+  Serial.print(F("sensor.aireciudadano.com"));
+  Serial.print(F(":"));
+  //  Serial.println(eepromConfig.MQTT_port);
+
+#if !Influxver
+  Serial.println(F("80"));
+#else
+  Serial.println(F("30183")); // InfluxDB port
+#endif
+    if (mqtt_client2.begin() == false) {
+        Serial.println("Error starting cliente");
+        while (true) {}
+    }
+    Serial.println("done starting client");
+
+    Serial.print("Connecting to mosquitto test server  ... ");
+    if (mqtt_client2.connect("sensor.aireciudadano.com", 80, clean_session, keepalive) == false) {
+        Serial.println("Fail, MQTT Reconnect by RESET");
+        while (true) {}
+    }
+    Serial.println("done connected to server");
+
+    Serial.print("Subscribe to topic  ... ");
+//    if (mqtt_client2.subscribe("config/AT1") == false) {
+    if (mqtt_client2.subscribe(MQTT_receive_topic.c_str()) == false) {
+        Serial.println("error subscribe to topic");
+        while (true) {}
+    }
+    Serial.println("done subscribe to topic");
+
+#if !ESP8266
+    digitalWrite(LEDPIN, HIGH);
+    delay(1000);
+    digitalWrite(LEDPIN, LOW);
+    delay(1000);
+    digitalWrite(LEDPIN, HIGH);
+#else
+    digitalWrite(LEDPIN, LOW);
+    delay(1000);
+    digitalWrite(LEDPIN, HIGH);
+    delay(1000);
+    digitalWrite(LEDPIN, LOW);
+#endif
+}
+
+#endif
+*/
 
 void MQTT_Reconnect()
 { // MQTT reconnect function
@@ -2989,7 +3231,35 @@ void Send_Message_Cloud_App_MQTT()
 
 if (FlagMobData == true)
 {
+//#if !FlagA7670
   RSSI = modem.getSignalQuality();
+//#else
+//  SerialAT.println("AT+CSQ");
+/*
+  char buffer2[20];
+  if (SerialAT.available()) {
+    // Leer la trama completa en el buffer
+    int bytesLeidos = SerialAT.readBytesUntil('\n', buffer2, sizeof(buffer2));
+
+    // Procesar la trama recibida
+    // (Aquí se debe agregar el código específico para la trama)
+    Serial.print("bytes Leidos: ");
+    Serial.println(bytesLeidos);
+    // Imprimir la trama recibida para debugging
+    Serial.print("Trama recibida: ");
+    Serial.println(buffer2);
+
+    // Limpiar el buffer
+    memset(buffer2, 0, sizeof(buffer2));
+  }
+  
+  String mensajeRecibido = Serial.readString();
+
+  // Imprimir el mensaje recibido en el monitor serial
+  Serial.print("Mensaje recibido: ");
+  Serial.println(mensajeRecibido);
+*/ 
+#endif 
   Serial.print(F("Signal Quality: "));
   Serial.println(RSSI);
 }
@@ -3089,7 +3359,17 @@ else
 
   // send message, the Print interface can be used to set the message contents
 
+//#if !FlagA7670
   MQTT_client.publish(MQTT_send_topic.c_str(), MQTT_message);
+//#else
+//  if (mqtt_client2.publish(MQTT_send_topic.c_str(), MQTT_message, 0, 60) == false) {
+//    Serial.println("error Publishing a message");
+//    while (true) {}
+//  }
+//  else {
+//    Serial.println("done mqtt publish MQTT");
+//  }
+//#endif
 
 #if !ESP8266
   digitalWrite(LEDPIN, HIGH);
@@ -3313,7 +3593,7 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
   }
 
   CustomValTotalString[8] = {0};
-  sprintf(CustomValTotalString, "%8lld", CustomValtotal2);
+  sprintf(CustomValTotalString, "%8d", CustomValtotal2);
   if (CustomValTotalString[0] == ' ')
     CustomValTotalString[0] = '0';
   if (CustomValTotalString[1] == ' ')
@@ -3623,7 +3903,212 @@ void update_error(int err)
 
 #if MobData
 
-void Connect_MobData()
+/*
+#if FlagA7670
+
+void Connect_MobData2()                                // Setup Connect Mob Data Lib A76xx
+{
+    Serial.print("Powering off ... ");
+    if (modem.powerOff() == false) {
+        Serial.println("error power off");
+        while (true) {}
+    }
+    Serial.println("done power off");
+
+    delay(15000);
+
+    Serial.print("Waiting for modem ... ");
+    if (modem.init() == false) {
+        Serial.println("error waiting for modem");
+        while (true) {}
+    }
+    Serial.println("OK waiting modem");
+pruebatest1:
+    Serial.print("Waiting for modem to register on network ... ");
+    if (modem.waitForRegistration() == false) {
+        Serial.println("registration timed out");
+        goto pruebatest1;
+        while (true) {}
+    }
+    Serial.println("done registration on network");
+
+    Serial.print("Connecting apn ... ");
+    if (modem.GPRSConnect(apn) == false){
+        Serial.println("cannot connect apn");
+        while (true) {}
+    }
+    Serial.println("connected apn");
+}
+
+void MobDataConnected2()
+{
+}
+
+
+#else
+
+void Connect_MobData4()
+{
+
+  SerialAT.println("AT+CPOF");
+  delay(15000);
+  SerialAT.println("ATE0");
+  delay(10);
+  SerialAT.println("AT+CMEE=0");
+  delay(10);
+  SerialAT.println("AT+CTZR=0");
+  delay(10);
+  SerialAT.println("AT+CTZU=1");
+  delay(10);
+  SerialAT.println("AT+CGREG?");
+  delay(10);
+  SerialAT.println("AT+CGDCONT=1,\"IP\",\"web.colombiamovil.com.co\"");
+  delay(10);
+  SerialAT.println("AT+CGACT=1,1");
+  delay(10);
+
+}
+
+
+#if !MobData
+void Connect_MobData3()     // Lib A76xx
+{
+      Serial.print("Powering off ... ");
+    if (modem2.powerOff() == false) {
+        Serial.println("error power off");
+        while (true) {}
+    }
+    Serial.println("done power off");
+
+    delay(12000);
+
+    Serial.print("Waiting for modem ... ");
+    if (modem2.init() == false) {
+        Serial.println("error waiting for modem");
+        while (true) {}
+    }
+    Serial.println("OK waiting modem");
+
+    Serial.print("Waiting for modem to register on network ... ");
+    if (modem2.waitForRegistration() == false) {
+        Serial.println("registration timed out");
+        while (true) {}
+    }
+    Serial.println("done registration on network");
+
+    Serial.print("Connecting apn ... ");
+    if (modem2.GPRSConnect(apn) == false){
+        Serial.println("cannot connect apn");
+        while (true) {}
+    }
+    Serial.println("connected apn");
+
+}
+
+#endif
+
+*/
+
+void Connect_MobData()                                // Setup Connect Mob Data Lib TinyGSM
+{
+  Serial.println("");
+  Serial.println("TinyGSM: Wait...");
+revini:
+  // Restart takes quite some time
+  Serial.println("TinyGSM: Initializing modem...");
+//  modem.restart();
+  // modem.init();
+
+  SerialAT.println("AT+CRESET");      // Restart
+
+  delay(20000);
+
+  SerialAT.println("ATE0");
+  delay(2000);
+
+//  String modemInfo = modem.getModemInfo();
+//  Serial.print("TinyGSM: Modem Info: ");
+//  Serial.println(modemInfo);
+
+  SerialAT.println("ATI");
+  delay(2000);
+
+//revnetwork:
+  Serial.print("TinyGSM: Waiting for network...");
+//  cont = 0;
+//  while (!modem.waitForNetwork()) {
+//  AT+CGREG?
+// +CGREG: 0,1
+    
+//    cont++;
+//    Serial.print("TinyGSM: fail network ");
+//    Serial.println(cont);
+//    delay(10000);
+//    if (cont > 7)
+//      {
+//      cont = 0;
+//      goto revini;
+//      }
+//  }
+  delay(2000);
+  Serial.println("TinyGSM: success waiting for network");
+  SerialAT.println("AT+CGREG?");
+  delay(100);
+
+  if (modem.isNetworkConnected()) {
+    Serial.println("TinyGSM: Network connected");
+  }
+  else
+  {
+    Serial.println("TinyGSM: NO Network connected");
+//    goto revini;
+  }
+
+  // GPRS connection parameters are usually set after network registration
+
+  Serial.print("TinyGSM: Connecting to apn: ");
+  Serial.print(apn);
+//  cont = 0;
+//    while (!modem.gprsConnect(apn)) {
+//    cont++;
+//    Serial.print("TinyGSM: fail apn ");
+//    Serial.println(cont);
+//    delay(5000);
+//    if (cont > 7)
+//      {
+//      cont = 0;
+//      goto revnetwork;
+//      }
+//  }
+
+  SerialAT.println("AT+NETCLOSE");
+  Serial.println("TinyGSM: AT+NETCLOSE");
+  delay(1000);
+  SerialAT.println("AT+CGDCONT=1,\"IP\",\"web.colombiamovil.com.co\",\"0.0.0.0\",0,0");
+  delay(100);
+  SerialAT.println("AT+CIPMODE=0");
+  delay(100);
+  SerialAT.println("AT+CIPSENDMODE=0");
+  delay(100);
+  SerialAT.println("AT+CIPCCFG=10,0,0,0,1,0,75000");
+  delay(100);
+  SerialAT.println("AT+NETOPEN");
+  Serial.println("TinyGSM: AT+NETOPEN");
+  delay(2000);
+
+  if (modem.isGprsConnected())
+  {
+    Serial.println("TinyGSM: GPRS connected");
+    Serial.println("TinyGSM: IP ADDRESS : " + modem.getLocalIP());
+  }
+  else
+  {
+    Serial.println("TinyGSM: GPRS NOT connected");
+    goto revini;
+  }
+}
+
+void Connect_MobDataOK()
 {
   Serial.println("");
   Serial.println("TinyGSM: Wait...");
@@ -3695,6 +4180,7 @@ revini:
     if (modem.isNetworkConnected()) {
       SerialMon.println("MONTiny: Network re-connected");
     }
+
     if (!modem.isGprsConnected()) {
       SerialMon.println("MONTiny: GPRS disconnected!");
       SerialMon.print(F("Connecting to "));
@@ -3747,6 +4233,8 @@ void MobDataConnected()
   Serial.println("Signal Quality: " + modem.getSignalQuality());
   delay(5);   // TEST
 
+//  MQTT_client.connect(aireciudadano_device_id.c_str());
+
   if (!MQTT_client.connected()) {
     Serial.println("TinyGSM: MQTT not connected");
     // Reconnect every 10 seconds
@@ -3761,7 +4249,22 @@ void MobDataConnected()
     return;
   }
   else
+  {
     Serial.println("TinyGSM: MQTT connected");
+  }
+
+//  while (!MQTT_client.connected())
+//  {
+//    Serial.println("=== MQTT NOT CONNECTED ===");
+//    delay(5000);
+//    MQTT_client.setServer("sensor.aireciudadano.com", 80);
+//    MQTT_client.connect(aireciudadano_device_id.c_str());
+//  }
+
+    // Once connected resubscribe
+//  MQTT_client.subscribe(MQTT_receive_topic.c_str());
+//  Serial.print("MONTiny: MQTT connected - Receive topic: ");
+//  Serial.println(MQTT_receive_topic);
 }
 
 boolean mqttConnectok() 
@@ -3782,17 +4285,16 @@ boolean mqttConnectok()
   MQTT_client.subscribe(MQTT_receive_topic.c_str());
   return MQTT_client.connected();
 }
-#endif
 
 void ResetMobDataConn()
 {
   if (contmqtt < 6)
   {
      Serial.println("Reset Mobile Data Connection, first Connect_MobData");
-     Connect_MobData();
+     Connect_MobDataOK();
      delay(100);
      Serial.println("second Init MQTT routine");
-     Init_MQTT();
+     Init_MQTT2();
      delay(100);
      contmqtt ++;
      FlagPoweroff = false;
@@ -3807,6 +4309,9 @@ void ResetMobDataConn()
 }
 
 #endif
+
+//#endif
+//#endif
 
 #if (Rosver || MinVer || MobData || MinVerSD)
 void Test_Sensor()
@@ -4403,12 +4908,16 @@ void Read_Sensor()
       Serial.print(F(" ug/m3   "));
       PM1_value = data.PM_AE_UG_1_0;
       PM25_value_ori = PM25_value;
+//#if !Bluetooth
       // PM25_value = ((562 * PM25_value_ori) / 1000) - 1; // Ecuación de ajuste resultado de 13 intercomparaciones entre PMS7003 y SPS30 por meses
       // PM25_value = ((553 * PM25_value_ori) / 1000) + 1.3; // Segundo ajuste
       PM25_value = ((630 * PM25_value_ori) / 1000) + 1.56; // Tercer ajuste a los que salio en Lima y pruebas aqui
       Serial.print(F("Adjust: "));
       Serial.print(PM25_value);
       Serial.println(F(" ug/m3"));
+//#else
+//      Serial.println(F(""));
+//#endif
     }
     else
     {
