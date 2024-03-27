@@ -41,7 +41,7 @@ void update_progress(int cur, int total);
 void update_error(int err);
 void Connect_MobData();
 void MobDataConnected();
-boolean mqttConnectok();
+boolean MqttConnectok();
 void ResetMobDataConn();
 void Write_Bluetooth();
 void Write_SD();

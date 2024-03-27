@@ -2,14 +2,8 @@
 // AireCiudadano medidor Fijo - Medidor de PM2.5 abierto, medición opcional de humedad y temperatura.
 // Más información en: aireciudadano.com
 // Este firmware es un fork del proyecto Anaire (https://www.anaire.org/) recomendado para la medición de CO2.
-// 26/03/2023 info@aireciudadano.com
+// 21/03/2024 info@aireciudadano.com
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// Pendientes:
-// Revisar todas las versiones y pruebas para pasar a v2.0
-// MODIFICACIONES EXTERNAS:
-// Modificado libreria WifiManager para compatibilidad
-// Modificado PubSubClient.cpp : para quitar warning
 
 // Novedades:
 // 1. Reporte del PM1 al servidor
@@ -60,7 +54,7 @@
 
 #define LedNeo false     // Set to true for Led Neo multicolor
 #define LTR390UV false
-#define NoxVoxTd true
+#define NoxVoxTd false
 
 // Seleccion de operador de telefonia movil
 #define Kalley true
@@ -294,7 +288,8 @@ unsigned int SDyRTC_loop_time;
 unsigned long MQTT_loop_start; // holds a timestamp for each cloud loop start
 unsigned long MQTT_loop_startsam;
 unsigned long MQTT_loop_review;
-unsigned long MQTT_loop_review_duration = 30000; // 30 seconds
+//unsigned long MQTT_loop_review_duration = 30000; // 30 seconds
+unsigned long MQTT_loop_review_duration = 120000; // 120 seconds
 unsigned long lastReconnectAttempt = 0; // MQTT reconnections
 
 // Errors loop: time between error condition recovery
@@ -1427,6 +1422,12 @@ void loop()
     }
     else
     {
+// Rutina Test para enviar datos sin sensor conectado
+//      PM25_value = random(1, 50);
+//      PM25_accumulated += PM25_value;
+//      PM1_accumulated += PM1_value;
+//      PM25_samples++;
+//      Con_loop_times++;
       Serial.println(F("Medidor No configurado"));
 
 #if (Tdisplaydisp || OLED96display || OLED66display)
@@ -2236,10 +2237,12 @@ void Check_WiFi_Server()                    // Server access by http when you pu
             client.println("<br>");
             client.print("MQTT Server: ");
             client.print("sensor.aireciudadano.com");
+//            client.print("194.242.56.226");
             client.println("<br>");
             client.print("MQTT Port: ");
 #if !Influxver
             client.print("80");
+//            client.print("30183");
 #else
             client.print("30183");
 #endif
@@ -2852,6 +2855,7 @@ void Init_MQTT()
   //  MQTT_client.setServer(eepromConfig.MQTT_server, eepromConfig.MQTT_port);
 #if !Influxver
   MQTT_client.setServer("sensor.aireciudadano.com", 80);
+//  MQTT_client.setServer("194.242.56.226", 30183);
 #else
   MQTT_client.setServer("sensor.aireciudadano.com", 30183);
 #endif
@@ -2881,6 +2885,7 @@ void Init_MQTT()
     Serial.print(F("MQTT connected - Receive topic: "));
     Serial.println(MQTT_receive_topic);
     FlagMQTTcon = true;
+    contmqtt = 0;
 #if !ESP8266
     digitalWrite(LEDPIN, HIGH);
     delay(1000);
@@ -2915,6 +2920,7 @@ void MQTT_Reconnect()
       MQTT_client.subscribe(MQTT_receive_topic.c_str());
       Serial.print(F("MQTT connected - Receive topic: "));
       Serial.println(MQTT_receive_topic);
+      contmqtt = 0;
 #if !ESP8266
       digitalWrite(LEDPIN, HIGH);
       delay(1000);
@@ -3709,6 +3715,7 @@ void update_error(int err)
 void Connect_MobData()
 {
   Serial.println("");
+  Serial.println("Connect_MobData");
   Serial.println("TinyGSM: Wait...");
 revini:
 
@@ -3836,7 +3843,7 @@ void MobDataConnected()
     uint32_t t = millis();
     if (t - lastReconnectAttempt > 10000L) {
       lastReconnectAttempt = t;
-      if (mqttConnectok()) {
+      if (MqttConnectok()) {
         lastReconnectAttempt = 0;
       }
     }
@@ -3847,19 +3854,20 @@ void MobDataConnected()
     Serial.println("TinyGSM: MQTT connected");
 }
 
-boolean mqttConnectok()
+boolean MqttConnectok()
 {
-  Serial.println("mqttConnectok, Re Connecting to: sensor.aireciudadano.com");
+  Serial.println("MqttConnectok");
+  Serial.println("Re Connecting to: sensor.aireciudadano.com");
 
   ResetMobDataConn();
 
   boolean status = MQTT_client.connect(aireciudadano_device_id.c_str());
 
   if (status == false) {
-    Serial.println("Fail mqttConnectok");
+    Serial.println("Fail MqttConnectok");
     return false;
   }
-  Serial.println(" success mqttConnectok");
+  Serial.println("Success MqttConnectok");
   MQTT_client.subscribe(MQTT_receive_topic.c_str());
   return MQTT_client.connected();
 }
@@ -3867,6 +3875,7 @@ boolean mqttConnectok()
 
 void ResetMobDataConn()
 {
+  Serial.println("ResetMobDataCon");
   if (ResetFlagMobData == false)
   {
     if (contmqtt < 4)
@@ -3878,6 +3887,8 @@ void ResetMobDataConn()
       Init_MQTT();
       delay(100);
       contmqtt ++;
+//      Serial.print("contmqtt1: ");
+//      Serial.println(contmqtt);
       FlagPoweroff = false;
     }
     else
@@ -3906,6 +3917,8 @@ void ResetMobDataConn()
       Init_MQTT();
       delay(100);
       contmqtt ++;
+//      Serial.print("contmqtt2: ");
+//      Serial.println(contmqtt);
     }
     else
     {
@@ -3915,10 +3928,9 @@ void ResetMobDataConn()
       contmqtt = 0;
       ESP.restart();
     }
-
   }
-  Serial.print("contmqtt: ");
-  Serial.println(contmqtt);
+//  Serial.print("contmqtt: ");
+//  Serial.println(contmqtt);
 }
 
 #endif
