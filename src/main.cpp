@@ -1423,11 +1423,14 @@ void loop()
     else
     {
 // Rutina Test para enviar datos sin sensor conectado
-//      PM25_value = random(1, 50);
-//      PM25_accumulated += PM25_value;
-//      PM1_accumulated += PM1_value;
-//      PM25_samples++;
-//      Con_loop_times++;
+/*
+      PM25_value = random(1, 50);
+      PM25_accumulated += PM25_value;
+      PM25_samples++;
+      Con_loop_times++;
+      Serial.print(F("Valor random: "));
+      Serial.println(PM25_value);
+*/
       Serial.println(F("Medidor No configurado"));
 
 #if (Tdisplaydisp || OLED96display || OLED66display)
