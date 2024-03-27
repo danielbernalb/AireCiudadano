@@ -1423,12 +1423,14 @@ void loop()
     else
     {
 // Rutina Test para enviar datos sin sensor conectado
-//      PM25_value = random(1, 50);
-//      PM25_accumulated += PM25_value;
-//      PM1_accumulated += PM1_value;
-//      PM25_samples++;
-//      Con_loop_times++;
-      Serial.println(F("Medidor No configurado"));
+      PM25_value = random(1, 50);
+      PM25_accumulated += PM25_value;
+      PM1_accumulated += PM1_value;
+      PM25_samples++;
+      Con_loop_times++;
+//      Serial.println(F("Medidor No configurado"));
+      Serial.print(F("Valor random: "));
+      Serial.println(PM25_value);
 
 #if (Tdisplaydisp || OLED96display || OLED66display)
 
@@ -2236,13 +2238,13 @@ void Check_WiFi_Server()                    // Server access by http when you pu
             client.println(eepromConfig.PublicTime);
             client.println("<br>");
             client.print("MQTT Server: ");
-            client.print("sensor.aireciudadano.com");
-//            client.print("194.242.56.226");
+//            client.print("sensor.aireciudadano.com");
+            client.print("194.242.56.226");
             client.println("<br>");
             client.print("MQTT Port: ");
 #if !Influxver
-            client.print("80");
-//            client.print("30183");
+//            client.print("80");
+            client.print("30183");
 #else
             client.print("30183");
 #endif
@@ -2854,8 +2856,8 @@ void Init_MQTT()
 
   //  MQTT_client.setServer(eepromConfig.MQTT_server, eepromConfig.MQTT_port);
 #if !Influxver
-  MQTT_client.setServer("sensor.aireciudadano.com", 80);
-//  MQTT_client.setServer("194.242.56.226", 30183);
+//  MQTT_client.setServer("sensor.aireciudadano.com", 80);
+  MQTT_client.setServer("194.242.56.226", 30183);
 #else
   MQTT_client.setServer("sensor.aireciudadano.com", 30183);
 #endif
