@@ -1156,7 +1156,7 @@ void setup()
   if (FlagMobData == true)
   {
 #if MobData
-// Loop time si Publish time es menor de 4 minutos es 30seg, sino 120seg     
+// Loop time si Publish time es menor de 4 minutos es 30seg, sino 120seg
     if (eepromConfig.PublicTime < 5)
       MQTT_loop_review_duration = 30000; // 30 seconds
     Serial.print("MQTT_loop_review_duration = ");
@@ -1168,7 +1168,6 @@ void setup()
 connectstart:
     Serial.println("Connect MobData routine");
     Connect_MobData();                // Setup Connect Mob Data
-
     // Attempt to connect to MQTT broker
     Serial.println("Init MQTT routine");
     FlagMQTTcon = false;
@@ -2982,7 +2981,7 @@ void MQTT_Reconnect()
           cont = 0;
           FlagMQTTcon = true;
           break;
-//          ESP.restart();    // CASO sin MQTT_client.loop(); 
+//          ESP.restart();    // CASO sin MQTT_client.loop();
         }
         MQTT_client.setServer("sensor.aireciudadano.com", 80);
         MQTT_client.connect(aireciudadano_device_id.c_str());
@@ -3193,10 +3192,10 @@ void Send_Message_Cloud_App_MQTT()
     ResetMobDataConn();
 #endif
     responsepublish = MQTT_client.publish(MQTT_send_topic.c_str(), MQTT_message);
-      if (responsepublish == 0)
-        Serial.println("Reintento fallido, mensaje no publicado");
-      else
-        Serial.println("Reintento OK, mensaje publicado");
+    if (responsepublish == 0)
+      Serial.println("Reintento fallido, mensaje no publicado");
+    else
+      Serial.println("Reintento OK, mensaje publicado");
   }
   else {
     Serial.println(", OK Mensaje publicado");
@@ -3883,8 +3882,7 @@ void MobDataConnected()
     Serial.println("TinyGSM: Network connected ok");
 
   Serial.println("TinyGSM: IP ADDRESS : " + modem.getLocalIP());
-  Serial.println("Signal Quality: " + modem.getSignalQuality());
-//  delay(5);   // TEST
+  Serial.println("Signal Quality: " + modem.getSignalQuality());//  delay(5);   // TEST
 
   if (!MQTT_client.connected()) {
     Serial.println("TinyGSM: MQTT not connected");
@@ -3899,14 +3897,14 @@ void MobDataConnected()
     if (t - lastReconnectAttempt > 10000L) {
       lastReconnectAttempt = t;
       if (!modem.isGprsConnected()) {
-            // Reconnect to GPRS network if not connected
-            SerialMon.println("NEW ROUTINE: GPRS not connected, reconnecting...");
-            if (!modem.gprsConnect(apn)) {
-                SerialMon.println("GPRS reconnect failed");
-                delay(10000);
-                return;
-            }
+        // Reconnect to GPRS network if not connected
+        SerialMon.println("NEW ROUTINE: GPRS not connected, reconnecting...");
+        if (!modem.gprsConnect(apn)) {
+          SerialMon.println("GPRS reconnect failed");
+          delay(10000);
+          return;
         }
+      }
       if (MqttConnectok()) {
         lastReconnectAttempt = 0;
       }
