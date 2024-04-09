@@ -817,7 +817,7 @@ LTR390 ltr;
 #define SerialMon Serial
 
 // SoftwareSerial pmsSerial2(PMS_TX2, PMS_RX2);
-SoftwareSerial SerialAT(13, 12);  // RX, TX     // Si se usan 2 PMSx003 habria conflicto con el pin 12
+SoftwareSerial SerialAT(13, 12);  // D7 RX, D6 TX     // Si se usan 2 PMSx003 habria conflicto con el pin 12
 
 // Use Hardware Serial on Mega, Leonardo, Micro
 //#define SerialAT Serial2
@@ -1156,8 +1156,14 @@ void setup()
   if (FlagMobData == true)
   {
 #if MobData
+// Loop time si Publish time es menor de 4 minutos es 30seg, sino 120seg     
+    if (eepromConfig.PublicTime < 5)
+      MQTT_loop_review_duration = 30000; // 30 seconds
+    Serial.print("MQTT_loop_review_duration = ");
+    Serial.println(MQTT_loop_review_duration);
     SerialAT.begin(19200);
     delay(10);
+    FlagPoweroff = true;                // TEST PARA RUTINA SIN mqtt.loop
     // Attempt to connect to Mobile Data network:
 connectstart:
     Serial.println("Connect MobData routine");
@@ -1549,7 +1555,9 @@ void loop()
 #if !SoundMeter
       ReadHyT();
 #endif
+#if SDyRTC
       Write_SD();
+#endif
       PM25_accumulated = 0.0;
       PM25_samples = 0.0;
       Con_loop_times = 0;
@@ -1742,7 +1750,7 @@ void loop()
 
   if (SDflag == false)
   {
-    if ((millis() - MQTT_loop_review) >= MQTT_loop_review_duration)     // Resvisar cada x milisegundos
+    if ((millis() - MQTT_loop_review) >= MQTT_loop_review_duration)     // Revisar cada x milisegundos
     {
       MQTT_loop_review = millis();
       if (FlagMobData == false)
@@ -1777,6 +1785,7 @@ void loop()
           MQTT_token = false;
         MQTT_client.loop();               // Ocurre cada lectura de Sensor, osea cada 1seg
         Serial.println("MQTT_client.loop");
+//        Serial.println("NOT MQTT_client.loop");
       }
     }
   }
@@ -2571,6 +2580,12 @@ void Start_Captive_Portal()
   wifiManager.addParameter(&custom_public_time);
   wifiManager.addParameter(&custom_sensor_html);
 #endif
+
+#if MobData
+  wifiManager.addParameter(&custom_public_time);
+  wifiManager.addParameter(&custom_sensor_html);
+#endif
+
   wifiManager.addParameter(&custom_sensor_latitude);
   wifiManager.addParameter(&custom_sensor_longitude);
 #if !(Rosver || SoundMeter || MinVer || MinVerSD)
@@ -2638,6 +2653,11 @@ void Start_Captive_Portal()
     Serial.println(F("Devname write_eeprom = true"));
 
 #if !(Rosver || SoundMeter || MinVer || MinVerSD)
+    eepromConfig.PublicTime = atoi(custom_public_time.getValue());
+    Serial.println(F("PublicTime write_eeprom = true"));
+#endif
+
+#if MobData
     eepromConfig.PublicTime = atoi(custom_public_time.getValue());
     Serial.println(F("PublicTime write_eeprom = true"));
 #endif
@@ -2885,7 +2905,7 @@ void Init_MQTT()
     lastReconnectAttempt = 0;
     // Once connected resubscribe
     MQTT_client.subscribe(MQTT_receive_topic.c_str());
-    Serial.print(F("MQTT connected - Receive topic: "));
+    Serial.print(F("Init MQTT connected - Receive topic: "));
     Serial.println(MQTT_receive_topic);
     FlagMQTTcon = true;
     contmqtt = 0;
@@ -2921,8 +2941,9 @@ void MQTT_Reconnect()
       lastReconnectAttempt = 0;
       // Once connected resubscribe
       MQTT_client.subscribe(MQTT_receive_topic.c_str());
-      Serial.print(F("MQTT connected - Receive topic: "));
+      Serial.print(F("Reconnect MQTT connected - Receive topic: "));
       Serial.println(MQTT_receive_topic);
+//      FlagMQTTcon = true;
       contmqtt = 0;
 #if !ESP8266
       digitalWrite(LEDPIN, HIGH);
@@ -2956,11 +2977,12 @@ void MQTT_Reconnect()
         Serial.print("TinyGSM: Retry MQQT ");
         Serial.println(cont);
         delay(5000);
-        if (cont > 7)
+        if (cont > 5)
         {
           cont = 0;
           FlagMQTTcon = true;
           break;
+//          ESP.restart();    // CASO sin MQTT_client.loop(); 
         }
         MQTT_client.setServer("sensor.aireciudadano.com", 80);
         MQTT_client.connect(aireciudadano_device_id.c_str());
@@ -3061,17 +3083,11 @@ void Send_Message_Cloud_App_MQTT()
     uint8_t nox;
 
     if (isnan(ambientHumidity))
-    {
-      if (humi == 0)
-        humi = 0;
-    }
+      humi = 0;
     else
       humi = round(ambientHumidity);
     if (isnan(ambientTemperature))
-    {
-      if (temp == 0)
-        temp = 0;
-    }
+      temp = 0;
     else
       temp = round(ambientTemperature);
     if (isnan(vocIndex))
@@ -3150,8 +3166,7 @@ void Send_Message_Cloud_App_MQTT()
 #endif
 #endif
   }
-  Serial.print(MQTT_message);
-  Serial.println();
+  Serial.println(MQTT_message);
 
 #if ESP8285
   digitalWrite(LEDPIN, LOW); // turn the LED off by making the voltage LOW
@@ -3163,19 +3178,39 @@ void Send_Message_Cloud_App_MQTT()
     FlagDATAicon = true;
 
   // send message, the Print interface can be used to set the message contents
+  // Publicar un mensaje MQTT
 
-  MQTT_client.publish(MQTT_send_topic.c_str(), MQTT_message);
+  int responsepublish = 0;
+  responsepublish = MQTT_client.publish(MQTT_send_topic.c_str(), MQTT_message);
+  Serial.print("response: ");
+  Serial.print(responsepublish);
 
+  // Revisar el código de retorno
+  if (responsepublish == 0) {
+    Serial.println(", ERROR Mensaje no publicado");
+    delay(5000);
+#if MobData
+    ResetMobDataConn();
+#endif
+    responsepublish = MQTT_client.publish(MQTT_send_topic.c_str(), MQTT_message);
+      if (responsepublish == 0)
+        Serial.println("Reintento fallido, mensaje no publicado");
+      else
+        Serial.println("Reintento OK, mensaje publicado");
+  }
+  else {
+    Serial.println(", OK Mensaje publicado");
 #if !ESP8266
-  digitalWrite(LEDPIN, HIGH);
+    digitalWrite(LEDPIN, HIGH);
 #else
-  digitalWrite(LEDPIN, LOW);
+    digitalWrite(LEDPIN, LOW);
 #endif
-  FlagLED = true;
+    FlagLED = true;
 #if Influxver
-  Influxseconds = 60;
-  Influxsecondssam = 60;
+    Influxseconds = 60;
+    Influxsecondssam = 60;
 #endif
+  }
 }
 
 #if SoundAM
@@ -3225,19 +3260,30 @@ void Send_Message_Cloud_App_MQTTsam()
     FlagDATAicon = true;
 
   // send message, the Print interface can be used to set the message contents
+  // Publicar un mensaje MQTT
 
-  MQTT_client.publish(MQTT_send_topicsam.c_str(), MQTT_message);
+  int responsepublish = 0;
+  responsepublish = MQTT_client.publish(MQTT_send_topicsam.c_str(), MQTT_message);
+  Serial.print("response: ");
+  Serial.println(responsepublish);
 
+  // Revisar el código de retorno
+  if (responsepublish == 0) {
+    Serial.println("ERROR Mensaje no publicado");
+  }
+  else {
+    Serial.println("OK Mensaje publicado");
 #if !ESP8266
-  digitalWrite(LEDPIN, HIGH);
+    digitalWrite(LEDPIN, HIGH);
 #else
-  digitalWrite(LEDPIN, LOW);
+    digitalWrite(LEDPIN, LOW);
 #endif
-  FlagLED = true;
+    FlagLED = true;
 #if Influxver
-  Influxseconds = 60;
-  Influxsecondssam = 60;
+    Influxseconds = 60;
+    Influxsecondssam = 60;
 #endif
+  }
 }
 #endif
 
@@ -3838,14 +3884,29 @@ void MobDataConnected()
 
   Serial.println("TinyGSM: IP ADDRESS : " + modem.getLocalIP());
   Serial.println("Signal Quality: " + modem.getSignalQuality());
-  delay(5);   // TEST
+//  delay(5);   // TEST
 
   if (!MQTT_client.connected()) {
     Serial.println("TinyGSM: MQTT not connected");
+    SerialMon.print("Disconnecting from: ");
+    SerialMon.println("sensor.aireciudadano.com");
+    MQTT_client.disconnect(); // Disconnect from MQTT  //added 08/04/2023
+    delay(500);
+    SerialMon.print("Network State is: ");
+    SerialMon.println(modem.isGprsConnected()); //added 08/04/2023
     // Reconnect every 10 seconds
     uint32_t t = millis();
     if (t - lastReconnectAttempt > 10000L) {
       lastReconnectAttempt = t;
+      if (!modem.isGprsConnected()) {
+            // Reconnect to GPRS network if not connected
+            SerialMon.println("NEW ROUTINE: GPRS not connected, reconnecting...");
+            if (!modem.gprsConnect(apn)) {
+                SerialMon.println("GPRS reconnect failed");
+                delay(10000);
+                return;
+            }
+        }
       if (MqttConnectok()) {
         lastReconnectAttempt = 0;
       }
@@ -3874,7 +3935,6 @@ boolean MqttConnectok()
   MQTT_client.subscribe(MQTT_receive_topic.c_str());
   return MQTT_client.connected();
 }
-#endif
 
 void ResetMobDataConn()
 {
@@ -3886,7 +3946,7 @@ void ResetMobDataConn()
       Serial.println("Reset Mobile Data Connection, first Connect_MobData");
       Connect_MobData();
       delay(100);
-      Serial.println("second Init MQTT routine");
+      Serial.println("second Init MQTT routine 1");
       Init_MQTT();
       delay(100);
       contmqtt ++;
@@ -3901,7 +3961,7 @@ void ResetMobDataConn()
       ResetFlagMobData = true;
       Connect_MobData();
       delay(100);
-      Serial.println("second Init MQTT routine");
+      Serial.println("second Init MQTT routine 2");
       Init_MQTT();
       delay(100);
       contmqtt = 0;
@@ -3916,7 +3976,7 @@ void ResetMobDataConn()
       ResetFlagMobData = true;
       Connect_MobData();
       delay(100);
-      Serial.println("second Init MQTT routine");
+      Serial.println("second Init MQTT routine 3");
       Init_MQTT();
       delay(100);
       contmqtt ++;
@@ -3935,6 +3995,7 @@ void ResetMobDataConn()
 //  Serial.print("contmqtt: ");
 //  Serial.println(contmqtt);
 }
+#endif
 
 #endif
 
