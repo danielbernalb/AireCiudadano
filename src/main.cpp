@@ -33,6 +33,8 @@
 // 21. Conectividad movil, FlagMobData
 // 22. mqtt.loop ser realiza ahora con la duracion  de MQTT_loop_review en milisegundos
 // 23. Wifi Power max con flag MaxWifiTX programada en pagina web Editor AireCiudadano: Resultado no concluyente de incremento de cobertura
+// OK: Revisar BUG cuando una simcard no se ha usado y no ingresa rapido a la red el ESP8266 se resetea y no sigue preguntando la red para ingresar, a diferencia del codigo Arduino y que si lo logra.
+// OK: MONTiny: fail y no sigue y se reinicia y sale 0:0
 
 // Constantes de Ajuste de sensores programables: pendiente e intercepto. ANALIZAR MAS
 // Verificar nueva libreria Bluetooth que parece compatible con Sensirion UPT Core@^0.3.0, Sigue el error con lectura de nox
@@ -146,6 +148,8 @@ bool FlagpmsHyT = false;
 bool FlagMQTTcon = false;
 bool FlagPoweroff = false;
 bool MaxWifiTX = false;
+
+uint8_t Contacon = 0;
 
 uint8_t CustomValue = 0;
 uint32_t CustomValtotal = 0;
@@ -289,7 +293,7 @@ unsigned long MQTT_loop_start; // holds a timestamp for each cloud loop start
 unsigned long MQTT_loop_startsam;
 unsigned long MQTT_loop_review;
 //unsigned long MQTT_loop_review_duration = 30000; // 30 seconds
-unsigned long MQTT_loop_review_duration = 120000; // 120 seconds
+unsigned long MQTT_loop_review_duration = 240000; // 240 seconds
 unsigned long lastReconnectAttempt = 0; // MQTT reconnections
 
 // Errors loop: time between error condition recovery
@@ -1142,8 +1146,8 @@ void setup()
       // Attempt to connect to MQTT broker
       if (!err_wifi)
       {
-        Init_MQTT();
         Serial.println("Init_MQTT");
+        Init_MQTT();        
 
 #if ESP8285
         digitalWrite(LEDPIN, LOW); // turn the LED off by making the voltage LOW
@@ -1429,7 +1433,7 @@ void loop()
     {
 // Rutina Test para enviar datos sin sensor conectado
 /*
-      PM25_value = random(1, 50);
+      PM25_value = random(1, 99);
       PM25_accumulated += PM25_value;
       PM25_samples++;
       Con_loop_times++;
@@ -1585,9 +1589,23 @@ void loop()
       // Message the MQTT broker in the cloud app to send the measured values
       if (PM25_samples > 0)  //!!!!!!!!!!!
       {
-        Send_Message_Cloud_App_MQTT();
-        MQTT_token = true;
-      }
+///*
+         if(FlagTemp1 == true)
+         {
+            MQTT_client.loop();               // Ocurre cada lectura de Sensor, osea cada 1seg
+            Serial.println("MQTT_client.loop");
+            FlagTemp1 = false;
+         }
+         else
+         {  
+            Send_Message_Cloud_App_MQTT();
+            FlagTemp1 = true;
+          }
+//*/       
+//        MQTT_client.loop();               // Ocurre cada lectura de Sensor, osea cada 1seg
+//        Serial.println("MQTT_client.loop");
+//        Send_Message_Cloud_App_MQTT();
+      } 
 #if SaveSDyRTC
       Write_SD();
 #endif
@@ -1745,7 +1763,7 @@ void loop()
 #endif
   }
 
-#if Wifi
+#if WifiTest    // CAMBIO
 
   if (SDflag == false)
   {
@@ -3783,14 +3801,22 @@ revini:
   SerialMon.print("MONTiny: Modem Info: ");
   SerialMon.println(modemInfo);
 
+revini2:
   SerialMon.print("MONTiny: Waiting for network...");
   if (!modem.waitForNetwork()) {
-    SerialMon.println("MONTiny:  fail");
+    SerialMon.println("MONTiny: fail");
     delay(10000);
-    //return;
-    delay(10);
+    if (modem.waitForNetwork()) {
+      goto revexit;
+    }
+    Contacon ++;
+if (Contacon < 60)
+    goto revini2;
+else
     goto revini;
   }
+revexit:
+  Contacon = 0;
   SerialMon.println("MONTiny: success waiting for network");
 
   if (modem.isNetworkConnected()) {
@@ -3809,7 +3835,7 @@ revini:
   SerialMon.print(apn);
   //  if (!modem.gprsConnect(apn, user1, pw1)) {
   if (!modem.gprsConnect(apn)) {
-    SerialMon.println("MONTiny:  fail apn");
+    SerialMon.println("MONTiny: fail apn");
     delay(10000);
     //    return;
     goto revini;
@@ -3825,7 +3851,7 @@ revini:
   if (!modem.isNetworkConnected()) {
     SerialMon.println("MONTiny: Network disconnected");
     if (!modem.waitForNetwork(180000L, true)) {
-      SerialMon.println("MONTiny:  fail");
+      SerialMon.println("MONTiny: fail1");
       delay(10000);
       //      return;
       goto revini;
@@ -3838,7 +3864,7 @@ revini:
       SerialMon.print(F("Connecting to "));
       SerialMon.print(apn);
       if (!modem.gprsConnect(apn)) {
-        SerialMon.println("MONTiny:  fail");
+        SerialMon.println("MONTiny: fail2");
         delay(10000);
         //        return;
         goto revini;
