@@ -59,10 +59,14 @@
 #define NoxVoxTd false
 
 // Seleccion de operador de telefonia movil
-#define TigoKalleyExito true
-#define MovistarVirgin false
+#define TigoKalleyExito false
+#define MovistarVirgin true
 #define Claro false
 #define Wom false
+
+#define A7670 false
+#define SIM7070 false
+#define SIM800 true
 
 // Escoger modelo de pantalla (pasar de false a true) o si no hay escoger ninguna (todas false):
 #define Tdisplaydisp false    // TTGO T Display
@@ -818,7 +822,14 @@ LTR390 ltr;
 #if MobData
 
 // Select your modem:
+#if A7670
 #define TINY_GSM_MODEM_A7670
+#elif SIM7070
+#define TINY_GSM_MODEM_SIM7070
+#define PowerSIM7070 15
+#elif SIM800
+#define TINY_GSM_MODEM_SIM800
+#endif
 
 // Set serial for debug console (to the Serial Monitor, default speed 115200)
 #define SerialMon Serial
@@ -1167,6 +1178,18 @@ void setup()
 #if MobData
     SerialAT.begin(19200);
     delay(10);
+
+#if SIM7070
+    Serial.println("Power ON SIM7070 routine");
+    pinMode(PowerSIM7070, OUTPUT);
+    digitalWrite(PowerSIM7070, HIGH);
+    delay(1000);
+    digitalWrite(PowerSIM7070, LOW);
+    delay(8000);
+    digitalWrite(PowerSIM7070, HIGH);
+    delay(1000);
+#endif
+
 // Attempt to connect to Mobile Data network:
 connectstart:
     Serial.println("Connect MobData routine");
@@ -2375,7 +2398,13 @@ void Start_Captive_Portal()
 #endif
 
 #if MobData
+#if A7670
   WiFiManagerParameter custom_mobdata("<p>Mobile Data Version with A7670:</p>"); // only custom html
+#elif SIM7070
+  WiFiManagerParameter custom_mobdata("<p>Mobile Data Version with SIM7070:</p>"); // only custom html
+#elif SIM800
+  WiFiManagerParameter custom_mobdata("<p>Mobile Data Version with SIM800:</p>"); // only custom html
+#endif
 #endif
 
 #if !ESP8266
@@ -3703,7 +3732,13 @@ revini:
   if (FlagPoweroff == true)
   { // Power off
     SerialMon.println("MONTiny: Reinit Power off - on");
+#if A7670
     SerialAT.println("AT+CPOF");
+#elif SIM7070
+    SerialAT.println("AT+CPOWD");
+#elif SIM800
+    SerialAT.println("AT+CPOWD");
+#endif
   }
   else
   { // Restart
@@ -3924,7 +3959,13 @@ void ResetMobDataConn()
     }
     else
     {
+#if A7670
       Serial.println("Reset module A7670");
+#elif SIM7070
+      Serial.println("Reset module SIM7070");
+#elif SIM800
+      Serial.println("Reset module SIM800");
+#endif
       FlagPoweroff = false;
       ResetFlagMobData = false;
       contmqtt = 0;
