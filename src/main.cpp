@@ -1168,7 +1168,7 @@ void setup()
       if (!err_wifi)
       {
         Serial.println("Init_MQTT");
-        Init_MQTT();        
+        Init_MQTT();
 
 #if ESP8285
         digitalWrite(LEDPIN, LOW); // turn the LED off by making the voltage LOW
@@ -1185,18 +1185,18 @@ void setup()
     delay(10);
 
 #if SIM7070
-  if (ResetFlag == true)
-  {
-    Serial.println("Power ON SIM7070 routine");
-    pinMode(PowerSIM7070, OUTPUT);
-    digitalWrite(PowerSIM7070, LOW);
-    delay(3000);
-    pinMode(PowerSIM7070, INPUT);
-    delay(7000);
-  }
+    if (ResetFlag == true)
+    {
+      Serial.println("Power ON SIM7070 routine");
+      pinMode(PowerSIM7070, OUTPUT);
+      digitalWrite(PowerSIM7070, LOW);
+      delay(3000);
+      pinMode(PowerSIM7070, INPUT);
+      delay(7000);
+    }
 #endif
 
-// Attempt to connect to Mobile Data network:
+    // Attempt to connect to Mobile Data network:
 connectstart:
     Serial.println("Connect MobData routine");
     Connect_MobData();                // Setup Connect Mob Data
@@ -1459,15 +1459,15 @@ void loop()
     }
     else
     {
-// Rutina Test para enviar datos sin sensor conectado
-/*
-      PM25_value = random(1, 99);
-      PM25_accumulated += PM25_value;
-      PM25_samples++;
-      Con_loop_times++;
-      Serial.print(F("Valor random: "));
-      Serial.println(PM25_value);
-*/
+      // Rutina Test para enviar datos sin sensor conectado
+      /*
+        PM25_value = random(1, 99);
+        PM25_accumulated += PM25_value;
+        PM25_samples++;
+        Con_loop_times++;
+        Serial.print(F("Valor random: "));
+        Serial.println(PM25_value);
+      */
       Serial.println(F("Medidor No configurado"));
 
 #if (Tdisplaydisp || OLED96display || OLED66display)
@@ -1620,7 +1620,7 @@ void loop()
         MQTT_client.loop();               // Ocurre cada lectura de Sensor, osea cada 1seg
         Serial.println("MQTT_client.loop");
         Send_Message_Cloud_App_MQTT();
-      } 
+      }
 #if SaveSDyRTC
       Write_SD();
 #endif
@@ -1784,21 +1784,21 @@ void loop()
   {
     if (FlagMobData == false)
     {
-       if ((millis() - MQTT_loop_review) >= MQTT_loop_review_duration)     // Revisar cada x milisegundos
-       {
-          // New timestamp for the loop start time
-          MQTT_loop_review = millis();
-          // From here, all other tasks performed outside of measurements, MQTT and error loops
+      if ((millis() - MQTT_loop_review) >= MQTT_loop_review_duration)     // Revisar cada x milisegundos
+      {
+        // New timestamp for the loop start time
+        MQTT_loop_review = millis();
+        // From here, all other tasks performed outside of measurements, MQTT and error loops
 
-          // if not there are not connectivity errors, receive MQTT messages
-          if ((!err_MQTT) && (!err_wifi))
-          {
-             MQTT_client.loop();                     // Ocurre cada lectura de Sensor, osea cada 1seg
-             Serial.println("MQTT_client.loop");
-          }
-          // Process wifi server requests
-          Check_WiFi_Server();
+        // if not there are not connectivity errors, receive MQTT messages
+        if ((!err_MQTT) && (!err_wifi))
+        {
+          MQTT_client.loop();                     // Ocurre cada lectura de Sensor, osea cada 1seg
+          Serial.println("MQTT_client.loop");
         }
+        // Process wifi server requests
+        Check_WiFi_Server();
+      }
     }
   }
 #endif
@@ -1969,13 +1969,13 @@ void Connect_WiFi()
   if (MaxWifiTX == true)
 #if !ESP8266
   {
-     WiFi.setTxPower(WIFI_POWER_19_5dBm);  // Default 14dB
-     Serial.println("MaxWifiTX = true");
+    WiFi.setTxPower(WIFI_POWER_19_5dBm);  // Default 14dB
+    Serial.println("MaxWifiTX = true");
   }
 #else
   {
-     WiFi.setOutputPower(20.5);        // Default 17dB
-     Serial.println("MaxWifiTX = true");
+    WiFi.setOutputPower(20.5);        // Default 17dB
+    Serial.println("MaxWifiTX = true");
   }
 #endif
 
@@ -2777,11 +2777,11 @@ void saveParamCallback()
 #endif
 
 #if MobData
-    FlagMobData = true;
-    Serial.println(F("Mobile Data mode"));
+  FlagMobData = true;
+  Serial.println(F("Mobile Data mode"));
 #else
-    FlagMobData = false;
-    Serial.println(F("NO Mobile Data mode"));
+  FlagMobData = false;
+  Serial.println(F("NO Mobile Data mode"));
 #endif
 
   ConfigPortalSave = true;
@@ -3443,10 +3443,10 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
   // CustomMobileData
 
 #if MobData
-    Serial.println(F("Mobile Data mode"));
-    CustomValtotal2 = CustomValtotal2 + 100000;
+  Serial.println(F("Mobile Data mode"));
+  CustomValtotal2 = CustomValtotal2 + 100000;
 #else
-    Serial.println(F("NO Mobile Data mode"));
+  Serial.println(F("NO Mobile Data mode"));
 #endif
 
   CustomValTotalString[8] = {0};
@@ -3798,10 +3798,10 @@ revini2:
       goto revexit;
     }
     Contacon ++;
-if (Contacon < 60)
-    goto revini2;
-else
-    goto revini;
+    if (Contacon < 60)
+      goto revini2;
+    else
+      goto revini;
   }
 revexit:
   Contacon = 0;
@@ -3962,8 +3962,6 @@ void ResetMobDataConn()
       Init_MQTT();
       delay(100);
       contmqtt ++;
-//      Serial.print("contmqtt1: ");
-//      Serial.println(contmqtt);
       FlagPoweroff = false;
     }
     else
@@ -3992,8 +3990,6 @@ void ResetMobDataConn()
       Init_MQTT();
       delay(100);
       contmqtt ++;
-//      Serial.print("contmqtt2: ");
-//      Serial.println(contmqtt);
     }
     else
     {
@@ -4010,8 +4006,6 @@ void ResetMobDataConn()
       ESP.restart();
     }
   }
-//  Serial.print("contmqtt: ");
-//  Serial.println(contmqtt);
 }
 #endif
 
@@ -6200,11 +6194,11 @@ void Aireciudadano_Characteristics()
     Serial.println("No SHT31/SHT4x sensor");
 
 #if MobData
-    FlagMobData = true;
-    Serial.println(F("Mobile Data mode"));
+  FlagMobData = true;
+  Serial.println(F("Mobile Data mode"));
 #else
-    FlagMobData = false;
-    Serial.println(F("NO Mobile Data mode"));
+  FlagMobData = false;
+  Serial.println(F("NO Mobile Data mode"));
 #endif
 
 #else // SoundMeter
