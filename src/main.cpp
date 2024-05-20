@@ -60,13 +60,13 @@
 
 // Seleccion de operador de telefonia movil
 #define TigoKalleyExito false
-#define MovistarVirgin true
+#define MovistarVirgin false
 #define Claro false
 #define Wom false
 
 #define A7670 false
 #define SIM7070 false
-#define SIM800 true
+#define SIM800 false
 
 // Escoger modelo de pantalla (pasar de false a true) o si no hay escoger ninguna (todas false):
 #define Tdisplaydisp false    // TTGO T Display
@@ -199,10 +199,10 @@ struct MyConfigStruct
   char ConfigValues[10] = "000100000";
   char aireciudadano_device_name[30]; // Device name; default to aireciudadano_device_id
 #else
-  char sensor_lat[10] = "4.69375";   // Aquí colocar la Latitud del sensor
-  char sensor_lon[10] = "-74.09382"; // Colocar la Longitud del sensor
-  char ConfigValues[10] = "000010111";
-  char aireciudadano_device_name[30] = "AireCiudadano_DBB_01"; // Nombre de la estacion
+  char sensor_lat[10] = "4.6987";   // Aquí colocar la Latitud del sensor
+  char sensor_lon[10] = "-74.0987"; // Colocar la Longitud del sensor
+  char ConfigValues[10] = "000100000";
+  char aireciudadano_device_name[30] = "AireCiudadano_Test01"; // Nombre de la estacion
 #endif
 #endif
 #if (WPA2 || Rosver)
@@ -301,6 +301,7 @@ unsigned int SDyRTC_loop_time;
 unsigned long MQTT_loop_start; // holds a timestamp for each cloud loop start
 unsigned long MQTT_loop_startsam;
 unsigned long MQTT_loop_review;
+unsigned int MQTT_loop_review_duration = 15000;
 unsigned long lastReconnectAttempt = 0; // MQTT reconnections
 
 // Errors loop: time between error condition recovery
@@ -826,7 +827,7 @@ LTR390 ltr;
 #define TINY_GSM_MODEM_A7670
 #elif SIM7070
 #define TINY_GSM_MODEM_SIM7070
-#define PowerSIM7070 15
+#define PowerSIM7070 0
 #elif SIM800
 #define TINY_GSM_MODEM_SIM800
 #endif
@@ -890,6 +891,10 @@ void setup()
   pinMode(OUT_EN, OUTPUT);
   // Off sensors
   digitalWrite(OUT_EN, LOW); // step-up off
+#endif
+
+#if SIM7070
+  pinMode(PowerSIM7070, INPUT);
 #endif
 
   while (!Serial)
@@ -1180,14 +1185,15 @@ void setup()
     delay(10);
 
 #if SIM7070
+  if (ResetFlag == true)
+  {
     Serial.println("Power ON SIM7070 routine");
     pinMode(PowerSIM7070, OUTPUT);
-    digitalWrite(PowerSIM7070, HIGH);
-    delay(1000);
     digitalWrite(PowerSIM7070, LOW);
-    delay(8000);
-    digitalWrite(PowerSIM7070, HIGH);
-    delay(1000);
+    delay(3000);
+    pinMode(PowerSIM7070, INPUT);
+    delay(7000);
+  }
 #endif
 
 // Attempt to connect to Mobile Data network:
@@ -1454,15 +1460,15 @@ void loop()
     else
     {
 // Rutina Test para enviar datos sin sensor conectado
-///*
+/*
       PM25_value = random(1, 99);
       PM25_accumulated += PM25_value;
       PM25_samples++;
       Con_loop_times++;
       Serial.print(F("Valor random: "));
       Serial.println(PM25_value);
-//*/
-//      Serial.println(F("Medidor No configurado"));
+*/
+      Serial.println(F("Medidor No configurado"));
 
 #if (Tdisplaydisp || OLED96display || OLED66display)
 
@@ -1771,6 +1777,32 @@ void loop()
     }
 #endif
   }
+
+#if Wifi
+
+  if (SDflag == false)
+  {
+    if (FlagMobData == false)
+    {
+       if ((millis() - MQTT_loop_review) >= MQTT_loop_review_duration)     // Revisar cada x milisegundos
+       {
+          // New timestamp for the loop start time
+          MQTT_loop_review = millis();
+          // From here, all other tasks performed outside of measurements, MQTT and error loops
+
+          // if not there are not connectivity errors, receive MQTT messages
+          if ((!err_MQTT) && (!err_wifi))
+          {
+             MQTT_client.loop();                     // Ocurre cada lectura de Sensor, osea cada 1seg
+             Serial.println("MQTT_client.loop");
+          }
+          // Process wifi server requests
+          Check_WiFi_Server();
+        }
+    }
+  }
+#endif
+
   // Process Bluetooth events
 #if Bluetooth
   provider.handleDownload();
@@ -1936,9 +1968,15 @@ void Connect_WiFi()
   // Highest RF power output
   if (MaxWifiTX == true)
 #if !ESP8266
-    WiFi.setTxPower(WIFI_POWER_19_5dBm);  // Default 14dB
+  {
+     WiFi.setTxPower(WIFI_POWER_19_5dBm);  // Default 14dB
+     Serial.println("MaxWifiTX = true");
+  }
 #else
-    WiFi.setOutputPower(20.5);        // Default 17dB
+  {
+     WiFi.setOutputPower(20.5);        // Default 17dB
+     Serial.println("MaxWifiTX = true");
+  }
 #endif
 
 #if !ESP8266
