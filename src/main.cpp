@@ -703,7 +703,8 @@ String MQTT_receive_topic;
 
 byte contmqtt = 0;
 
-#if SoundMeter
+//#if SoundMeter
+#if Influxver
 byte Influxseconds = 60;
 byte Influxsecondssam = 60;
 #endif
@@ -2877,6 +2878,7 @@ void Init_MQTT()
 //  MQTT_client.setServer("194.242.56.226", 30183);
 #else
   MQTT_client.setServer("sensor.aireciudadano.com", 30183);
+//  MQTT_client.setServer("194.242.56.226", 30183);
 #endif
   MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
 
