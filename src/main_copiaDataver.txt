@@ -2,8 +2,14 @@
 // AireCiudadano medidor Fijo - Medidor de PM2.5 abierto, medición opcional de humedad y temperatura.
 // Más información en: aireciudadano.com
 // Este firmware es un fork del proyecto Anaire (https://www.anaire.org/) recomendado para la medición de CO2.
-// 21/03/2024 info@aireciudadano.com
+// 26/03/2023 info@aireciudadano.com
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Pendientes:
+// Revisar todas las versiones y pruebas para pasar a v2.0
+// MODIFICACIONES EXTERNAS:
+// Modificado libreria WifiManager para compatibilidad
+// Modificado PubSubClient.cpp : para quitar warning
 
 // Novedades:
 // 1. Reporte del PM1 al servidor
@@ -28,16 +34,10 @@
 // 16. ESP8285 flag en platformio.ini
 // 17. En Test_Sensor se identifica SEN54 y 55 con HyT y PMS7003T para parpadeo de HyT
 // 18. Ver 2.5
-// 19. SPS30 ajuste resultado de intercomparacion con SEN y PMS
-// 20. MinVer con SD
-// 21. Conectividad movil, FlagMobData
-// 22. mqtt.loop ser realiza ahora con la duracion  de MQTT_loop_review en milisegundos
-// 23. Wifi Power max con flag MaxWifiTX programada en pagina web Editor AireCiudadano: Resultado no concluyente de incremento de cobertura
-// OK: Revisar BUG cuando una simcard no se ha usado y no ingresa rapido a la red el ESP8266 se resetea y no sigue preguntando la red para ingresar, a diferencia del codigo Arduino y que si lo logra.
-// OK: MONTiny: fail y no sigue y se reinicia y sale 0:0
 
-// Constantes de Ajuste de sensores programables: pendiente e intercepto. ANALIZAR MAS
-// Verificar nueva libreria Bluetooth que parece compatible con Sensirion UPT Core@^0.3.0, Sigue el error con lectura de nox
+// SPS30 ajust revisar, esta muy alto. Compararlo con SEN5X y PMS
+// Conectividad movil
+// Constantes de Ajuste de sensores programables: pendiente e intercepto
 
 #include <Arduino.h>
 #include "main.hpp"
@@ -49,33 +49,23 @@
 #define Bluetooth false  // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
+#define CO2sensor false  // Set to true for CO2 sensors: SCD30 and SenseAir S8
 #define TwoPMS false     // Set to true if you want 2 PMS7003 sensors
 #define SoundMeter false // set to true for Sound Meter
-#define SoundAM false    // Set to true to Sound meter airplane mode
 #define Influxver false  // Set to true for InfluxDB version
-
+#define SoundAM false    // Set to true to Sound meter airplane mode
 #define LedNeo false     // Set to true for Led Neo multicolor
+
 #define LTR390UV false
 #define NoxVoxTd false
 
-// Seleccion de operador de telefonia movil
-#define TigoKalleyExito false
-#define MovistarVirgin false
-#define Claro false
-#define Wom false
-
-#define A7670 false
-#define SIM7070 false
-#define SIM800 false
+#define SiteAltitude 0 // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
+// #define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
 
 // Escoger modelo de pantalla (pasar de false a true) o si no hay escoger ninguna (todas false):
-#define Tdisplaydisp false    // TTGO T Display
-#define OLED66display false   // Pantalla OLED 0.66"
-#define OLED96display false   // Pantalla OLED 0.96"
-
-#define CO2sensor false        // Set to true for CO2 sensors: SCD30 and SenseAir S8
-#define SiteAltitude 0         // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
-// #define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
+#define Tdisplaydisp false
+#define OLED66display false
+#define OLED96display false
 
 // Boards diferentes
 #define TTGO_TQ false
@@ -90,27 +80,27 @@
                             // Nombre estación: char aireciudadano_device_name[36] = "xxxxxxxxxxxxxx";
 
 #ifdef ESP32S3def
-#define ESP32S3 true      // Set to true in case you use an ESP32S3
+#define ESP32S3 true     // Set to true in case you use an ESP32S3
 #else
 #define ESP32S3 false     // Set to true in case you use an ESP32S3
 #endif
 
 #ifdef ESP32C3AGdef
-#define ESP32C3AG true    // Set to true in case you use an ESP32C3 version AirGrad
+#define ESP32C3AG true     // Set to true in case you use an ESP32C3 version AirGrad
 #else
-#define ESP32C3AG false   // Set to true in case you use an ESP32C3 version AirGrad
+#define ESP32C3AG false     // Set to true in case you use an ESP32C3 version AirGrad
 #endif
 
 #ifdef ESP8285def
-#define ESP8285 true      // Set to true in case you use an ESP8285 switch
+#define ESP8285 true    // Set to true in case you use an ESP8285 switch
 #else
 #define ESP8285 false
 #endif
 
 #ifdef Rosverdef
-#define Rosver true       // Set to true in case you use an ESP32S3
+#define Rosver true     // Set to true in case you use an ESP32S3
 #else
-#define Rosver false      // Set to true in case you use an ESP32S3
+#define Rosver false     // Set to true in case you use an ESP32S3
 #endif
 
 #ifdef MinVerdef
@@ -120,15 +110,9 @@
 #endif
 
 #ifdef MobDatadef
-#define MobData true      // Opcion para datos mobiles
+#define MobData true
 #else
 #define MobData false
-#endif
-
-#ifdef MinVerSDdef
-#define MinVerSD true     // Version minima con SD
-#else
-#define MinVerSD false
 #endif
 
 // Fin definiciones opcionales Wifi
@@ -151,10 +135,6 @@ bool FlagMobData = false;
 bool FlagSENHyT = false;
 bool FlagpmsHyT = false;
 bool FlagMQTTcon = false;
-bool FlagPoweroff = false;
-bool MaxWifiTX = false;
-
-uint8_t Contacon = 0;
 
 uint8_t CustomValue = 0;
 uint32_t CustomValtotal = 0;
@@ -186,23 +166,19 @@ struct MyConfigStruct
 #endif
   char aireciudadano_device_name[30]; // Device name; default to aireciudadano_device_id
 #elif Wifi
-#if !MobData
   uint16_t PublicTime = 1; // Publication Time
-#else
-  uint16_t PublicTime = 2; // Publication Time
-#endif
-  //  uint16_t MQTT_port = 80;                           // MQTT port; Default Port on 80
-  //  char MQTT_server[30] = "sensor.aireciudadano.com"; // MQTT server url or public IP address.
+                           //  uint16_t MQTT_port = 80;                           // MQTT port; Default Port on 80
+                           //  char MQTT_server[30] = "sensor.aireciudadano.com"; // MQTT server url or public IP address.
 #if !PreProgSensor
   char sensor_lat[10] = "0.0"; // Sensor latitude  GPS
   char sensor_lon[10] = "0.0"; // Sensor longitude GPS
   char ConfigValues[10] = "000100000";
   char aireciudadano_device_name[30]; // Device name; default to aireciudadano_device_id
 #else
-  char sensor_lat[10] = "4.6987";   // Aquí colocar la Latitud del sensor
-  char sensor_lon[10] = "-74.0987"; // Colocar la Longitud del sensor
-  char ConfigValues[10] = "000100000";
-  char aireciudadano_device_name[30] = "AireCiudadano_Test01"; // Nombre de la estacion
+  char sensor_lat[10] = "4.69375";   // Aquí colocar la Latitud del sensor
+  char sensor_lon[10] = "-74.09382"; // Colocar la Longitud del sensor
+  char ConfigValues[10] = "000010111";
+  char aireciudadano_device_name[30] = "AireCiudadano_DBB_01"; // Nombre de la estacion
 #endif
 #endif
 #if (WPA2 || Rosver)
@@ -285,9 +261,6 @@ bool err_sensor = false;
 bool FlagDATAicon = false;
 bool NoSensor = false;
 
-bool MQTT_toggle = false;
-bool MQTT_token = false;
-
 // Measurements loop: time between measurements
 unsigned int measurements_loop_duration = 1000; // 1 second
 unsigned long measurements_loop_start;          // holds a timestamp for each control loop start
@@ -300,8 +273,6 @@ unsigned int SDyRTC_loop_time;
 // MQTT loop: time between MQTT measurements sent to the cloud
 unsigned long MQTT_loop_start; // holds a timestamp for each cloud loop start
 unsigned long MQTT_loop_startsam;
-unsigned long MQTT_loop_review;
-unsigned int MQTT_loop_review_duration = 15000;
 unsigned long lastReconnectAttempt = 0; // MQTT reconnections
 
 // Errors loop: time between error condition recovery
@@ -580,7 +551,7 @@ byte failh = 0;
 #include "Adafruit_SHT4x.h"
 Adafruit_SHT4x sht4 = Adafruit_SHT4x();
 
-#if !(Rosver || MinVer || MobData || MinVerSD)
+#if !(Rosver || MinVer || MobData)
 
 #include "Adafruit_Sensor.h"
 #include "Adafruit_AM2320.h"
@@ -619,9 +590,9 @@ DataProvider provider(lib, DataType::PM10_PM25_PM40_PM100);
 DataProvider provider(lib, DataType::T_RH_CO2_ALT);
 #elif NoxVoxTd
 //DataProvider provider(lib, DataType::T_RH_VOC_NOX_PM25); // Por error al bajar los datos con nox: assert failed: void ByteArray<SIZE>
-DataProvider provider(lib, DataType::T_RH_VOC_PM25_V2);
+DataProvider provider(lib, DataType::T_RH_VOC_PM25);
 #else
-DataProvider provider(lib, DataType::T_RH_VOC_PM25_V2);
+DataProvider provider(lib, DataType::T_RH_VOC_PM25);
 #endif
 #endif
 
@@ -693,18 +664,13 @@ WiFiServer wifi_server(80); // to check if it is alive
 // MQTT
 #include <PubSubClient.h>
 char MQTT_message[256];
-#if !MobData
 PubSubClient MQTT_client(wifi_client);
-#endif
 char received_payload[384];
 String MQTT_send_topic;
 String MQTT_send_topicsam;
 String MQTT_receive_topic;
 
-byte contmqtt = 0;
-
-//#if SoundMeter
-#if Influxver
+#if SoundMeter
 byte Influxseconds = 60;
 byte Influxsecondssam = 60;
 #endif
@@ -735,8 +701,7 @@ JsonDocument jsonBuffer;
 bool ResetFlag = false;
 bool DeepSleepFlag = false;
 bool NoiseBUTTONFlag = false;
-bool ResetFlagMobData = false;
-bool ResetFlagMobDataTemp = false;
+// int reason;
 
 #if !ESP8266
 void print_reset_reason(RESET_REASON reason);
@@ -753,7 +718,7 @@ bool Calibrating = false;
 uint16_t SDyRTCtime = 60; // Valor de Sample Time de SD y RTC
 
 //#if (Wifi || SDyRTC || SaveSDyRTC || Rosver)
-#if (SDyRTC || SaveSDyRTC || Rosver || MinVerSD)
+#if (SDyRTC || SaveSDyRTC || Rosver)
 #if !WPA2
 
 #include <SPI.h>
@@ -819,25 +784,16 @@ Adafruit_NeoPixel LED_RGB(1, PinLedNeo, NEO_GRBW + NEO_KHZ800);  // Creamos el o
 LTR390 ltr;
 #endif
 
-// MOBILE DATA TRANSMISION
-
 #if MobData
-
 // Select your modem:
-#if A7670
+//#define TINY_GSM_MODEM_SIM7600
 #define TINY_GSM_MODEM_A7670
-#elif SIM7070
-#define TINY_GSM_MODEM_SIM7070
-#define PowerSIM7070 0
-#elif SIM800
-#define TINY_GSM_MODEM_SIM800
-#endif
 
 // Set serial for debug console (to the Serial Monitor, default speed 115200)
-#define SerialMon Serial
+//#define SerialMon Serial
 
 // SoftwareSerial pmsSerial2(PMS_TX2, PMS_RX2);
-SoftwareSerial SerialAT(13, 12);  // D7 RX, D6 TX     // Si se usan 2 PMSx003 habria conflicto con el pin 12
+SoftwareSerial SerialAT(13, 12);  // RX, TX     // Si se usan 2 PMSx003 habria conflicto con el pin 12
 
 // Use Hardware Serial on Mega, Leonardo, Micro
 //#define SerialAT Serial2
@@ -846,31 +802,25 @@ SoftwareSerial SerialAT(13, 12);  // D7 RX, D6 TX     // Si se usan 2 PMSx003 ha
 #define DUMP_AT_COMMANDS
 
 // Define the serial console for debug prints, if needed
-#define TINY_GSM_DEBUG SerialMon
+//#define TINY_GSM_DEBUG SerialMon
+#define TINY_GSM_DEBUG Serial
 
 // Your GPRS credentials, if any
-#if TigoKalleyExito
 const char apn[] = "web.colombiamovil.com.co";
-#elif MovistarVirgin
-const char apn[] = "internet.movistar.com.co";
-#elif Claro
-const char apn[] = "internet.comcel.com.co";
-#elif Wom
-const char apn[] = "internet.wom.co";
-#endif
+//const char apn[] = "internet.comcel.com.co";
+//const char apn[] = "internet.movistar.com.co";
 
 #include <TinyGsmClient.h>
 
 #ifdef DUMP_AT_COMMANDS
 #include <StreamDebugger.h>
-StreamDebugger debugger(SerialAT, SerialMon);
+StreamDebugger debugger(SerialAT, Serial);
 TinyGsm modem(debugger);
 #else
 TinyGsm modem(SerialAT);
 #endif
 
 TinyGsmClient client(modem);
-PubSubClient MQTT_client(client);
 
 #endif
 
@@ -894,10 +844,6 @@ void setup()
   digitalWrite(OUT_EN, LOW); // step-up off
 #endif
 
-#if SIM7070
-  pinMode(PowerSIM7070, INPUT);
-#endif
-
   while (!Serial)
   {
     delay(500); // wait 0.5 seconds for connection
@@ -905,8 +851,6 @@ void setup()
 
   Serial.setDebugOutput(true);
   Serial.println(F(""));
-
-  ResetFlagMobDataTemp = true;
 
 #if Wifi
 
@@ -1137,7 +1081,7 @@ void setup()
   latitudef = atof(eepromConfig.sensor_lat);
   longitudef = atof(eepromConfig.sensor_lon);
 
-  // Initialize the GadgetBle Library for Bluetooth
+// Initialize the GadgetBle Library for Bluetooth
 #elif Bluetooth
   provider.begin(Bluetooth_loop_time);
   Serial.print(F("Sensirion Provider Lib initialized with deviceId = "));
@@ -1150,7 +1094,7 @@ void setup()
   // Start Captive Portal for 60 seconds
   if (ResetFlag == true)
   {
-#if (Rosver || MinVer || MobData || MinVerSD)
+#if (Rosver || MinVer || MobData)
     Serial.println(F("Test_Sensor"));
     Test_Sensor();
 #endif
@@ -1168,8 +1112,8 @@ void setup()
       // Attempt to connect to MQTT broker
       if (!err_wifi)
       {
-        Serial.println("Init_MQTT");
         Init_MQTT();
+        Serial.println("Init_MQTT");
 
 #if ESP8285
         digitalWrite(LEDPIN, LOW); // turn the LED off by making the voltage LOW
@@ -1182,31 +1126,18 @@ void setup()
   if (FlagMobData == true)
   {
 #if MobData
-    SerialAT.begin(19200);
-    delay(10);
-
-#if SIM7070
-    if (ResetFlag == true)
-    {
-      Serial.println("Power ON SIM7070 routine");
-      pinMode(PowerSIM7070, OUTPUT);
-      digitalWrite(PowerSIM7070, LOW);
-      delay(3000);
-      pinMode(PowerSIM7070, INPUT);
-      delay(7000);
-    }
-#endif
-
+    SerialAT.begin(115200);
+    delay(100);
     // Attempt to connect to Mobile Data network:
 connectstart:
     Serial.println("Connect MobData routine");
-    Connect_MobData();                // Setup Connect Mob Data
+    Connect_MobData();
+
     // Attempt to connect to MQTT broker
     Serial.println("Init MQTT routine");
-    FlagMQTTcon = false;
     Init_MQTT();
-    if (FlagMQTTcon == false)
-      goto connectstart;
+    if (FlagMQTTcon == true)
+      goto connectstart;      
 #endif
   }
 #endif
@@ -1226,13 +1157,12 @@ connectstart:
   // Init control loops
   measurements_loop_start = millis();
   errors_loop_start = millis();
-  MQTT_loop_review = millis();
 #if Wifi
   MQTT_loop_start = millis();
   MQTT_loop_startsam = millis();
 #endif
 
-#if (SDyRTC || SaveSDyRTC || Rosver || MinVerSD)
+#if (SDyRTC || SaveSDyRTC || Rosver)
 #if !WPA2
 #if !SaveSDyRTC
   if (SDflag == true)
@@ -1311,7 +1241,7 @@ connectstart:
 #endif
 
   // Get device id
-#if (Rosver || SoundMeter || MinVer || MinVerSD)
+#if (Rosver || SoundMeter || MinVer)
   IDn = 0;
   Aireciudadano_Characteristics();
 #endif
@@ -1460,15 +1390,6 @@ void loop()
     }
     else
     {
-      // Rutina Test para enviar datos sin sensor conectado
-      /*
-        PM25_value = random(1, 99);
-        PM25_accumulated += PM25_value;
-        PM25_samples++;
-        Con_loop_times++;
-        Serial.print(F("Valor random: "));
-        Serial.println(PM25_value);
-      */
       Serial.println(F("Medidor No configurado"));
 
 #if (Tdisplaydisp || OLED96display || OLED66display)
@@ -1567,7 +1488,7 @@ void loop()
     dBAmax = 0.0;
   }
 
-  //#elif (Wifi || SDyRTC || Rosver)
+//#elif (Wifi || SDyRTC || Rosver)
 #elif (Wifi || SDyRTC || MobData)
 
   if (SDflag == true)
@@ -1582,12 +1503,11 @@ void loop()
       PM25f = PM25_accumulated / PM25_samples;
       pm25int = round(PM25f);
       Serial.print(F("PM2.5: "));
-      Serial.print(pm25int);
-      Serial.print("   ");
+      Serial.println(pm25int);
 #if !SoundMeter
       ReadHyT();
 #endif
-#if SDyRTC
+#if SaveSDyRTC
       Write_SD();
 #endif
       PM25_accumulated = 0.0;
@@ -1601,9 +1521,9 @@ void loop()
   {
     // MQTT loop
 #if !Influxver
-    if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 60000))
-      //  if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 15000))
-      //  if ((millis() - MQTT_loop_start) >= (1 * 60000))
+//    if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 60000))
+  if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 15000))
+//  if ((millis() - MQTT_loop_start) >= (1 * 60000))
 #else
     if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 1000 * Influxseconds))
 #endif
@@ -1612,16 +1532,13 @@ void loop()
       MQTT_loop_start = millis();
 
 #if MobData
-      MobDataConnected();     // MobDataConnected revision!!!!!!!!
+      MobDataConnected();
 #endif
 
       // Message the MQTT broker in the cloud app to send the measured values
       if (PM25_samples > 0)  //!!!!!!!!!!!
-      {
-        MQTT_client.loop();               // Ocurre cada lectura de Sensor, osea cada 1seg
-        Serial.println("MQTT_client.loop");
         Send_Message_Cloud_App_MQTT();
-      }
+      
 #if SaveSDyRTC
       Write_SD();
 #endif
@@ -1667,8 +1584,8 @@ void loop()
     // MQTT loop
 #if !Influxver
     if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 60000))
-      //  if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 3000))
-      //  if ((millis() - MQTT_loop_start) >= (1 * 60000))
+//  if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 3000))
+//  if ((millis() - MQTT_loop_start) >= (1 * 60000))
 #else
     if ((millis() - MQTT_loop_start) >= (eepromConfig.PublicTime * 1000 * Influxseconds))
 #endif
@@ -1785,26 +1702,27 @@ void loop()
   {
     if (FlagMobData == false)
     {
-      if ((millis() - MQTT_loop_review) >= MQTT_loop_review_duration)     // Revisar cada x milisegundos
-      {
-        // New timestamp for the loop start time
-        MQTT_loop_review = millis();
-        // From here, all other tasks performed outside of measurements, MQTT and error loops
+      // From here, all other tasks performed outside of measurements, MQTT and error loops
 
-        // if not there are not connectivity errors, receive MQTT messages
-        if ((!err_MQTT) && (!err_wifi))
+      // if not there are not connectivity errors, receive MQTT messages
+      if ((!err_MQTT) && (!err_wifi))
         {
           MQTT_client.loop();                     // Ocurre cada lectura de Sensor, osea cada 1seg
           Serial.println("MQTT_client.loop");
         }
-        // Process wifi server requests
-        Check_WiFi_Server();
-      }
+
+      // Process wifi server requests
+      Check_WiFi_Server();
+    }
+    else if (!err_MQTT)
+    {
+      MQTT_client.loop();
+      Serial.println("MQTT_client.loop");
     }
   }
 #endif
 
-  // Process Bluetooth events
+// Process Bluetooth events
 #if Bluetooth
   provider.handleDownload();
   delay(3);
@@ -1965,20 +1883,6 @@ void Connect_WiFi()
 
   WiFi.disconnect(true); // disconnect from wifi to set new wifi connection
   WiFi.mode(WIFI_STA);   // init wifi mode
-
-  // Highest RF power output
-  if (MaxWifiTX == true)
-#if !ESP8266
-  {
-    WiFi.setTxPower(WIFI_POWER_19_5dBm);  // Default 14dB
-    Serial.println("MaxWifiTX = true");
-  }
-#else
-  {
-    WiFi.setOutputPower(20.5);        // Default 17dB
-    Serial.println("MaxWifiTX = true");
-  }
-#endif
 
 #if !ESP8266
 
@@ -2211,16 +2115,16 @@ void Print_WiFi_Status()
 }
 
 void Check_WiFi_Server()                    // Server access by http when you put the ip address in a web browser !!!!!!!!!!!!!!!!!!!!!!!!!!!
-{ // Wifi server
+{                                           // Wifi server
   WiFiClient client = wifi_server.accept(); // listen for incoming clients
   if (client)
-  { // if you get a client,
+  {                                         // if you get a client, 
     Serial.println(F("new client"));        // print a message out the serial port
     String currentLine = "";                // make a String to hold incoming data from the client
     while (client.connected())
     { // loop while the client's connected
       if (client.available())
-      { // if there's bytes to read from the client,
+      {                                     // if there's bytes to read from the client,
         char c = client.read(); // read a byte, then
         Serial.write(c);        // print it out the serial monitor
         if (c == '\n')
@@ -2268,12 +2172,10 @@ void Check_WiFi_Server()                    // Server access by http when you pu
             client.println("<br>");
             client.print("MQTT Server: ");
             client.print("sensor.aireciudadano.com");
-//            client.print("194.242.56.226");
             client.println("<br>");
             client.print("MQTT Port: ");
 #if !Influxver
             client.print("80");
-//            client.print("30183");
 #else
             client.print("30183");
 #endif
@@ -2370,7 +2272,6 @@ void Start_Captive_Portal()
 
   if (SDflag == false)
     captiveportaltime = 60;
-  //    captiveportaltime = 15;
   else
     captiveportaltime = 30; // captiveportaltime = 15;
 
@@ -2429,20 +2330,10 @@ void Start_Captive_Portal()
   WiFiManagerParameter custom_wifi_html("<p>Set WPA2 Enterprise</p>"); // only custom html
   WiFiManagerParameter custom_wifi_user("User", "WPA2 Enterprise identity", eepromConfig.wifi_user, 24);
   WiFiManagerParameter custom_wpa2_pass;
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer)
   WiFiManagerParameter custom_wifi_html2("<p></p>"); // only custom html
 #else
   WiFiManagerParameter custom_wifi_html2("<hr><br/>"); // only custom html
-#endif
-#endif
-
-#if MobData
-#if A7670
-  WiFiManagerParameter custom_mobdata("<p>Mobile Data Version with A7670:</p>"); // only custom html
-#elif SIM7070
-  WiFiManagerParameter custom_mobdata("<p>Mobile Data Version with SIM7070:</p>"); // only custom html
-#elif SIM800
-  WiFiManagerParameter custom_mobdata("<p>Mobile Data Version with SIM800:</p>"); // only custom html
 #endif
 #endif
 
@@ -2452,7 +2343,7 @@ void Start_Captive_Portal()
   WiFiManagerParameter custom_id_name("CustomName", "Set Station Name (25 characters max):", eepromConfig.aireciudadano_device_name, 25);
 #endif
 
-#if !(Rosver || SoundMeter || Minver || MinVerSD)
+#if !(Rosver || SoundMeter || Minver)
   char Ptime[5];
   itoa(eepromConfig.PublicTime, Ptime, 10);
   WiFiManagerParameter custom_public_time("Ptime", "Set Publication Time in minutes:", Ptime, 4);
@@ -2460,20 +2351,24 @@ void Start_Captive_Portal()
 #endif
   WiFiManagerParameter custom_sensor_latitude("Latitude", "Latitude (5-4 dec digits are enough)", eepromConfig.sensor_lat, 10);
   WiFiManagerParameter custom_sensor_longitude("Longitude", "Longitude (5-4 dec)", eepromConfig.sensor_lon, 10);
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer)
   WiFiManagerParameter custom_sensorPM_type;
   WiFiManagerParameter custom_sensorHYT_type;
   WiFiManagerParameter custom_display_type;
 #endif
   WiFiManagerParameter custom_outin_type;
-#if (Rosver || MinVerSD)
+#if Rosver
   WiFiManagerParameter custom_endhtmlup("<hr><p></p>"); // only custom html
   WiFiManagerParameter custom_sd_type;
   WiFiManagerParameter date_time;
 #endif
+#if MobData
+  WiFiManagerParameter custom_endhtmlup("<hr><p></p>"); // only custom html
+  WiFiManagerParameter custom_md_type;
+#endif
   WiFiManagerParameter custom_endhtml("<p></p>"); // only custom html
 
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer)
   // Sensor PM menu
 
   if (eepromConfig.ConfigValues[7] == '0')
@@ -2558,7 +2453,7 @@ void Start_Captive_Portal()
     new (&custom_outin_type) WiFiManagerParameter(custom_outin_str);
   }
 
-#if (Rosver || MinVerSD)
+#if Rosver
 #if !WPA2
   // SD option
   if (eepromConfig.ConfigValues[4] == '0')
@@ -2577,6 +2472,21 @@ void Start_Captive_Portal()
 #endif
 #endif
 
+#if MobData
+  // Mobile Data option
+  if (eepromConfig.ConfigValues[2] == '0')
+  {
+    const char *custom_md_str = "<label for='customMD'>Mobile Data version:</label><br/><input type='radio' name='customMD' value='0' checked> No Mobile Data<br><input type='radio' name='customMD' value='1'> Mobile Data A7670";
+    new (&custom_md_type) WiFiManagerParameter(custom_md_str);
+  }
+  else if (eepromConfig.ConfigValues[2] == '1')
+  {
+    const char *custom_md_str = "<label for='customMD'>Mobile Data version:</label><br/><input type='radio' name='customMD' value='0'> No Mobile Data<br><input type='radio' name='customMD' value='1' checked> Mobile Data A7670";
+    new (&custom_md_type) WiFiManagerParameter(custom_md_str);
+  }
+#endif
+
+
   // Add parameters
 
 #if WPA2
@@ -2585,25 +2495,20 @@ void Start_Captive_Portal()
   wifiManager.addParameter(&custom_wifi_html2);
 #endif
 
-#if MobData
-  wifiManager.addParameter(&custom_mobdata);
-#endif
-
   wifiManager.addParameter(&custom_id_name);
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer)
   wifiManager.addParameter(&custom_public_time);
   wifiManager.addParameter(&custom_sensor_html);
 #endif
-
   wifiManager.addParameter(&custom_sensor_latitude);
   wifiManager.addParameter(&custom_sensor_longitude);
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer)
   wifiManager.addParameter(&custom_sensorPM_type);
   wifiManager.addParameter(&custom_sensorHYT_type);
   wifiManager.addParameter(&custom_display_type);
 #endif
   wifiManager.addParameter(&custom_outin_type);
-#if (Rosver || MinVerSD)
+#if Rosver
 #if !WPA2
   wifiManager.addParameter(&custom_endhtmlup);
   wifiManager.addParameter(&custom_sd_type);
@@ -2611,6 +2516,10 @@ void Start_Captive_Portal()
   wifiManager.addParameter(&date_time);
 #endif
 #else
+#if MobData
+  wifiManager.addParameter(&custom_endhtmlup);
+  wifiManager.addParameter(&custom_md_type);
+#endif
   wifiManager.addParameter(&custom_endhtml);
 #endif
 
@@ -2657,7 +2566,7 @@ void Start_Captive_Portal()
     eepromConfig.aireciudadano_device_name[sizeof(eepromConfig.aireciudadano_device_name) - 1] = '\0';
     Serial.println(F("Devname write_eeprom = true"));
 
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer)
     eepromConfig.PublicTime = atoi(custom_public_time.getValue());
     Serial.println(F("PublicTime write_eeprom = true"));
 #endif
@@ -2696,7 +2605,7 @@ void Start_Captive_Portal()
     Serial.print(F("CustomValTotalString: "));
     Serial.println(CustomValTotalString);
 
-#if !(Rosver || MinVer || MinVerSD)
+#if !(Rosver || MinVer)
     if (CustomValtotal == 0)
     {
       Serial.println(F("No configuration sensor values ​​chosen, no changes will be stored"));
@@ -2707,7 +2616,7 @@ void Start_Captive_Portal()
       strncpy(eepromConfig.ConfigValues, CustomValTotalString, sizeof(eepromConfig.ConfigValues));
       eepromConfig.ConfigValues[sizeof(eepromConfig.ConfigValues) - 1] = '\0';
       Serial.println(F("CustomVal write_eeprom = true"));
-#if !(Rosver || MinVer || MinVerSD)
+#if !(Rosver || MinVer)
     }
 #endif
     Write_EEPROM();
@@ -2759,7 +2668,7 @@ void saveParamCallback()
   Serial.println(CustomValtotal);
   strncpy(wifi_passwpa2, getParam("p").c_str(), sizeof(wifi_passwpa2)); // REVISAR!!!!!!!!!!!
 
-#if (Rosver || MinVerSD)
+#if Rosver
 #if !WPA2
   if (getParam("customSD") == "1")
   {
@@ -2777,18 +2686,23 @@ void saveParamCallback()
 #endif
 #endif
 
-#if MobData
-  FlagMobData = true;
-  Serial.println(F("Mobile Data mode"));
-#else
-  FlagMobData = false;
-  Serial.println(F("NO Mobile Data mode"));
-#endif
+//#if MobData
+  if (getParam("customMD") == "1")
+  {
+    Serial.println("Mobile Data selected");
+    FlagMobData = true;
+  }
+  else
+  {
+    Serial.println("No Mobile data");
+    FlagMobData = false;
+  }
+//#endif
 
   ConfigPortalSave = true;
 }
 
-#if (Rosver || MinVerSD)
+#if Rosver
 #if !WPA2
 void RTCadjustTime()
 {
@@ -2866,26 +2780,18 @@ void Init_MQTT()
   MQTT_client.setBufferSize(1024);    // PROBAR!!!!!!!!!!!!!!!!!!!!!
 #endif
 
-#if !MobData
-  MQTT_client.setKeepAlive(120);
-#else
-  MQTT_client.setKeepAlive(500);
-#endif
-
   //  MQTT_client.setServer(eepromConfig.MQTT_server, eepromConfig.MQTT_port);
 #if !Influxver
   MQTT_client.setServer("sensor.aireciudadano.com", 80);
-//  MQTT_client.setServer("194.242.56.226", 30183);
 #else
   MQTT_client.setServer("sensor.aireciudadano.com", 30183);
-//  MQTT_client.setServer("194.242.56.226", 30183);
 #endif
   MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
 
   MQTT_client.connect(aireciudadano_device_id.c_str());
 
 #if MobData
-  delay(1000);
+  delay(100);
 #endif
 
   if (!MQTT_client.connected())
@@ -2893,7 +2799,7 @@ void Init_MQTT()
     err_MQTT = true;
     Serial.println("Fail, MQTT_Reconnect");
 #if MobData
-    delay(5000);
+  delay(5000);
 #endif
     MQTT_Reconnect();
   }
@@ -2903,10 +2809,8 @@ void Init_MQTT()
     lastReconnectAttempt = 0;
     // Once connected resubscribe
     MQTT_client.subscribe(MQTT_receive_topic.c_str());
-    Serial.print(F("Init MQTT connected - Receive topic: "));
+    Serial.print(F("MQTT connected - Receive topic: "));
     Serial.println(MQTT_receive_topic);
-    FlagMQTTcon = true;
-    contmqtt = 0;
 #if !ESP8266
     digitalWrite(LEDPIN, HIGH);
     delay(1000);
@@ -2939,10 +2843,8 @@ void MQTT_Reconnect()
       lastReconnectAttempt = 0;
       // Once connected resubscribe
       MQTT_client.subscribe(MQTT_receive_topic.c_str());
-      Serial.print(F("Reconnect MQTT connected - Receive topic: "));
+      Serial.print(F("MQTT connected - Receive topic: "));
       Serial.println(MQTT_receive_topic);
-//      FlagMQTTcon = true;
-      contmqtt = 0;
 #if !ESP8266
       digitalWrite(LEDPIN, HIGH);
       delay(1000);
@@ -2965,33 +2867,29 @@ void MQTT_Reconnect()
       Serial.print(MQTT_client.state());
       Serial.println(F(" try again in 5 seconds"));
 #else
-      Serial.print("TinyGSM: Retry MQQT connect ");
-      Serial.println(apn);
-      MQTT_client.setServer("sensor.aireciudadano.com", 80);
-      MQTT_client.connect(aireciudadano_device_id.c_str());
-      cont = 0;
-      while (!MQTT_client.connected()) {
-        cont++;
-        Serial.print("TinyGSM: Retry MQQT ");
-        Serial.println(cont);
-        delay(5000);
-        if (cont > 5)
-        {
-          cont = 0;
-          FlagMQTTcon = true;
-          break;
-//          ESP.restart();    // CASO sin MQTT_client.loop();
-        }
-        MQTT_client.setServer("sensor.aireciudadano.com", 80);
-        MQTT_client.connect(aireciudadano_device_id.c_str());
-      }
-      if (MQTT_client.connected())
-        Serial.println("TinyGSM:  success to apn");
-      else
+  Serial.print("TinyGSM: Retry MQQT connect ");
+  Serial.println(apn);
+  MQTT_client.setServer("sensor.aireciudadano.com", 80);
+  MQTT_client.connect(aireciudadano_device_id.c_str());
+  cont = 0;
+  while (!MQTT_client.connected()) {
+    cont++;
+    Serial.print("TinyGSM: Retry MQQT ");
+    Serial.println(cont);
+    delay(5000);
+    if (cont > 7)
       {
-        Serial.println("TinyGSM:  no connection to apn");
-        ResetMobDataConn();
+      cont = 0;
+      FlagMQTTcon = true;
+      break;
       }
+  MQTT_client.setServer("sensor.aireciudadano.com", 80);
+  MQTT_client.connect(aireciudadano_device_id.c_str());
+  }
+  if (MQTT_client.connected())
+    Serial.println("TinyGSM:  success to apn");
+  else
+    Serial.println("TinyGSM:  no connection to apn");
 #endif
     }
   }
@@ -3053,21 +2951,21 @@ void Send_Message_Cloud_App_MQTT()
   ReadHyT();
 #endif
 
-  if (FlagMobData == true)
-  {
+if (FlagMobData == true)
+{
 #if MobData
-    RSSI = modem.getSignalQuality();
-    Serial.print(F("Signal Quality: "));
-    Serial.println(RSSI);
-#endif
-  }
-  else
-  {
-    RSSI = WiFi.RSSI();
-    Serial.print(F("Signal strength (RSSI): "));
-    Serial.print(RSSI);
-    Serial.println(F(" dBm"));
-  }
+  RSSI = modem.getSignalQuality();   
+  Serial.print(F("Signal Quality: "));
+  Serial.println(RSSI);
+#endif 
+}
+else
+{
+  RSSI = WiFi.RSSI();
+  Serial.print(F("Signal strength (RSSI): "));
+  Serial.print(RSSI);
+  Serial.println(F(" dBm"));
+}
 
   if (AmbInOutdoors)
     inout = 1;
@@ -3106,19 +3004,7 @@ void Send_Message_Cloud_App_MQTT()
     pm25intori = pm25int;   // RAW = Original
 
 #if !Influxver
-    // TEST PARA CONTAR RESET MOBDATA!!!!!!!!!!!!!!!!!
-    //sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, VOC: %d, NOx: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, voc, nox, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
-    if (ResetFlagMobDataTemp == true)
-    {
-      byte temp1 = 1;
-      sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, VOC: %d, NOx: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d, datavar2: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, voc, nox, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId, temp1);
-      ResetFlagMobDataTemp = false;
-    }
-    else
-    {
-      byte temp1 = 0;
-      sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, VOC: %d, NOx: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d, datavar2: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, voc, nox, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId, temp1);
-    }
+    sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, VOC: %d, NOx: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, voc, nox, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
 #else
     sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"VOC\": %d, \"NOx\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, voc, nox, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId); // for Telegraf
 #endif
@@ -3129,22 +3015,7 @@ void Send_Message_Cloud_App_MQTT()
 #if !Rosver
 #if !TwoPMS
 #if !Influxver
-
-    // TEST PARA CONTAR RESET MOBDATA!!!!!!!!!!!!!!!!!
-    //sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
-
-    if (ResetFlagMobDataTemp == true)
-    {
-      byte temp1 = 1;
-      sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d, datavar2: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId, temp1);
-      ResetFlagMobDataTemp = false;
-    }
-    else
-    {
-      byte temp1 = 0;
-      sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d, datavar2: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId, temp1);
-    }
-
+    sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
 #else
     sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId); // for Telegraf
 #endif
@@ -3170,7 +3041,8 @@ void Send_Message_Cloud_App_MQTT()
 #endif
 #endif
   }
-  Serial.println(MQTT_message);
+  Serial.print(MQTT_message);
+  Serial.println();
 
 #if ESP8285
   digitalWrite(LEDPIN, LOW); // turn the LED off by making the voltage LOW
@@ -3182,39 +3054,19 @@ void Send_Message_Cloud_App_MQTT()
     FlagDATAicon = true;
 
   // send message, the Print interface can be used to set the message contents
-  // Publicar un mensaje MQTT
 
-  int responsepublish = 0;
-  responsepublish = MQTT_client.publish(MQTT_send_topic.c_str(), MQTT_message);
-  Serial.print("response: ");
-  Serial.print(responsepublish);
+  MQTT_client.publish(MQTT_send_topic.c_str(), MQTT_message);
 
-  // Revisar el código de retorno
-  if (responsepublish == 0) {
-    Serial.println(", ERROR Mensaje no publicado");
-    delay(5000);
-#if MobData
-    ResetMobDataConn();
-#endif
-    responsepublish = MQTT_client.publish(MQTT_send_topic.c_str(), MQTT_message);
-    if (responsepublish == 0)
-      Serial.println("Reintento fallido, mensaje no publicado");
-    else
-      Serial.println("Reintento OK, mensaje publicado");
-  }
-  else {
-    Serial.println(", OK Mensaje publicado");
 #if !ESP8266
-    digitalWrite(LEDPIN, HIGH);
+  digitalWrite(LEDPIN, HIGH);
 #else
-    digitalWrite(LEDPIN, LOW);
+  digitalWrite(LEDPIN, LOW);
 #endif
-    FlagLED = true;
+  FlagLED = true;
 #if Influxver
-    Influxseconds = 60;
-    Influxsecondssam = 60;
+  Influxseconds = 60;
+  Influxsecondssam = 60;
 #endif
-  }
 }
 
 #if SoundAM
@@ -3264,30 +3116,19 @@ void Send_Message_Cloud_App_MQTTsam()
     FlagDATAicon = true;
 
   // send message, the Print interface can be used to set the message contents
-  // Publicar un mensaje MQTT
 
-  int responsepublish = 0;
-  responsepublish = MQTT_client.publish(MQTT_send_topicsam.c_str(), MQTT_message);
-  Serial.print("response: ");
-  Serial.println(responsepublish);
+  MQTT_client.publish(MQTT_send_topicsam.c_str(), MQTT_message);
 
-  // Revisar el código de retorno
-  if (responsepublish == 0) {
-    Serial.println("ERROR Mensaje no publicado");
-  }
-  else {
-    Serial.println("OK Mensaje publicado");
 #if !ESP8266
-    digitalWrite(LEDPIN, HIGH);
+  digitalWrite(LEDPIN, HIGH);
 #else
-    digitalWrite(LEDPIN, LOW);
+  digitalWrite(LEDPIN, LOW);
 #endif
-    FlagLED = true;
+  FlagLED = true;
 #if Influxver
-    Influxseconds = 60;
-    Influxsecondssam = 60;
+  Influxseconds = 60;
+  Influxsecondssam = 60;
 #endif
-  }
 }
 #endif
 
@@ -3295,31 +3136,10 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
 { // callback function to receive configuration messages from the cloud application by MQTT
   boolean write_eeprom = false; // to track if writing the eeprom is required
   uint16_t tempcustom = 0;
-  uint64_t CustomValtotal2 = 0;
+  uint16_t CustomValtotal2 = 0;
   memcpy(received_payload, payload, length);
   Serial.print(F("Message arrived: "));
   Serial.println(received_payload);
-
-  /* POSIBLES ESPACIOS DE ENVIO DE CONFIG
-
-    {"warning": "", "caution": "4.7835", "alarm": "ON", "name": "", "update": "OFF", "factory_reset": "OFF", "FRC": "OFF", "FRC_value": "", "MQTT_server": "", "MQTT_port": "", "ABC": "OFF", "reboot": "OFF", "temperature_offset": "-74.7654", "altitude_compensation": ""}
-
-    "warning": ""            // Publication Time
-    "caution": "4.7835"     // Latitude
-    "alarm": "ON"
-    "name": ""              // Update name
-    "update": "OFF"         // Firmware Update
-    "factory_reset": "OFF"  // Factory Reset
-    "FRC": "OFF"
-    "FRC_value": ""         // CustomSenHYT
-    "MQTT_server": ""
-    "MQTT_port": ""        // CustomOutIn
-    "ABC": "OFF"
-    "reboot": "OFF"
-    "temperature_offset": "-74.7654"   // Longitude
-    "altitude_compensation": ""        // CustomSenPM
-
-  */
 
   // Deserialize the JSON document
   DeserializationError error = deserializeJson(jsonBuffer, received_payload);
@@ -3380,7 +3200,7 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
 
   // CustomSenPM
 
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer)
 
   tempcustom = ((uint16_t)jsonBuffer["altitude_compensation"]);
   if (tempcustom != 0)
@@ -3394,9 +3214,9 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
 #endif
     CustomValtotal2 = ((int)(eepromConfig.ConfigValues[7]) - 48);
 
-  // CustomSenHYT OR MaxWifiTX
+  // CustomSenHYT
 
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer)
 
   tempcustom = ((uint16_t)jsonBuffer["FRC_value"]);
 
@@ -3408,25 +3228,8 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
     CustomValtotal2 = CustomValtotal2 + (tempcustom * 10);
   }
   else
-    CustomValtotal2 = CustomValtotal2 + ((int)eepromConfig.ConfigValues[6] - 48) * 10;
-#else
-
-  tempcustom = ((uint16_t)jsonBuffer["FRC_value"]);
-
-  if (tempcustom != 0)
-  {
-    Serial.print("MaxWifiTX activated: ");
-    Serial.println(tempcustom);
-    CustomValtotal2 = CustomValtotal2 + (tempcustom * 10);
-  }
-  else
-  {
-    Serial.print("Normal Wifi TX: ");
-    Serial.println(tempcustom);
-    //CustomValtotal2 = CustomValtotal2 + ((int)eepromConfig.ConfigValues[6] - 48) * 10;
-  }
 #endif
-  //  CustomValtotal2 = CustomValtotal2 + ((int)eepromConfig.ConfigValues[6] - 48) * 10;
+    CustomValtotal2 = CustomValtotal2 + ((int)eepromConfig.ConfigValues[6] - 48) * 10;
 
   // CustomOutIn
 
@@ -3442,17 +3245,8 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
   else
     CustomValtotal2 = CustomValtotal2 + ((int)eepromConfig.ConfigValues[3] - 48) * 10000;
 
-  // CustomMobileData
-
-#if MobData
-  Serial.println(F("Mobile Data mode"));
-  CustomValtotal2 = CustomValtotal2 + 100000;
-#else
-  Serial.println(F("NO Mobile Data mode"));
-#endif
-
   CustomValTotalString[8] = {0};
-  sprintf(CustomValTotalString, "%8lld", CustomValtotal2);
+  sprintf(CustomValTotalString, "%8d", CustomValtotal2);
   if (CustomValTotalString[0] == ' ')
     CustomValTotalString[0] = '0';
   if (CustomValTotalString[1] == ' ')
@@ -3475,7 +3269,7 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
   Serial.print(F("CustomValTotalString: "));
   Serial.println(CustomValTotalString);
 
-#if !(Rosver || MinVer || MinVerSD)
+#if !(Rosver || MinVer)
   if (CustomValtotal2 == 0)
   {
     Serial.println(F("No configuration sensor values ​​chosen, no changes will be stored"));
@@ -3489,7 +3283,7 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
     Serial.println(F("CustomVal write_eeprom = true"));
     Serial.print(F("Configuration Values: "));
     Serial.println(eepromConfig.ConfigValues);
-#if !(Rosver || MinVer || MinVerSD)
+#if !(Rosver || MinVer)
   }
 #endif
   Aireciudadano_Characteristics();
@@ -3698,12 +3492,6 @@ void Firmware_Update()
 #elif MinVer
   Serial.println("Firmware ESP8266WISP_MinVer");
   t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISPMV.bin");
-#elif MinVerSD
-  Serial.println("Firmware ESP8266WISP_MinVerSD");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISPMVSD.bin");
-#elif MobData
-  Serial.println("Firmware ESP8266WISP_MobData");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISPMobData.bin");
 #elif SoundMeter
 #if !Influxver
   Serial.println("Firmware ESP8266WISP_SoundMeter");
@@ -3761,116 +3549,80 @@ void update_error(int err)
 }
 
 #if MobData
-
 void Connect_MobData()
 {
   Serial.println("");
-  Serial.println("Connect_MobData");
   Serial.println("TinyGSM: Wait...");
 revini:
+  // Restart takes quite some time
+  Serial.println("TinyGSM: Initializing modem...");
+  modem.restart();
+  // modem.init();
 
-  if (FlagPoweroff == true)
-  { // Power off
-    SerialMon.println("MONTiny: Reinit Power off - on");
-#if A7670
-    SerialAT.println("AT+CPOF");
-#elif SIM7070
-    SerialAT.println("AT+CPOWD");
-#elif SIM800
-    SerialAT.println("AT+CPOWD");
-#endif
-  }
-  else
-  { // Restart
-    SerialMon.println("MONTiny: Initializing modem...");
-    modem.restart();
-  }
-  delay(15000);
+  delay(7000);
 
   String modemInfo = modem.getModemInfo();
-  SerialMon.print("MONTiny: Modem Info: ");
-  SerialMon.println(modemInfo);
+  Serial.print("TinyGSM: Modem Info: ");
+  Serial.println(modemInfo);
 
-revini2:
-  SerialMon.print("MONTiny: Waiting for network...");
-  if (!modem.waitForNetwork()) {
-    SerialMon.println("MONTiny: fail");
+revnetwork:
+  Serial.print("TinyGSM: Waiting for network...");
+  cont = 0;
+  while (!modem.waitForNetwork()) {
+    cont++;
+    Serial.print("TinyGSM: fail network ");
+    Serial.println(cont);
     delay(10000);
-    if (modem.waitForNetwork()) {
-      goto revexit;
-    }
-    Contacon ++;
-    if (Contacon < 60)
-      goto revini2;
-    else
+    if (cont > 7)
+      {
+      cont = 0;
       goto revini;
+      }
   }
-revexit:
-  Contacon = 0;
-  SerialMon.println("MONTiny: success waiting for network");
+  Serial.println("TinyGSM: success waiting for network");
 
   if (modem.isNetworkConnected()) {
-    SerialMon.println("MONTiny: Network connected");
+    Serial.println("TinyGSM: Network connected");
   }
   else
   {
     Serial.println("TinyGSM: NO Network connected");
-    delay(10);
-    goto revini;
+    goto revnetwork;
   }
-
 
   // GPRS connection parameters are usually set after network registration
-  SerialMon.print("MONTiny: Connecting to ");
-  SerialMon.print(apn);
-  //  if (!modem.gprsConnect(apn, user1, pw1)) {
-  if (!modem.gprsConnect(apn)) {
-    SerialMon.println("MONTiny: fail apn");
-    delay(10000);
-    //    return;
+
+  Serial.print("TinyGSM: Connecting to ");
+  Serial.print(apn);
+  cont = 0;
+    while (!modem.gprsConnect(apn)) {
+    cont++;
+    Serial.print("TinyGSM: fail apn ");
+    Serial.println(cont);
+    delay(5000);
+    if (cont > 7)
+      {
+      cont = 0;
+      goto revnetwork;
+      }
+  }
+  Serial.println("TinyGSM:  success to apn");
+
+  if (modem.isGprsConnected())
+  {
+    Serial.println("TinyGSM: GPRS connected");
+    Serial.println("TinyGSM: IP ADDRESS : " + modem.getLocalIP());
+  }
+  else
+  {
+    Serial.println("TinyGSM: GPRS NOT connected");
     goto revini;
-  }
-  SerialMon.println("MONTiny:  success to apn");
-
-  if (modem.isGprsConnected()) {
-    SerialMon.println("MONTiny: GPRS connected");
-  }
-
-  // CASI SE REPITE 2 VECES !!!!!!!!!!!!!!!!
-  // Make sure we're still registered on the network.
-  if (!modem.isNetworkConnected()) {
-    SerialMon.println("MONTiny: Network disconnected");
-    if (!modem.waitForNetwork(180000L, true)) {
-      SerialMon.println("MONTiny: fail1");
-      delay(10000);
-      //      return;
-      goto revini;
-    }
-    if (modem.isNetworkConnected()) {
-      SerialMon.println("MONTiny: Network re-connected");
-    }
-    if (!modem.isGprsConnected()) {
-      SerialMon.println("MONTiny: GPRS disconnected!");
-      SerialMon.print(F("Connecting to "));
-      SerialMon.print(apn);
-      if (!modem.gprsConnect(apn)) {
-        SerialMon.println("MONTiny: fail2");
-        delay(10000);
-        //        return;
-        goto revini;
-      }
-      if (modem.isGprsConnected()) {
-        SerialMon.println("MONTiny: GPRS reconnected");
-      }
-      Serial.println("MonTiny: NEW IP ADDRESS : " + modem.getLocalIP());
-    }
   }
 }
 
 void MobDataConnected()
 {
-  Serial.println("MobDataConnected");
-  // Make sure we're still registered on the network
+    // Make sure we're still registered on the network
   if (!modem.isNetworkConnected()) {
     Serial.println("TinyGSM: Network disconnected");
     if (!modem.waitForNetwork(180000L, true)) {
@@ -3894,131 +3646,66 @@ void MobDataConnected()
         Serial.println("TinyGSM: GPRS reconnected");
     }
   }
-  else
-    Serial.println("TinyGSM: Network connected ok");
+  
+  Serial.println("TinyGSM: NEW IP ADDRESS : " + modem.getLocalIP());
+  Serial.println("Signal Quality: " + modem.getSignalQuality());
 
-  Serial.println("TinyGSM: IP ADDRESS : " + modem.getLocalIP());
-  Serial.println("Signal Quality: " + modem.getSignalQuality());//  delay(5);   // TEST
+  MQTT_client.connect(aireciudadano_device_id.c_str());
 
   if (!MQTT_client.connected()) {
-    Serial.println("TinyGSM: MQTT not connected");
-    SerialMon.print("Disconnecting from: ");
-    SerialMon.println("sensor.aireciudadano.com");
-    MQTT_client.disconnect(); // Disconnect from MQTT  //added 08/04/2023
-    delay(500);
-    SerialMon.print("Network State is: ");
-    SerialMon.println(modem.isGprsConnected()); //added 08/04/2023
+    Serial.println("=== MQTT NOT CONNECTED ===");
     // Reconnect every 10 seconds
-    uint32_t t = millis();
+   uint32_t t = millis();
     if (t - lastReconnectAttempt > 10000L) {
       lastReconnectAttempt = t;
-      if (!modem.isGprsConnected()) {
-        // Reconnect to GPRS network if not connected
-        SerialMon.println("NEW ROUTINE: GPRS not connected, reconnecting...");
-        if (!modem.gprsConnect(apn)) {
-          SerialMon.println("GPRS reconnect failed");
-          delay(10000);
-          return;
-        }
-      }
-      if (MqttConnectok()) {
+      if (mqttConnectok()) {
         lastReconnectAttempt = 0;
       }
     }
     delay(100);
-    return;
+//    return;
   }
-  else
-    Serial.println("TinyGSM: MQTT connected");
+
+//  while (!MQTT_client.connected())
+//  {
+//    Serial.println("=== MQTT NOT CONNECTED ===");
+//    delay(5000);
+//    MQTT_client.setServer("sensor.aireciudadano.com", 80);
+//    MQTT_client.connect(aireciudadano_device_id.c_str());
+//  }
+
+    // Once connected resubscribe
+  MQTT_client.subscribe(MQTT_receive_topic.c_str());
+  Serial.print("MONTiny: MQTT connected - Receive topic: ");
+  Serial.println(MQTT_receive_topic);
 }
 
-boolean MqttConnectok()
+boolean mqttConnectok() 
 {
-  Serial.println("MqttConnectok");
-  Serial.println("Re Connecting to: sensor.aireciudadano.com");
+  Serial.println("Connecting to: sensor.aireciudadano.com");
 
-  ResetMobDataConn();
-
+  // Connect to MQTT Broker
   boolean status = MQTT_client.connect(aireciudadano_device_id.c_str());
 
+  // Or, if you want to authenticate MQTT:
+
   if (status == false) {
-    Serial.println("Fail MqttConnectok");
+    Serial.println(" fail");
     return false;
   }
-  Serial.println("Success MqttConnectok");
+  Serial.println(" success");
   MQTT_client.subscribe(MQTT_receive_topic.c_str());
   return MQTT_client.connected();
 }
-
-void ResetMobDataConn()
-{
-  Serial.println("ResetMobDataCon");
-  if (ResetFlagMobData == false)
-  {
-    if (contmqtt < 4)
-    {
-      Serial.println("Reset Mobile Data Connection, first Connect_MobData");
-      Connect_MobData();
-      delay(100);
-      Serial.println("second Init MQTT routine 1");
-      Init_MQTT();
-      delay(100);
-      contmqtt ++;
-      FlagPoweroff = false;
-    }
-    else
-    {
-      Serial.println("Reset Mobile Data Connection, first Power off and Connect_MobData");
-      FlagPoweroff = true;
-      ResetFlagMobData = true;
-      Connect_MobData();
-      delay(100);
-      Serial.println("second Init MQTT routine 2");
-      Init_MQTT();
-      delay(100);
-      contmqtt = 0;
-    }
-  }
-  else
-  {
-    if (contmqtt < 4)
-    {
-      Serial.println("Reset Mobile Data Connection, first Power off and Connect_MobData");
-      FlagPoweroff = true;
-      ResetFlagMobData = true;
-      Connect_MobData();
-      delay(100);
-      Serial.println("second Init MQTT routine 3");
-      Init_MQTT();
-      delay(100);
-      contmqtt ++;
-    }
-    else
-    {
-#if A7670
-      Serial.println("Reset module A7670");
-#elif SIM7070
-      Serial.println("Reset module SIM7070");
-#elif SIM800
-      Serial.println("Reset module SIM800");
 #endif
-      FlagPoweroff = false;
-      ResetFlagMobData = false;
-      contmqtt = 0;
-      ESP.restart();
-    }
-  }
-}
 #endif
 
-#endif
-
-#if (Rosver || MinVer || MobData || MinVerSD)
+#if (Rosver || MinVer || MobData)
 void Test_Sensor()
 {
   byte ErrorFlag = 0;
 
-#if (MinVer || MinVerSD)
+#if MinVer
   Serial.println(F("Test Sensirion SPS30 sensor"));
 #if ESP8266
   Wire.begin();
@@ -4074,15 +3761,9 @@ void Test_Sensor()
     if (data.HUMI != 0)
     {
       if (!isnan(humidity))
-      {
         FlagpmsHyT = true;
-        Serial.println("FlagpmsHyT = true");
-      }
       else
-      {
         FlagpmsHyT = false;
-        Serial.println("FlagpmsHyT = false");
-      }
     }
   }
   else
@@ -4155,7 +3836,7 @@ void Test_Sensor()
 
   if (ErrorFlag > 0)
   {
-    Serial.println(F("OK SHT3X, SHT4x, SEN54, SEN55 o PMSx003T"));
+    Serial.println(F("OK SHT31/SHT4x, SEN54 o SEN55 y PMSx003T"));
     delay(200);
     digitalWrite(LEDPIN, LOW); // turn the LED on by making the voltage LOW
     delay(200);                // wait for a 200 ms
@@ -4179,7 +3860,7 @@ void Setup_Sensor()
 
   // Test PM2.5 SPS30
 
-#if !(MinVer || MinVerSD)
+#if !MinVer
 #if Wifi
 
   if (SPS30sen == true)
@@ -4217,7 +3898,7 @@ void Setup_Sensor()
       else
         Errorloop((char *)"Could NOT start measurement", 0);
     }
-#if !(MinVer || MinVerSD)
+#if !MinVer
 #if Wifi
   }
 
@@ -4229,7 +3910,7 @@ void Setup_Sensor()
   {
 #endif
 #endif
-#if (Bluetooth || SDyRTC || MinVer || MinVerSD)
+#if (Bluetooth || SDyRTC || MinVer)
     if (SPS30sen == false)
     {
 #endif
@@ -4274,7 +3955,7 @@ void Setup_Sensor()
         else
           Serial.println(F("SEN5X measurement OK"));
       }
-#if (Bluetooth || SDyRTC || MinVer || MinVerSD)
+#if (Bluetooth || SDyRTC || MinVer)
     }
 #else
     }
@@ -4364,7 +4045,7 @@ void Setup_Sensor()
       Serial.println(F("Could not find Plantower2 sensor!"));
 #endif
 
-#if !(Rosver || MinVer || MinVerSD)
+#if !(Rosver || MinVer)
 #if Wifi
   }
 
@@ -4420,7 +4101,7 @@ void Setup_Sensor()
       }
     }
 
-#if !(Rosver || MinVer || MobData || MinVerSD)
+#if !(Rosver || MinVer || MobData)
 #if Wifi
   }
 
@@ -4512,9 +4193,7 @@ void Read_Sensor()
       Serial.print(F(" ug/m3   "));
       PM25_value_ori = PM25_value;
       // PM25_value = ((1280 * PM25_value_ori) / 1000) + 1.78; // Ajuste propuesto por paper USA, falta calibracion propia
-      PM25_value = ((1207 * PM25_value_ori) / 1000) - 1.01; // Ajuste propuesto por paper USA, falta calibracion propia
-      if (PM25_value < 0)
-        PM25_value = 0;
+      PM25_value = ((1280 * PM25_value_ori) / 1000) + 1.78; // Ajuste propuesto por paper USA, falta calibracion propia
       Serial.print(F("Adjust: "));
       Serial.print(PM25_value);
       Serial.println(F(" ug/m3"));
@@ -5094,7 +4773,7 @@ void printModuleVersions()
     Serial.print(F("Error trying to execute getProductName(): "));
     errorToString(error, errorMessage, 256);
     Serial.println(errorMessage);
-#if (MinVer || MinVerSD)
+#if MinVer
     SEN5Xsen = false;  // Sensor Sensirion SEN5X
 #endif
   }
@@ -5107,7 +4786,7 @@ void printModuleVersions()
       FlagSENHyT = true;
     if (String(((char *)productName)) == "SEN55")
       FlagSENHyT = true;
-#if (MinVer || MinVerSD)
+#if MinVer
     SEN5Xsen = true;  // Sensor Sensirion SEN5X
 #endif
   }
@@ -5260,7 +4939,7 @@ void ReadHyT()
     }
   }
 
-#if !(Rosver || MinVer || MobData || MinVerSD)
+#if !(Rosver || MinVer || MobData)
   // AM2320//
   else if (AM2320sen == true)
   {
@@ -5320,13 +4999,6 @@ void ReadHyT()
       temp = round(temperature);
     }
   }
-  else if (FlagSENHyT == true)
-  {
-    Serial.print(F("SEN5x Humi % = "));
-    Serial.print(humi);
-    Serial.print(F("   Temp *C = "));
-    Serial.println(temp);
-  }
 }
 #endif
 
@@ -5346,7 +5018,7 @@ void Print_Config()
   Serial.print(F("Bluetooth Time: "));
   Serial.println(eepromConfig.BluetoothTime);
 #endif
-#if (SDyRTC || Rosver || MinVerSD)
+#if (SDyRTC || Rosver)
 #if !WPA2
   if (SDflag == true)
   {
@@ -5840,7 +5512,7 @@ void Get_AireCiudadano_DeviceId()
   chipIdHEX = String(ESP.getChipId(), HEX);
   strncpy(aireciudadano_device_id_endframe, chipIdHEX.c_str(), sizeof(aireciudadano_device_id_endframe));
 #if Wifi
-#if !(Rosver || MinVer || MobData || MinVerSD)
+#if !(Rosver || MinVer || MobData)
   Aireciudadano_Characteristics();
 #else
   if (eepromConfig.ConfigValues[4] == '0')
@@ -5854,14 +5526,16 @@ void Get_AireCiudadano_DeviceId()
     Serial.println(F("Mode: SD & RTC"));
   }
 
-#if MobData
-  FlagMobData = true;
-  Serial.println(F("Mobile Data mode"));
-#else
-  FlagMobData = false;
-  Serial.println(F("NO Mobile Data mode"));
-#endif
-
+  if (eepromConfig.ConfigValues[2] == '0')
+  {
+    FlagMobData = false;
+    Serial.println(F("NO Mobile Data mode"));
+  }
+  else
+  {
+    FlagMobData = true;
+    Serial.println(F("Mobile Data mode"));
+  }
 #endif
 #endif
   Serial.print(F("ESP8266 Chip ID = "));
@@ -5882,7 +5556,7 @@ void Get_AireCiudadano_DeviceId()
 void Aireciudadano_Characteristics()
 {
 #if !Bluetooth
-#if !(Rosver || SoundMeter || MinVer || MobData || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer || MobData)
   Serial.print(F("eepromConfig.ConfigValues: "));
   Serial.println(eepromConfig.ConfigValues);
 
@@ -6021,19 +5695,6 @@ void Aireciudadano_Characteristics()
     Serial.println(F("SD & RTC mode"));
   }
 
-  Serial.print(F("eepromConfig.ConfigValues[6]: "));
-  Serial.println(eepromConfig.ConfigValues[6]);
-  if (eepromConfig.ConfigValues[6] == '0')
-  {
-    MaxWifiTX = false;
-    Serial.println(F("Normal Wifi power TX"));
-  }
-
-  if (eepromConfig.ConfigValues[6] == '1')
-  {
-    MaxWifiTX = true;
-    Serial.println(F("MaxWifiTX activated"));
-  }
 #if !WPA2
   Serial.println(F("No WPA2"));
 #else
@@ -6058,20 +5719,6 @@ void Aireciudadano_Characteristics()
     Serial.println(F("Indoors"));
   }
 
-  Serial.print(F("eepromConfig.ConfigValues[6]: "));
-  Serial.println(eepromConfig.ConfigValues[6]);
-  if (eepromConfig.ConfigValues[6] == '0')
-  {
-    MaxWifiTX = false;
-    Serial.println(F("Normal Wifi power TX"));
-  }
-
-  if (eepromConfig.ConfigValues[6] == '1')
-  {
-    MaxWifiTX = true;
-    Serial.println(F("MaxWifiTX activated"));
-  }
-
   if (SPS30sen == true)
     Serial.println(F("SPS30 sensor"));
   else
@@ -6091,71 +5738,6 @@ void Aireciudadano_Characteristics()
     Serial.println(F("SHT31/SHT4x sensor"));
   else
     Serial.println("No SHT31/SHT4x sensor");
-
-#elif MinVerSD
-
-  Serial.print(F("eepromConfig.ConfigValues: "));
-  Serial.println(eepromConfig.ConfigValues);
-
-  Serial.print(F("eepromConfig.ConfigValues[3]: "));
-  Serial.println(eepromConfig.ConfigValues[3]);
-  if (eepromConfig.ConfigValues[3] == '0')
-  {
-    AmbInOutdoors = false;
-    Serial.println(F("Outdoors"));
-  }
-  else
-  {
-    AmbInOutdoors = true;
-    Serial.println(F("Indoors"));
-  }
-
-  Serial.print(F("eepromConfig.ConfigValues[6]: "));
-  Serial.println(eepromConfig.ConfigValues[6]);
-  if (eepromConfig.ConfigValues[6] == '0')
-  {
-    MaxWifiTX = false;
-    Serial.println(F("Normal Wifi power TX"));
-  }
-
-  if (eepromConfig.ConfigValues[6] == '1')
-  {
-    MaxWifiTX = true;
-    Serial.println(F("MaxWifiTX activated"));
-  }
-
-  if (SPS30sen == true)
-    Serial.println(F("SPS30 sensor"));
-  else
-    Serial.println(F("No SPS30 sensor"));
-
-  if (SEN5Xsen == true)
-    Serial.println(F("SEN5X sensor"));
-  else
-    Serial.println(F("No SEN5X sensor"));
-
-  if (PMSsen == true)
-    Serial.println(F("PMS sensor"));
-  else
-    Serial.println(F("No PMS sensor"));
-
-  if (SHTsen == true)
-    Serial.println(F("SHT31/SHT4x sensor"));
-  else
-    Serial.println("No SHT31/SHT4x sensor");
-
-  Serial.print(F("eepromConfig.ConfigValues[4]: "));
-  Serial.println(eepromConfig.ConfigValues[4]);
-  if (eepromConfig.ConfigValues[4] == '0')
-  {
-    SDflag = false;
-    Serial.println(F("No SD & RTC"));
-  }
-  else
-  {
-    SDflag = true;
-    Serial.println(F("SD & RTC mode"));
-  }
 
 #elif MobData
 
@@ -6195,13 +5777,18 @@ void Aireciudadano_Characteristics()
   else
     Serial.println("No SHT31/SHT4x sensor");
 
-#if MobData
-  FlagMobData = true;
-  Serial.println(F("Mobile Data mode"));
-#else
-  FlagMobData = false;
-  Serial.println(F("NO Mobile Data mode"));
-#endif
+  Serial.print(F("eepromConfig.ConfigValues[2]: "));
+  Serial.println(eepromConfig.ConfigValues[2]);
+  if (eepromConfig.ConfigValues[2] == '0')
+  {
+    FlagMobData = false;
+    Serial.println(F("No Mobile Data mode"));
+  }
+  else
+  {
+    FlagMobData = true;
+    Serial.println(F("Mobile Data mode"));
+  }
 
 #else // SoundMeter
 
@@ -6218,20 +5805,6 @@ void Aireciudadano_Characteristics()
   {
     AmbInOutdoors = true;
     Serial.println(F("Indoors"));
-  }
-
-  Serial.print(F("eepromConfig.ConfigValues[6]: "));
-  Serial.println(eepromConfig.ConfigValues[6]);
-  if (eepromConfig.ConfigValues[6] == '0')
-  {
-    MaxWifiTX = false;
-    Serial.println(F("Normal Wifi power TX"));
-  }
-
-  if (eepromConfig.ConfigValues[6] == '1')
-  {
-    MaxWifiTX = true;
-    Serial.println(F("MaxWifiTX activated"));
   }
 
   Serial.println(F("Sound Meter MEMS sensor"));
@@ -6274,8 +5847,8 @@ void Aireciudadano_Characteristics()
     IDn = IDn + 16;
   if (AM2320sen)
     IDn = IDn + 32;
-  //  if (SDflag)
-  //    IDn = IDn + 64;
+//  if (SDflag)
+//    IDn = IDn + 64;
 #if SaveSDyRTC
   IDn = IDn + 64;
 #endif
@@ -6286,8 +5859,8 @@ void Aireciudadano_Characteristics()
     IDn = IDn + 256;
   if (OLED66 || OLED96)
     IDn = IDn + 512;
-  //  if (OLED96)
-  //    IDn = IDn + 1024;
+//  if (OLED96)
+//    IDn = IDn + 1024;
   if (FlagMobData)
     IDn = IDn + 1024;
 #if TwoPMS
@@ -7394,7 +6967,7 @@ void Write_Bluetooth()
   provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
   provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
   provider.writeValueToCurrentSample(vocint, SignalType::VOC_INDEX);
-  provider.writeValueToCurrentSample(noxint, SignalType::NOX_INDEX);
+  //  provider.writeValueToCurrentSample(noxint, SignalType::NOX_INDEX);
   provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
   provider.commitSample(Bluetooth_loop_time);
   Serial.print("Bluetooth frame PM2.5(ug/m3): ");
@@ -7408,33 +6981,21 @@ void Write_Bluetooth()
   Serial.print(", humidity(%): ");
   Serial.println(humi);
 #else
-  if (SHT31sen == true || SHT4xsen == true || AM2320sen == true || data.HUMI != 0 || FlagSENHyT == true)
-  {
-    provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
-    provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
-    provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
-    provider.commitSample(Bluetooth_loop_time);
-    Serial.print("Bluetooth frame PM2.5(ug/m3): ");
-    Serial.print(pm25int);
-    Serial.print(", temp(°C): ");
-    Serial.print(temp);
-    Serial.print(", humidity(%): ");
-    Serial.println(humi);
-  }
-  else
-  {
-    provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
-    provider.writeValueToCurrentSample(0, SignalType::TEMPERATURE_DEGREES_CELSIUS);
-    provider.writeValueToCurrentSample(0, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
-    provider.commitSample(Bluetooth_loop_time);
-    Serial.print("Bluetooth frame PM2.5(ug/m3): ");
-    Serial.println(pm25int);
-  }
+  provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
+  provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
+  provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
+  provider.commitSample(Bluetooth_loop_time);
+  Serial.print("Bluetooth frame PM2.5(ug/m3):");
+  Serial.print(pm25int);
+  Serial.print(", temp(°C):");
+  Serial.print(temp);
+  Serial.print(", humidity(%):");
+  Serial.println(humi);
 #endif
 }
 #endif
 
-#if (SDyRTC || SaveSDyRTC || Rosver || MinVerSD)
+#if (SDyRTC || SaveSDyRTC || Rosver)
 #if !WPA2
 void Write_SD()
 { // Write date - time and measurements to SD card
@@ -7449,7 +7010,7 @@ void Write_SD()
   dataString = now.toString(buf1);
   dataString += "_";
   dataString += pm25int;
-  if (SHT31sen == true || SHT4xsen == true || AM2320sen == true || data.HUMI != 0 || FlagSENHyT == true)
+  if (SHT31sen == true || AM2320sen == true)
   {
     dataString += "_";
     dataString += humi;

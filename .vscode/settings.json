@@ -12,8 +12,18 @@
         "functional": "cpp",
         "tuple": "cpp",
         "type_traits": "cpp",
-        "utility": "cpp"
+        "utility": "cpp",
+        "deque": "cpp",
+        "list": "cpp",
+        "unordered_map": "cpp",
+        "vector": "cpp",
+        "string_view": "cpp",
+        "initializer_list": "cpp",
+        "ranges": "cpp",
+        "*.tpp": "cpp",
+        "cstddef": "cpp"
     },
     "idf.portWin": "COM56",
-    "workbench.colorTheme": "Visual Studio 2017 Light - C++"
+    "workbench.colorTheme": "Visual Studio 2017 Light - C++",
+    "C_Cpp.errorSquiggles": "disabled"
 }
