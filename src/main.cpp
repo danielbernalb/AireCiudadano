@@ -516,7 +516,11 @@ PMS::DATA data;
 #define PMS_TX 14 // PMS TX pin
 #define PMS_RX 16 // PMS RX pin
 #else
+#if !PurpleVer
 #define PMS_TX1 14 // PMS TX pin      // D5
+#else
+#define PMS_TX1 13 // PMS TX pin      
+#endif
 #define PMS_RX1 16 // PMS RX pin
 #define PMS_TX2 12 // PMS TX pin      // D6
 #define PMS_RX2 2  // PMS RX pin
@@ -569,7 +573,7 @@ PMS::DATA data;
 #endif
 #endif
 #else
-#define ESP8266_RX 14 // ESP_MEMS TX pin
+#define ESP8266_RX 14 // ESP_MEMS TX pin, D5
 SoftwareSerial SerialESP(ESP8266_RX, 16);
 #endif
 #endif
@@ -837,7 +841,7 @@ LTR390 ltr;
 #define SerialMon Serial
 
 // SoftwareSerial pmsSerial2(PMS_TX2, PMS_RX2);
-SoftwareSerial SerialAT(13, 12);  // D7 RX, D6 TX     // Si se usan 2 PMSx003 habria conflicto con el pin 12
+SoftwareSerial SerialAT(13, 12);  // D7 RX, D6 TX en la board, conectar al SIM     // Si se usan 2 PMSx003 habria conflicto con el pin 12
 
 // Use Hardware Serial on Mega, Leonardo, Micro
 //#define SerialAT Serial2
@@ -2268,7 +2272,6 @@ void Check_WiFi_Server()                    // Server access by http when you pu
             client.println("<br>");
             client.print("MQTT Server: ");
             client.print("sensor.aireciudadano.com");
-//            client.print("194.242.56.226");
             client.println("<br>");
             client.print("MQTT Port: ");
 #if !Influxver
@@ -2875,10 +2878,8 @@ void Init_MQTT()
   //  MQTT_client.setServer(eepromConfig.MQTT_server, eepromConfig.MQTT_port);
 #if !Influxver
   MQTT_client.setServer("sensor.aireciudadano.com", 80);
-//  MQTT_client.setServer("194.242.56.226", 30183);
 #else
   MQTT_client.setServer("sensor.aireciudadano.com", 30183);
-//  MQTT_client.setServer("194.242.56.226", 30183);
 #endif
   MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
 
@@ -4318,6 +4319,12 @@ void Setup_Sensor()
 #else
     pmsSerial1.begin(9600); // Software serial begin for PMS1 sensor
     pmsSerial2.begin(9600); // Software serial begin for PMS2 sensor
+
+#if PurpleVer
+    pms1.activeMode();
+    pms2.activeMode();
+#endif
+
 #endif
 #endif
 #endif
