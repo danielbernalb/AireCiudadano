@@ -50,9 +50,9 @@
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
 #define TwoPMS false     // Set to true if you want 2 PMS7003 sensors
-#define SoundMeter false // set to true for Sound Meter
-#define SoundAM false    // Set to true to Sound meter airplane mode
-#define Influxver false  // Set to true for InfluxDB version
+#define SoundMeter true  // set to true for Sound Meter
+#define SoundAM true     // Set to true to Sound meter airplane mode
+#define Influxver true   // Set to true for InfluxDB version
 
 #define LedNeo false     // Set to true for Led Neo multicolor
 #define LTR390UV false
@@ -60,11 +60,11 @@
 
 // Seleccion de operador de telefonia movil
 #define TigoKalleyExito false
-#define MovistarVirgin false
+#define MovistarVirgin true
 #define Claro false
 #define Wom false
 
-#define A7670 false
+#define A7670 true
 #define SIM7070 false
 #define SIM800 false
 
@@ -129,6 +129,12 @@
 #define MinVerSD true     // Version minima con SD
 #else
 #define MinVerSD false
+#endif
+
+#ifdef MobDataSPver
+#define MobDataSP true
+#else
+#define MobDataSP false
 #endif
 
 // Fin definiciones opcionales Wifi
@@ -412,6 +418,7 @@ int vref = 1100;
 
 byte failpm = 0;
 
+#if !MobDataSP
 #if !Rosver
 
 #include <sps30.h>
@@ -444,6 +451,7 @@ float noxIndex;
 #endif
 
 #include "PMS.h"
+#endif
 
 #if !ESP8266
 
@@ -578,11 +586,13 @@ SoftwareSerial SerialESP(ESP8266_RX, 16);
 #endif
 #endif
 
+#if !MobDataSP
 #include <Adafruit_SHT31.h>
 Adafruit_SHT31 sht31;
 byte failh = 0;
 #include "Adafruit_SHT4x.h"
 Adafruit_SHT4x sht4 = Adafruit_SHT4x();
+#endif
 
 #if !(Rosver || MinVer || MobData || MinVerSD)
 
@@ -1154,9 +1164,11 @@ void setup()
   // Start Captive Portal for 60 seconds
   if (ResetFlag == true)
   {
+#if !MobDataSP
 #if (Rosver || MinVer || MobData || MinVerSD)
     Serial.println(F("Test_Sensor"));
     Test_Sensor();
+#endif
 #endif
     Start_Captive_Portal();
     delay(100);
@@ -4014,6 +4026,8 @@ void ResetMobDataConn()
 
 #endif
 
+#if !MobDataSP
+
 #if (Rosver || MinVer || MobData || MinVerSD)
 void Test_Sensor()
 {
@@ -4451,6 +4465,8 @@ void Setup_Sensor()
 #endif
 #endif
 }
+
+#endif
 
 #if !SoundMeter
 
@@ -4988,6 +5004,7 @@ void Read_UV()
    @brief : read and display device info
 */
 
+#if !MobDataSP
 #if !Rosver
 void GetDeviceInfo()
 {
@@ -5174,6 +5191,8 @@ void printSerialNumber()
     Serial.println((char *)serialNumber);
   }
 }
+#endif
+
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
