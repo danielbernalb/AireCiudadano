@@ -50,9 +50,9 @@
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
 #define TwoPMS false     // Set to true if you want 2 PMS7003 sensors
-#define SoundMeter false // set to true for Sound Meter
-#define SoundAM false    // Set to true to Sound meter airplane mode
-#define Influxver false  // Set to true for InfluxDB version
+#define SoundMeter true  // set to true for Sound Meter
+#define SoundAM true     // Set to true to Sound meter airplane mode
+#define Influxver true   // Set to true for InfluxDB version
 
 #define LedNeo false     // Set to true for Led Neo multicolor
 #define LTR390UV false
@@ -60,11 +60,11 @@
 
 // Seleccion de operador de telefonia movil
 #define TigoKalleyExito false
-#define MovistarVirgin false
+#define MovistarVirgin true
 #define Claro false
 #define Wom false
 
-#define A7670 false
+#define A7670 true
 #define SIM7070 false
 #define SIM800 false
 
@@ -129,6 +129,12 @@
 #define MinVerSD true     // Version minima con SD
 #else
 #define MinVerSD false
+#endif
+
+#ifdef MobDataSPver
+#define MobDataSP true
+#else
+#define MobDataSP false
 #endif
 
 // Fin definiciones opcionales Wifi
@@ -412,6 +418,7 @@ int vref = 1100;
 
 byte failpm = 0;
 
+#if !MobDataSP
 #if !Rosver
 
 #include <sps30.h>
@@ -444,6 +451,7 @@ float noxIndex;
 #endif
 
 #include "PMS.h"
+#endif
 
 #if !ESP8266
 
@@ -516,7 +524,11 @@ PMS::DATA data;
 #define PMS_TX 14 // PMS TX pin
 #define PMS_RX 16 // PMS RX pin
 #else
+#if !PurpleVer
 #define PMS_TX1 14 // PMS TX pin      // D5
+#else
+#define PMS_TX1 13 // PMS TX pin      
+#endif
 #define PMS_RX1 16 // PMS RX pin
 #define PMS_TX2 12 // PMS TX pin      // D6
 #define PMS_RX2 2  // PMS RX pin
@@ -569,16 +581,18 @@ PMS::DATA data;
 #endif
 #endif
 #else
-#define ESP8266_RX 14 // ESP_MEMS TX pin
+#define ESP8266_RX 14 // ESP_MEMS TX pin, D5
 SoftwareSerial SerialESP(ESP8266_RX, 16);
 #endif
 #endif
 
+#if !MobDataSP
 #include <Adafruit_SHT31.h>
 Adafruit_SHT31 sht31;
 byte failh = 0;
 #include "Adafruit_SHT4x.h"
 Adafruit_SHT4x sht4 = Adafruit_SHT4x();
+#endif
 
 #if !(Rosver || MinVer || MobData || MinVerSD)
 
@@ -837,7 +851,7 @@ LTR390 ltr;
 #define SerialMon Serial
 
 // SoftwareSerial pmsSerial2(PMS_TX2, PMS_RX2);
-SoftwareSerial SerialAT(13, 12);  // D7 RX, D6 TX     // Si se usan 2 PMSx003 habria conflicto con el pin 12
+SoftwareSerial SerialAT(13, 12);  // D7 RX, D6 TX en la board, conectar al SIM     // Si se usan 2 PMSx003 habria conflicto con el pin 12
 
 // Use Hardware Serial on Mega, Leonardo, Micro
 //#define SerialAT Serial2
@@ -1150,9 +1164,11 @@ void setup()
   // Start Captive Portal for 60 seconds
   if (ResetFlag == true)
   {
+#if !MobDataSP
 #if (Rosver || MinVer || MobData || MinVerSD)
     Serial.println(F("Test_Sensor"));
     Test_Sensor();
+#endif
 #endif
     Start_Captive_Portal();
     delay(100);
@@ -2268,7 +2284,6 @@ void Check_WiFi_Server()                    // Server access by http when you pu
             client.println("<br>");
             client.print("MQTT Server: ");
             client.print("sensor.aireciudadano.com");
-//            client.print("194.242.56.226");
             client.println("<br>");
             client.print("MQTT Port: ");
 #if !Influxver
@@ -2875,10 +2890,8 @@ void Init_MQTT()
   //  MQTT_client.setServer(eepromConfig.MQTT_server, eepromConfig.MQTT_port);
 #if !Influxver
   MQTT_client.setServer("sensor.aireciudadano.com", 80);
-//  MQTT_client.setServer("194.242.56.226", 30183);
 #else
   MQTT_client.setServer("sensor.aireciudadano.com", 30183);
-//  MQTT_client.setServer("194.242.56.226", 30183);
 #endif
   MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
 
@@ -4013,6 +4026,8 @@ void ResetMobDataConn()
 
 #endif
 
+#if !MobDataSP
+
 #if (Rosver || MinVer || MobData || MinVerSD)
 void Test_Sensor()
 {
@@ -4318,6 +4333,12 @@ void Setup_Sensor()
 #else
     pmsSerial1.begin(9600); // Software serial begin for PMS1 sensor
     pmsSerial2.begin(9600); // Software serial begin for PMS2 sensor
+
+#if PurpleVer
+    pms1.activeMode();
+    pms2.activeMode();
+#endif
+
 #endif
 #endif
 #endif
@@ -4444,6 +4465,8 @@ void Setup_Sensor()
 #endif
 #endif
 }
+
+#endif
 
 #if !SoundMeter
 
@@ -4981,6 +5004,7 @@ void Read_UV()
    @brief : read and display device info
 */
 
+#if !MobDataSP
 #if !Rosver
 void GetDeviceInfo()
 {
@@ -5167,6 +5191,8 @@ void printSerialNumber()
     Serial.println((char *)serialNumber);
   }
 }
+#endif
+
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
