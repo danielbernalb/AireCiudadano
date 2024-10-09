@@ -27,7 +27,7 @@
 // 15. Json lib actualizada a v7
 // 16. ESP8285 flag en platformio.ini
 // 17. En Test_Sensor se identifica SEN54 y 55 con HyT y PMS7003T para parpadeo de HyT
-// 18. Ver 2.5
+// 18. Ver 2.6
 // 19. SPS30 ajuste resultado de intercomparacion con SEN y PMS
 // 20. MinVer con SD
 // 21. Conectividad movil, FlagMobData
@@ -44,15 +44,15 @@
 
 ////////////////////////////////
 // Modo de comunicaciones del sensor:
-#define Wifi true        // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
+#define Wifi true       // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
 #define WPA2 false       // Set to true to WPA2 enterprise networks (IEEE 802.1X)
 #define Bluetooth false  // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
 #define TwoPMS false     // Set to true if you want 2 PMS7003 sensors
-#define SoundMeter true  // set to true for Sound Meter
-#define SoundAM true     // Set to true to Sound meter airplane mode
-#define Influxver true   // Set to true for InfluxDB version
+#define SoundMeter false // set to true for Sound Meter
+#define SoundAM false    // Set to true to Sound meter airplane mode
+#define Influxver false  // Set to true for InfluxDB version
 
 #define LedNeo false     // Set to true for Led Neo multicolor
 #define LTR390UV false
@@ -60,7 +60,7 @@
 
 // Seleccion de operador de telefonia movil
 #define TigoKalleyExito false
-#define MovistarVirgin true
+#define MovistarVirgin false
 #define Claro false
 #define Wom false
 
@@ -69,7 +69,7 @@
 #define SIM800 false
 
 // Escoger modelo de pantalla (pasar de false a true) o si no hay escoger ninguna (todas false):
-#define Tdisplaydisp false    // TTGO T Display
+#define Tdisplaydisp false     // TTGO T Display
 #define OLED66display false   // Pantalla OLED 0.66"
 #define OLED96display false   // Pantalla OLED 0.96"
 
@@ -175,7 +175,7 @@ uint32_t chipId = 0;
 #endif
 
 // device id, automatically filled by concatenating the last three fields of the wifi mac address, removing the ":" in betweeen, in HEX format. Example: ChipId (HEX) = 85e646, ChipId (DEC) = 8775238, macaddress = E0:98:06:85:E6:46
-String sw_version = "2.5";
+String sw_version = "2.6";
 String aireciudadano_device_id;
 uint8_t Swver;
 
@@ -621,7 +621,7 @@ float hpa;
 // Bluetooth in TTGO T-Display
 #if Bluetooth
 #include <Sensirion_Gadget_BLE.h> // to connect to Sensirion MyAmbience Android App available on Google Play
-#include <BLE2902.h>
+//#include <BLE2902.h>
 // #include <BLEDevice.h>
 // #include <BLEServer.h>
 // #include <BLEUtils.h>
