@@ -44,9 +44,9 @@
 
 ////////////////////////////////
 // Modo de comunicaciones del sensor:
-#define Wifi true       // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
+#define Wifi false       // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
 #define WPA2 false       // Set to true to WPA2 enterprise networks (IEEE 802.1X)
-#define Bluetooth false  // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
+#define Bluetooth true   // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
 #define TwoPMS false     // Set to true if you want 2 PMS7003 sensors
@@ -55,7 +55,7 @@
 #define Influxver false  // Set to true for InfluxDB version
 
 #define LedNeo false     // Set to true for Led Neo multicolor
-#define LTR390UV false
+#define LTR390UV true
 #define NoxVoxTd false
 
 // Seleccion de operador de telefonia movil
@@ -64,12 +64,12 @@
 #define Claro false
 #define Wom false
 
-#define A7670 true
+#define A7670 false
 #define SIM7070 false
 #define SIM800 false
 
 // Escoger modelo de pantalla (pasar de false a true) o si no hay escoger ninguna (todas false):
-#define Tdisplaydisp false     // TTGO T Display
+#define Tdisplaydisp true     // TTGO T Display
 #define OLED66display false   // Pantalla OLED 0.66"
 #define OLED96display false   // Pantalla OLED 0.96"
 
@@ -829,8 +829,11 @@ Adafruit_NeoPixel LED_RGB(1, PinLedNeo, NEO_GRBW + NEO_KHZ800);  // Creamos el o
 #endif
 
 #if LTR390UV
-#include <bb_ltr390.h>
-LTR390 ltr;
+#include "Adafruit_LTR390.h"
+Adafruit_LTR390 ltr = Adafruit_LTR390();
+float getUVIval;
+//uint8_t GainLTR390 = 18;    // 18 para medir UV
+//uint8_t ResLTR390 = 20;     // 20 para medir UV
 #endif
 
 // MOBILE DATA TRANSMISION
@@ -1562,7 +1565,7 @@ void loop()
     Serial.print(dBAmax, 1);
     Serial.println(F(" dBA"));
 #elif LTR390UV
-    Serial.print(F("UV Index: "));
+    Serial.print(F("UV Index int: "));
     Serial.println(pm25int);
 #else
     Serial.print(F("PM2.5: "));
@@ -4981,19 +4984,76 @@ void Read_SoundMeter()
 
 void Setup_UV()
 {
-  if (ltr.init(-1, -1, 0) == LTR390_SUCCESS)  // found a supported device
-    Serial.println("LTR390 init success!");
+  if ( ! ltr.begin() ) {
+      Serial.println("Couldn't find LTR sensor!");
+    }
   else
-    Serial.println("LTR390 not init");
+  {
+    Serial.println("Found LTR sensor!");
+
+    ltr.setMode(LTR390_MODE_UVS);
+    if (ltr.getMode() == LTR390_MODE_ALS) {
+      Serial.println("In ALS mode");
+    } else {
+      Serial.println("In UVS mode");
+    }
+
+    ltr.setGain(LTR390_GAIN_18);
+    Serial.print("Gain: ");
+    switch (ltr.getGain()) {
+      case LTR390_GAIN_1: Serial.println(1); break;
+      case LTR390_GAIN_3: Serial.println(3); break;
+      case LTR390_GAIN_6: Serial.println(6); break;
+      case LTR390_GAIN_9: Serial.println(9); break;
+      case LTR390_GAIN_18: Serial.println(18); break;
+    }
+
+    ltr.setResolution(LTR390_RESOLUTION_20BIT);
+    Serial.print("Resolution: ");
+    switch (ltr.getResolution()) {
+      case LTR390_RESOLUTION_13BIT: Serial.println(13); break;
+      case LTR390_RESOLUTION_16BIT: Serial.println(16); break;
+      case LTR390_RESOLUTION_17BIT: Serial.println(17); break;
+      case LTR390_RESOLUTION_18BIT: Serial.println(18); break;
+      case LTR390_RESOLUTION_19BIT: Serial.println(19); break;
+      case LTR390_RESOLUTION_20BIT: Serial.println(20); break;
+    }
+    ltr.configInterrupt(false, LTR390_MODE_UVS);
+  }
 }
 
 void Read_UV()
 {
-  if (ltr.start(true) == LTR390_SUCCESS) { // start sampling
-    ltr.getSample();
-    PM25_value = ltr.getUVI();
-    Serial.print("UV index:");
-    Serial.println(PM25_value);
+  if (ltr.newDataAvailable()) 
+  { 
+    getUVIval = ltr.readUVS() / 2300.0f;
+//    PM25_value = round(getUVIval);
+    PM25_value = int(getUVIval);
+    Serial.print("UV index: ");
+    Serial.print(getUVIval);
+    Serial.print("   int: ");
+    Serial.println(PM25_value, 0);
+
+/*
+    Serial.print("Gain: ");
+    switch (ltr.getGain()) {
+      case LTR390_GAIN_1: Serial.println(1); break;
+      case LTR390_GAIN_3: Serial.println(3); break;
+      case LTR390_GAIN_6: Serial.println(6); break;
+      case LTR390_GAIN_9: Serial.println(9); break;
+      case LTR390_GAIN_18: Serial.println(18); break;
+    }
+    Serial.print("Resolution: ");
+    switch (ltr.getResolution()) {
+      case LTR390_RESOLUTION_13BIT: Serial.println(13); break;
+      case LTR390_RESOLUTION_16BIT: Serial.println(16); break;
+      case LTR390_RESOLUTION_17BIT: Serial.println(17); break;
+      case LTR390_RESOLUTION_18BIT: Serial.println(18); break;
+      case LTR390_RESOLUTION_19BIT: Serial.println(19); break;
+      case LTR390_RESOLUTION_20BIT: Serial.println(20); break;
+    }
+*/
+  
   }
   else
     Serial.print("LTR390 not connected");
@@ -5455,7 +5515,8 @@ void Button_Init()
 #if Wifi
     tft.drawString("ID " + aireciudadano_device_id, 8, 5);         //!!!Arreglar por nuevo tamaño String
 #elif Bluetooth
-    tft.drawString("ID MyAm 00:" + provider.getDeviceIdString(), 8, 5);         //!!!Arreglar por nuevo tamaño String
+//    tft.drawString("ID MyAm 00:" + provider.getDeviceIdString(), 8, 5);         //!!!Arreglar por nuevo tamaño String
+    tft.drawString("ID MyAm:" + provider.getDeviceIdString(), 8, 5);         //!!!Arreglar por nuevo tamaño String
 #endif
     tft.drawString("SW ver: " + sw_version, 8, 22);
 #if Bluetooth
@@ -5488,6 +5549,29 @@ void Button_Init()
   // Bottom button short click: show buttons info
   button_bottom.setClickHandler([](Button2 & b)
   {
+
+///////////////
+/*
+    if (GainLTR390 == 1) {
+        GainLTR390 = 3;
+    }
+    else if (GainLTR390 == 3) {
+        GainLTR390 = 6;
+    }
+    else if (GainLTR390 == 6) {
+        GainLTR390 = 9;
+    }
+    else if (GainLTR390 == 9) {
+        GainLTR390 = 18;
+    }
+    else if (GainLTR390 == 18) {
+        GainLTR390 = 1;
+    }
+   
+    ltr.setGain(GainLTR390);
+*/
+//////////////
+
     Serial.println(F("Bottom button short click"));
     tft.fillScreen(TFT_WHITE);
     tft.setTextColor(TFT_BLUE, TFT_WHITE);
@@ -7086,9 +7170,10 @@ void displayAverage(int average)
   // Draw PM25 units
   tft.setTextSize(1);
   tft.setFreeFont(FF90);
-  tft.drawString("UV index", 28, 197);
-  tft.drawString(String(round(PM25_value), 0), 107, 197);
-  tft.drawString("r: " + String(ltr.uv()), 60, 220);
+  tft.drawString("UVindex", 25, 197);
+  tft.drawString(String(getUVIval, 1), 99, 197);
+//  tft.drawString("r: " + String(ltr.uv()), 60, 220);
+  tft.drawString("r: " + String(ltr.readUVS()), 58, 220);
 
 #if Wifi
   int rssi;
