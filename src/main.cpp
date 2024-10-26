@@ -829,11 +829,12 @@ Adafruit_NeoPixel LED_RGB(1, PinLedNeo, NEO_GRBW + NEO_KHZ800);  // Creamos el o
 #endif
 
 #if LTR390UV
-#include "Adafruit_LTR390.h"
-Adafruit_LTR390 ltr = Adafruit_LTR390();
+#include <Wire.h>
+#include <LTR390.h>
+#define I2C_ADDRESS 0x53
+LTR390 ltr390(I2C_ADDRESS);
 float getUVIval;
-//uint8_t GainLTR390 = 18;    // 18 para medir UV
-//uint8_t ResLTR390 = 20;     // 20 para medir UV
+uint32_t rawUVS;
 #endif
 
 // MOBILE DATA TRANSMISION
@@ -4984,59 +4985,66 @@ void Read_SoundMeter()
 
 void Setup_UV()
 {
-  if ( ! ltr.begin() ) {
-      Serial.println("Couldn't find LTR sensor!");
-    }
+  Wire.begin();
+  if(!ltr390.init())
+  {
+    Serial.println("Couldn't find LTR sensor!");
+  }
   else
   {
     Serial.println("Found LTR sensor!");
 
-    ltr.setMode(LTR390_MODE_UVS);
-    if (ltr.getMode() == LTR390_MODE_ALS) {
-      Serial.println("In ALS mode");
-    } else {
-      Serial.println("In UVS mode");
-    }
+  ltr390.setMode(LTR390_MODE_UVS);
+  if (ltr390.getMode() == LTR390_MODE_ALS) {
+    Serial.println("In ALS mode");
+  } else {
+    Serial.println("In UVS mode");
+  }
 
-    ltr.setGain(LTR390_GAIN_18);
-    Serial.print("Gain: ");
-    switch (ltr.getGain()) {
-      case LTR390_GAIN_1: Serial.println(1); break;
-      case LTR390_GAIN_3: Serial.println(3); break;
-      case LTR390_GAIN_6: Serial.println(6); break;
-      case LTR390_GAIN_9: Serial.println(9); break;
-      case LTR390_GAIN_18: Serial.println(18); break;
-    }
+  ltr390.setGain(LTR390_GAIN_18);
+  Serial.print("Gain: ");
+  switch (ltr390.getGain()) {
+    case LTR390_GAIN_1: Serial.println(1); break;
+    case LTR390_GAIN_3: Serial.println(3); break;
+    case LTR390_GAIN_6: Serial.println(6); break;
+    case LTR390_GAIN_9: Serial.println(9); break;
+    case LTR390_GAIN_18: Serial.println(18); break;
+  }
 
-    ltr.setResolution(LTR390_RESOLUTION_20BIT);
-    Serial.print("Resolution: ");
-    switch (ltr.getResolution()) {
-      case LTR390_RESOLUTION_13BIT: Serial.println(13); break;
-      case LTR390_RESOLUTION_16BIT: Serial.println(16); break;
-      case LTR390_RESOLUTION_17BIT: Serial.println(17); break;
-      case LTR390_RESOLUTION_18BIT: Serial.println(18); break;
-      case LTR390_RESOLUTION_19BIT: Serial.println(19); break;
-      case LTR390_RESOLUTION_20BIT: Serial.println(20); break;
-    }
-    ltr.configInterrupt(false, LTR390_MODE_UVS);
+  ltr390.setResolution(LTR390_RESOLUTION_20BIT);
+  Serial.print("Resolution: ");
+  switch (ltr390.getResolution()) {
+    case LTR390_RESOLUTION_13BIT: Serial.println(13); break;
+    case LTR390_RESOLUTION_16BIT: Serial.println(16); break;
+    case LTR390_RESOLUTION_17BIT: Serial.println(17); break;
+    case LTR390_RESOLUTION_18BIT: Serial.println(18); break;
+    case LTR390_RESOLUTION_19BIT: Serial.println(19); break;
+    case LTR390_RESOLUTION_20BIT: Serial.println(20); break;
+  }
+  //ltr390.setThresholds(100, 1000);
+  //ltr390.configInterrupt(true, LTR390_MODE_UVS);
   }
 }
 
 void Read_UV()
 {
-  if (ltr.newDataAvailable()) 
+  if (ltr390.newDataAvailable()) 
   { 
-    getUVIval = ltr.readUVS() / 2300.0f;
+//    getUVIval = ltr390.getUVI();
+    getUVIval = ltr390.getUVI();
 //    PM25_value = round(getUVIval);
-    PM25_value = int(getUVIval);
+    PM25_value = int(getUVIval / 2.7f);
     Serial.print("UV index: ");
     Serial.print(getUVIval);
-    Serial.print("   int: ");
+    Serial.print("   intori: ");
     Serial.println(PM25_value, 0);
+    rawUVS = ltr390.readUVS();
+    Serial.print("UVraw: ");
+    Serial.println(rawUVS);
 
 /*
     Serial.print("Gain: ");
-    switch (ltr.getGain()) {
+    switch (ltr390.getGain()) {
       case LTR390_GAIN_1: Serial.println(1); break;
       case LTR390_GAIN_3: Serial.println(3); break;
       case LTR390_GAIN_6: Serial.println(6); break;
@@ -5044,7 +5052,7 @@ void Read_UV()
       case LTR390_GAIN_18: Serial.println(18); break;
     }
     Serial.print("Resolution: ");
-    switch (ltr.getResolution()) {
+    switch (ltr390.getResolution()) {
       case LTR390_RESOLUTION_13BIT: Serial.println(13); break;
       case LTR390_RESOLUTION_16BIT: Serial.println(16); break;
       case LTR390_RESOLUTION_17BIT: Serial.println(17); break;
@@ -7173,7 +7181,7 @@ void displayAverage(int average)
   tft.drawString("UVindex", 25, 197);
   tft.drawString(String(getUVIval, 1), 99, 197);
 //  tft.drawString("r: " + String(ltr.uv()), 60, 220);
-  tft.drawString("r: " + String(ltr.readUVS()), 58, 220);
+  tft.drawString("r: " + String(rawUVS), 58, 220);
 
 #if Wifi
   int rssi;
