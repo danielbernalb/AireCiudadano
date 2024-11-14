@@ -55,7 +55,7 @@
 #define Influxver false  // Set to true for InfluxDB version
 
 #define LedNeo false     // Set to true for Led Neo multicolor
-#define LTR390UV true
+#define LTR390UV false
 #define NoxVoxTd false
 
 // Seleccion de operador de telefonia movil
@@ -73,9 +73,9 @@
 #define OLED66display false   // Pantalla OLED 0.66"
 #define OLED96display false   // Pantalla OLED 0.96"
 
-#define CO2sensor false        // Set to true for CO2 sensors: SCD30 and SenseAir S8
+#define CO2sensor false          // Set to true for CO2 sensors: SCD30 and SenseAir S8
 #define SiteAltitude 0         // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
-// #define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
+//define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
 
 // Boards diferentes
 #define TTGO_TQ false
@@ -630,12 +630,12 @@ NimBLELibraryWrapper lib;
 #if (LTR390 || SoundMeter)
 DataProvider provider(lib, DataType::PM10_PM25_PM40_PM100);
 #elif CO2sensor
-DataProvider provider(lib, DataType::T_RH_CO2_ALT);
+DataProvider provider(lib, DataType::T_RH_CO2);
 #elif NoxVoxTd
 //DataProvider provider(lib, DataType::T_RH_VOC_NOX_PM25); // Por error al bajar los datos con nox: assert failed: void ByteArray<SIZE>
 DataProvider provider(lib, DataType::T_RH_VOC_PM25_V2);
 #else
-DataProvider provider(lib, DataType::T_RH_VOC_PM25_V2);
+DataProvider provider(lib, DataType::PM10_PM25_PM40_PM100);
 #endif
 #endif
 
