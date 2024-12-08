@@ -37,7 +37,8 @@
 // OK: MONTiny: fail y no sigue y se reinicia y sale 0:0
 
 // Constantes de Ajuste de sensores programables: pendiente e intercepto. ANALIZAR MAS
-// Verificar nueva libreria Bluetooth que parece compatible con Sensirion UPT Core@^0.3.0, Sigue el error con lectura de nox
+// Verificar nueva libreria Bluetooth que parece compatible con Sensirion UPT Core@^0.3.0, Sigue el error con lectura de nox y en algunos modelos es lento
+// La rutina Button2 falla pero con https://github.com/LennartHennigs/Button2.git#2.3.3 OK, no se porque el sensor viejo falla en eso
 
 #include <Arduino.h>
 #include "main.hpp"
@@ -175,7 +176,7 @@ uint32_t chipId = 0;
 #endif
 
 // device id, automatically filled by concatenating the last three fields of the wifi mac address, removing the ":" in betweeen, in HEX format. Example: ChipId (HEX) = 85e646, ChipId (DEC) = 8775238, macaddress = E0:98:06:85:E6:46
-String sw_version = "2.6";
+String sw_version = "2.9";
 String aireciudadano_device_id;
 uint8_t Swver;
 
@@ -635,7 +636,8 @@ DataProvider provider(lib, DataType::T_RH_CO2);
 //DataProvider provider(lib, DataType::T_RH_VOC_NOX_PM25); // Por error al bajar los datos con nox: assert failed: void ByteArray<SIZE>
 DataProvider provider(lib, DataType::T_RH_VOC_PM25_V2);
 #else
-DataProvider provider(lib, DataType::PM10_PM25_PM40_PM100);
+//DataProvider provider(lib, DataType::PM10_PM25_PM40_PM100);
+DataProvider provider(lib, DataType::T_RH_VOC_PM25_V2);
 #endif
 #endif
 
