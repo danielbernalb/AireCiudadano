@@ -32,7 +32,7 @@
 // 20. MinVer con SD
 // 21. Conectividad movil, FlagMobData
 // 22. mqtt.loop ser realiza ahora con la duracion  de MQTT_loop_review en milisegundos
-// 23. Wifi Power max con flag MaxWifiTX programada en pagina web Editor AireCiudadano: Resultado no concluyente de incremento de cobertura
+// 23. Wifi Power max con flag MaxWifiTX SOLO programada desde web mqtt AireCiudadano: Resultado no concluyente de incremento de cobertura
 // OK: Revisar BUG cuando una simcard no se ha usado y no ingresa rapido a la red el ESP8266 se resetea y no sigue preguntando la red para ingresar, a diferencia del codigo Arduino y que si lo logra.
 // OK: MONTiny: fail y no sigue y se reinicia y sale 0:0
 
@@ -45,9 +45,9 @@
 
 ////////////////////////////////
 // Modo de comunicaciones del sensor:
-#define Wifi false       // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
+#define Wifi true        // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
 #define WPA2 false       // Set to true to WPA2 enterprise networks (IEEE 802.1X)
-#define Bluetooth true   // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
+#define Bluetooth false  // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
 #define TwoPMS false     // Set to true if you want 2 PMS7003 sensors
@@ -70,7 +70,7 @@
 #define SIM800 false
 
 // Escoger modelo de pantalla (pasar de false a true) o si no hay escoger ninguna (todas false):
-#define Tdisplaydisp true     // TTGO T Display
+#define Tdisplaydisp false    // TTGO T Display
 #define OLED66display false   // Pantalla OLED 0.66"
 #define OLED96display false   // Pantalla OLED 0.96"
 
@@ -160,6 +160,7 @@ bool FlagpmsHyT = false;
 bool FlagMQTTcon = false;
 bool FlagPoweroff = false;
 bool MaxWifiTX = false;
+bool FlagAdjustSensor;
 
 uint8_t Contacon = 0;
 
@@ -837,6 +838,10 @@ Adafruit_NeoPixel LED_RGB(1, PinLedNeo, NEO_GRBW + NEO_KHZ800);  // Creamos el o
 LTR390 ltr390(I2C_ADDRESS);
 float getUVIval;
 uint32_t rawUVS;
+
+#define EnLTR390 13
+//#define EnLTR390 26
+
 #endif
 
 // MOBILE DATA TRANSMISION
@@ -912,6 +917,22 @@ void setup()
   pinMode(OUT_EN, OUTPUT);
   // Off sensors
   digitalWrite(OUT_EN, LOW); // step-up off
+
+#if LTR390UV
+  pinMode(EnLTR390, OUTPUT);
+
+  // Configurar el pin con resistencia pulldown interna
+  gpio_pulldown_en((gpio_num_t)EnLTR390);
+  gpio_pullup_dis((gpio_num_t)EnLTR390);
+  
+  // Opcionalmente, configurar el estado del pin durante deep sleep
+  //gpio_hold_en((gpio_num_t)EnLTR390);
+
+
+  // Off sensors
+  digitalWrite(EnLTR390, LOW); // LTR390 off
+#endif
+
 #endif
 
 #if SIM7070
@@ -1133,6 +1154,11 @@ void setup()
 #if Tdisplaydisp
   // On sensors
   digitalWrite(OUT_EN, HIGH); // step-up on
+
+#if EnLTR390
+  digitalWrite(EnLTR390, HIGH); // LTR390 on
+#endif
+
   delay(100);
 #endif
 
@@ -4505,7 +4531,7 @@ void Read_Sensor()
         Serial.print("Error during reading values: ");
         Serial.println(ret);
       }
-      if (failpm > 14)
+      if (failpm > 120)
       {
         failpm = 0;
         Serial.print(F("Reset lectura sensor erronea 1"));
@@ -4524,7 +4550,7 @@ void Read_Sensor()
     {
       if ((PM25_value == 0 && PM1_value == 0) || (PM25_value == PM25_valueold))
       { // Recuperación de error en 0
-        if (failpm > 20)
+        if (failpm > 120)
         {
           failpm = 0;
           Serial.print(F("Reset lectura sensor erronea 2"));
@@ -4540,8 +4566,19 @@ void Read_Sensor()
       Serial.print(PM25_value);
       Serial.print(F(" ug/m3   "));
       PM25_value_ori = PM25_value;
+
+#if Bluetooth
+      if (FlagAdjustSensor == 0){
+        Serial.print("No ");
+      }
+      else{
+        //Serial.println("Adjust PM2.5 SPS30");
+        PM25_value = ((1207 * PM25_value_ori) / 1000) - 1.01; // Ajuste propuesto por paper USA, falta calibracion propia  
+      }
+#else
       // PM25_value = ((1280 * PM25_value_ori) / 1000) + 1.78; // Ajuste propuesto por paper USA, falta calibracion propia
       PM25_value = ((1207 * PM25_value_ori) / 1000) - 1.01; // Ajuste propuesto por paper USA, falta calibracion propia
+#endif
       if (PM25_value < 0)
         PM25_value = 0;
       Serial.print(F("Adjust: "));
@@ -4568,7 +4605,7 @@ void Read_Sensor()
       Setup_Sensor();
       Serial.println(F("Reinit I2C"));
       delay(10);
-      if (failpm > 20)
+      if (failpm > 120)
       {
         failpm = 0;
         ESP.restart();
@@ -4580,7 +4617,7 @@ void Read_Sensor()
     {
       if (PM25_value == 0 && PM1_value == 0)
       { // Recuperación de error en 0
-        if (failpm > 20)
+        if (failpm > 120)
         {
           failpm = 0;
           ESP.restart();
@@ -4643,9 +4680,24 @@ void Read_Sensor()
       Serial.print(F(" ug/m3   "));
       PM1_value = data.PM_AE_UG_1_0;
       PM25_value_ori = PM25_value;
+
+#if Bluetooth
+      if (FlagAdjustSensor == 0){
+        Serial.print("No ");
+      }
+      else{
+        //Serial.println("Adjust PM2.5 PMSx003");
+        // PM25_value = ((562 * PM25_value_ori) / 1000) - 1; // Ecuación de ajuste resultado de 13 intercomparaciones entre PMS7003 y SPS30 por meses
+        // PM25_value = ((553 * PM25_value_ori) / 1000) + 1.3; // Segundo ajuste
+        PM25_value = ((630 * PM25_value_ori) / 1000) + 1.56; // Tercer ajuste a los que salio en Lima y pruebas aqui
+      }
+#else
       // PM25_value = ((562 * PM25_value_ori) / 1000) - 1; // Ecuación de ajuste resultado de 13 intercomparaciones entre PMS7003 y SPS30 por meses
       // PM25_value = ((553 * PM25_value_ori) / 1000) + 1.3; // Segundo ajuste
       PM25_value = ((630 * PM25_value_ori) / 1000) + 1.56; // Tercer ajuste a los que salio en Lima y pruebas aqui
+#endif
+      if (PM25_value < 0)
+        PM25_value = 0;
       Serial.print(F("Adjust: "));
       Serial.print(PM25_value);
       Serial.println(F(" ug/m3"));
@@ -4653,7 +4705,7 @@ void Read_Sensor()
     else
     {
       Serial.println(F("No data by Plantower sensor!"));
-      if (failpm > 20)
+      if (failpm > 120)
       {
         failpm = 0;
         ESP.restart();
@@ -4679,7 +4731,7 @@ void Read_Sensor()
     else
     {
       Serial.println(F("No data by Plantower1 sensor!"));
-      if (failpm > 20)
+      if (failpm > 120)
       {
         failpm = 0;
         ESP.restart();
@@ -4705,7 +4757,7 @@ void Read_Sensor()
     else
     {
       Serial.println(F("No data by Plantower2 sensor!"));
-      if (failpm > 20)
+      if (failpm > 120)
       {
         failpm = 0;
         ESP.restart();
@@ -5034,8 +5086,8 @@ void Read_UV()
   { 
 //    getUVIval = ltr390.getUVI();
     getUVIval = ltr390.getUVI();
-//    PM25_value = round(getUVIval);
-    PM25_value = int(getUVIval / 2.7f);
+    PM25_value = round(getUVIval);
+//    PM25_value = int(getUVIval / 2.7f);
     Serial.print("UV index: ");
     Serial.print(getUVIval);
     Serial.print("   intori: ");
@@ -5598,7 +5650,30 @@ void Button_Init()
     tft.drawString("Right button", 3, 75);
     tft.drawString("  Short: Info", 3, 91);
     tft.drawString("  Long: Sleep", 3, 107);
-    delay(5000);
+    if (FlagAdjustSensor == 0)
+      tft.drawString("NO Adjust Sensor", 3, 150);
+    else
+      tft.drawString("Adjust Sensor", 3, 150);
+    delay(2500);
+    if (digitalRead(BUTTON_TOP) == false){
+      delay(100);
+      if (digitalRead(BUTTON_TOP) == false){
+        delay(100);
+        if (digitalRead(BUTTON_TOP) == false){
+          if (FlagAdjustSensor == 0){
+            FlagAdjustSensor = 1;
+            Serial.println("Adjust Sensor");
+            tft.drawString("Adjust Sens        ", 3, 150);
+          }
+          else{
+            FlagAdjustSensor = 0;
+            Serial.println("No Adjust Sensor");
+            tft.drawString("NO Adjust Sens  ", 3, 150);
+          }
+        }
+      }
+    }
+    delay(2500);
     Update_Display();
   });
 
@@ -6623,6 +6698,10 @@ void Suspend_Device()
     // Off sensors
     digitalWrite(OUT_EN, LOW); // step-up off
 
+#if LTR390UV
+    digitalWrite(EnLTR390, LOW); // LTR390 off
+#endif  
+
 #if Tdisplaydisp
 
     if (TDisplay == true)
@@ -6640,6 +6719,7 @@ void Suspend_Device()
       tft.writecommand(TFT_SLPIN);
       // #endif
     }
+
 #else
     espDelay(3000);
 #endif
@@ -6659,6 +6739,13 @@ void Suspend_Device()
 #if !ESP32C3AG        // REVISAR!!! para el caso ESP32C3AG
   esp_sleep_enable_ext0_wakeup(GPIO_NUM_35, 0); // Top button
   // esp_sleep_enable_ext0_wakeup(GPIO_NUM_0, 0); // Bottom button
+
+  // Antes de entrar en deep sleep:
+
+#if LTR390UV
+  digitalWrite(EnLTR390, LOW);
+  gpio_deep_sleep_hold_en();  // Mantener el estado de los pines durante deep sleep
+#endif
 
   delay(200);
   esp_deep_sleep_start();
@@ -6934,7 +7021,10 @@ void displayAverage(int average)
   // Draw PM25 units
   tft.setTextSize(1);
   tft.setFreeFont(FF90);
-  tft.drawString("PM2.5: ", 30, 197);
+  if (FlagAdjustSensor == 0)
+    tft.drawString("PM2.5: ", 30, 197);
+  else
+    tft.drawString("PM2.5. ", 30, 197);
   tft.drawString(String(round(PM25_value), 0), 90, 197);
 
   if (temp != 0 || humi != 0)
