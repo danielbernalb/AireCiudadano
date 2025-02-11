@@ -55,6 +55,7 @@
 #define SoundAM false    // Set to true to Sound meter airplane mode
 #define Influxver false  // Set to true for InfluxDB version
 
+#define SDS011sen true   // Set to true for SDS011 instead PMSX003
 #define LedNeo false     // Set to true for Led Neo multicolor
 #define LTR390UV false
 #define NoxVoxTd false
@@ -449,6 +450,18 @@ float ambientHumidity;
 float ambientTemperature;
 float vocIndex;
 float noxIndex;
+
+#if SDS011sen
+
+#include <SDS011.h>
+SDS011 my_sds;
+float p10, p25;
+int errSDS011;
+#ifdef ESP32
+HardwareSerial port(2);
+#endif
+
+#endif
 
 #endif
 
@@ -2525,22 +2538,38 @@ void Start_Captive_Portal()
 
   if (eepromConfig.ConfigValues[7] == '0')
   {
+#if SDS011sen
+    const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0' checked> None<br><input type='radio' name='customSenPM' value='1'> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> SDS011";
+#else
     const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0' checked> None<br><input type='radio' name='customSenPM' value='1'> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> Plantower PMS adjusted";
+#endif
     new (&custom_sensorPM_type) WiFiManagerParameter(custom_senPM_str);
   }
   else if (eepromConfig.ConfigValues[7] == '1')
   {
+#if SDS011sen   
+    const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1' checked> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> SDS011";
+#else
     const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1' checked> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> Plantower PMS adjusted";
+#endif
     new (&custom_sensorPM_type) WiFiManagerParameter(custom_senPM_str);
   }
   else if (eepromConfig.ConfigValues[7] == '2')
   {
+#if SDS011sen
+    const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1'> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2' checked> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> SDS011";
+#else
     const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1'> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2' checked> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> Plantower PMS adjusted";
+#endif
     new (&custom_sensorPM_type) WiFiManagerParameter(custom_senPM_str);
   }
   else if (eepromConfig.ConfigValues[7] == '3')
   {
+#if SDS011sen
+    const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1'> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3' checked> SDS011";
+#else
     const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1'> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3' checked> Plantower PMS adjusted";
+#endif
     new (&custom_sensorPM_type) WiFiManagerParameter(custom_senPM_str);
   }
 
@@ -4333,14 +4362,26 @@ void Setup_Sensor()
     {
 #endif
 #endif
+
+#if SDS011sen
+    Serial.println(F("Test SDS011 Sensor"));
+#else
     Serial.println(F("Test Plantower Sensor"));
+#endif
 
 #if !ESP8266
 
 #if !TwoPMS
 
 #if !TTGO_TQ
+
+#if SDS011sen
+	  my_sds.begin(&port);
+	  Serial.begin(115200);
+#else
     Serial1.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX, PMS_RX);
+#endif
+
 #else
     Serial2.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX, PMS_RX);
 #endif
@@ -4379,9 +4420,16 @@ void Setup_Sensor()
 #if !(TwoPMS || SoundMeter)
     delay(1000);
 
+#if SDS011sen
+	  errSDS011 = my_sds.read(&p25, &p10);
+	  if (!errSDS011) {
+		  Serial.println(F("SDS011 sensor found!"));
+#else
     if (pms.readUntil(data))
     {
       Serial.println(F("Plantower sensor found!"));
+#endif
+
       PMSsen = true;
 #if ESP8285
       digitalWrite(LEDPIN, LOW); // turn the LED off by making the voltage LOW
@@ -4391,7 +4439,13 @@ void Setup_Sensor()
     }
     else
     {
+
+#if SDS011sen
+      Serial.println(F("Could not find SDS011 sensor!"));
+#else
       Serial.println(F("Could not find Plantower sensor!"));
+#endif
+
     }
 #elif TwoPMS
     delay(500);
@@ -4671,6 +4725,18 @@ void Read_Sensor()
 #endif
   {
 #if !TwoPMS
+
+#if SDS011sen
+    errSDS011 = my_sds.read(&p25, &p10);
+	  if (!errSDS011) 
+    {
+      failpm = 0;
+      PM25_value = p25;
+      Serial.print(F("PMS PM2.5: "));
+      Serial.print(PM25_value);
+      Serial.print(F(" ug/m3   "));
+
+#else
     if (pms.readUntil(data))
     {
       failpm = 0;
@@ -4679,6 +4745,8 @@ void Read_Sensor()
       Serial.print(PM25_value);
       Serial.print(F(" ug/m3   "));
       PM1_value = data.PM_AE_UG_1_0;
+#endif
+
       PM25_value_ori = PM25_value;
 
 #if Bluetooth
@@ -4692,9 +4760,15 @@ void Read_Sensor()
         PM25_value = ((630 * PM25_value_ori) / 1000) + 1.56; // Tercer ajuste a los que salio en Lima y pruebas aqui
       }
 #else
+
+#if SDS011sen
+      PM25_value = PM25_value;
+#else
       // PM25_value = ((562 * PM25_value_ori) / 1000) - 1; // Ecuación de ajuste resultado de 13 intercomparaciones entre PMS7003 y SPS30 por meses
       // PM25_value = ((553 * PM25_value_ori) / 1000) + 1.3; // Segundo ajuste
       PM25_value = ((630 * PM25_value_ori) / 1000) + 1.56; // Tercer ajuste a los que salio en Lima y pruebas aqui
+#endif
+
 #endif
       if (PM25_value < 0)
         PM25_value = 0;
@@ -4704,7 +4778,13 @@ void Read_Sensor()
     }
     else
     {
+
+#if SDS011sen
+      Serial.println(F("No data by SDS011 sensor!"));
+#else
       Serial.println(F("No data by Plantower sensor!"));
+#endif
+
       if (failpm > 120)
       {
         failpm = 0;
