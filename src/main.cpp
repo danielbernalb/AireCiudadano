@@ -33,6 +33,8 @@
 // 21. Conectividad movil, FlagMobData
 // 22. mqtt.loop ser realiza ahora con la duracion  de MQTT_loop_review en milisegundos
 // 23. Wifi Power max con flag MaxWifiTX SOLO programada desde web mqtt AireCiudadano: Resultado no concluyente de incremento de cobertura
+// 24. ZH10 sensor para ESP32
+// 25- SDS011 sensor para ESP8266 y ESP32
 // OK: Revisar BUG cuando una simcard no se ha usado y no ingresa rapido a la red el ESP8266 se resetea y no sigue preguntando la red para ingresar, a diferencia del codigo Arduino y que si lo logra.
 // OK: MONTiny: fail y no sigue y se reinicia y sale 0:0
 
@@ -45,9 +47,9 @@
 
 ////////////////////////////////
 // Modo de comunicaciones del sensor:
-#define Wifi true        // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
+#define Wifi true       // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
 #define WPA2 false       // Set to true to WPA2 enterprise networks (IEEE 802.1X)
-#define Bluetooth false  // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
+#define Bluetooth false   // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
 #define TwoPMS false     // Set to true if you want 2 PMS7003 sensors
@@ -55,7 +57,8 @@
 #define SoundAM false    // Set to true to Sound meter airplane mode
 #define Influxver false  // Set to true for InfluxDB version
 
-#define SDS011sen true   // Set to true for SDS011 instead PMSX003
+#define ZH10sen false     // Set to true for ZH10 instead PMSX003
+#define SDS011sen false  // Set to true for SDS011 instead PMSX003
 #define LedNeo false     // Set to true for Led Neo multicolor
 #define LTR390UV false
 #define NoxVoxTd false
@@ -457,9 +460,35 @@ float noxIndex;
 SDS011 my_sds;
 float p10, p25;
 int errSDS011;
-#ifdef ESP32
-HardwareSerial port(2);
+
+#if ESP32
+HardwareSerial port(2);     // PIN 17 y 16 ESP32
 #endif
+
+#if ESP8266
+#include <SoftwareSerial.h>
+#define SDS_TX 14 // PMS TX pin
+#define SDS_RX 12 // PMS RX pin
+#endif
+
+#endif
+
+#if ZH10sen     // Funciona para ESP32, falta ESP8266
+
+#define RX_PIN_ZH10 17  // Pin RX del ESP32
+#define TX_PIN_ZH10 15  // Pin TX del ESP32
+HardwareSerial mySerial(2);
+uint8_t command[] = {0xFF, 0x01, 0x35, 0x00, 0x00, 0x00, 0x00, 0x00, 0xCA}; // Comando para leer datos
+uint8_t response[22];
+uint8_t checksum = 0;
+float temperatureZH10;
+float vocZH10;
+uint16_t vocsint;
+uint16_t pm1_0;
+uint16_t pm2_5;
+uint16_t pm10ZH10;
+uint16_t rawTemp;
+uint16_t humiZH10;
 
 #endif
 
@@ -4365,6 +4394,8 @@ void Setup_Sensor()
 
 #if SDS011sen
     Serial.println(F("Test SDS011 Sensor"));
+#elif ZH10sen
+    Serial.println(F("Test ZH10 Sensor"));
 #else
     Serial.println(F("Test Plantower Sensor"));
 #endif
@@ -4377,7 +4408,8 @@ void Setup_Sensor()
 
 #if SDS011sen
 	  my_sds.begin(&port);
-	  Serial.begin(115200);
+#elif ZH10sen
+    mySerial.begin(9600, SERIAL_8N1, RX_PIN_ZH10, TX_PIN_ZH10); // Comunicación con el sensor
 #else
     Serial1.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX, PMS_RX);
 #endif
@@ -4389,8 +4421,6 @@ void Setup_Sensor()
 #else
     pmsSerial1.begin(PMS::BAUD_RATE); // SoftwareSerial PMS1
     pmsSerial2.begin(PMS::BAUD_RATE); // SoftwareSerial PMS2
-    //    Serial0.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX1, PMS_RX1);    //Opción HardwareSerial PMS1
-    //    Serial1.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX2, PMS_RX2);    //Opción HardwareSerial PMS2
     delay(100);
     pms1.activeMode();
     pms2.activeMode();
@@ -4402,7 +4432,12 @@ void Setup_Sensor()
 #if !SoundMeter
 #if !ESP8266SH
 #if !TwoPMS
+//ESP8266
+#if SDS011sen
+    my_sds.begin(SDS_TX, SDS_RX); // SoftwareSerial SDS011 9600 baudrate  
+#else
     pmsSerial.begin(9600); // Software serial begin for PMS sensor
+#endif
 #else
     pmsSerial1.begin(9600); // Software serial begin for PMS1 sensor
     pmsSerial2.begin(9600); // Software serial begin for PMS2 sensor
@@ -4424,6 +4459,58 @@ void Setup_Sensor()
 	  errSDS011 = my_sds.read(&p25, &p10);
 	  if (!errSDS011) {
 		  Serial.println(F("SDS011 sensor found!"));
+
+#elif ZH10sen
+
+    mySerial.write(command, sizeof(command)); // Enviar comando al sensor
+    delay(100); // Esperar respuesta del sensor
+
+    if (mySerial.available() >= 22) { // Se esperan 22 bytes en total
+      Serial.print("Trama recibida: ");
+
+      // Leer y mostrar la trama recibida
+      for (int i = 0; i < 22; i++) {
+        response[i] = mySerial.read();
+        Serial.printf("%02X ", response[i]);
+      }
+      Serial.println();
+
+      // Validar cabecera
+      if (response[0] == 0xFF && response[1] == 0x01 && response[2] == 0x35) {
+        // Extraer datos
+        vocsint = (response[3] << 8) | response[4];
+        pm1_0 = (response[7] << 8) | response[8];
+        pm2_5 = (response[9] << 8) | response[10];
+        pm10ZH10 = (response[11] << 8) | response[12];
+        rawTemp = (response[13] << 8) | response[14];
+        humiZH10 = (response[15] << 8) | response[16];
+
+        // Convertir datos
+        temperatureZH10 = (rawTemp - 500) / 10.0;
+        vocZH10 = vocsint / 10.0;
+
+        // Calcular checksum
+        uint8_t checksum = 0;
+        for (int i = 1; i < 21; i++) { // Sumar bytes del 1 al 20
+          checksum += response[i];
+        }
+        checksum = ~checksum + 1; // Complemento a uno
+
+        // Comparar con el byte de checksum recibido
+        if (checksum == response[21]) {
+          PM25_value = pm2_5;
+          PM1_value = pm1_0;
+          humi = humiZH10;
+          temp = round(temperatureZH10);
+          vocIndex = vocZH10;
+
+        } else {
+          Serial.printf("Error: Checksum inválido. Calculado: %02X, Recibido: %02X\n", checksum, response[21]);
+        }
+      } else {
+        Serial.println("Error: Respuesta inválida (cabecera incorrecta)");
+      }
+
 #else
     if (pms.readUntil(data))
     {
@@ -4442,6 +4529,8 @@ void Setup_Sensor()
 
 #if SDS011sen
       Serial.println(F("Could not find SDS011 sensor!"));
+#elif ZH10sen
+      Serial.println(F("Could not find ZH10 sensor!")); 
 #else
       Serial.println(F("Could not find Plantower sensor!"));
 #endif
@@ -4735,6 +4824,55 @@ void Read_Sensor()
       Serial.print(F("PMS PM2.5: "));
       Serial.print(PM25_value);
       Serial.print(F(" ug/m3   "));
+
+#elif ZH10sen
+
+    mySerial.write(command, sizeof(command)); // Enviar comando al sensor
+    delay(100); // Esperar respuesta del sensor
+
+    if (mySerial.available() >= 22) { // Se esperan 22 bytes en total
+      // Leer y mostrar la trama recibida
+      for (int i = 0; i < 22; i++) {
+      response[i] = mySerial.read();
+    }
+
+    // Validar cabecera
+    if (response[0] == 0xFF && response[1] == 0x01 && response[2] == 0x35) {
+      // Extraer datos
+      vocsint = (response[3] << 8) | response[4];
+      pm1_0 = (response[7] << 8) | response[8];
+      pm2_5 = (response[9] << 8) | response[10];
+      pm10ZH10 = (response[11] << 8) | response[12];
+      rawTemp = (response[13] << 8) | response[14];
+      humiZH10 = (response[15] << 8) | response[16];
+
+      // Convertir datos
+      temperatureZH10 = (rawTemp - 500) / 10.0;
+      vocZH10 = vocsint / 10.0;
+
+      // Calcular checksum
+      uint8_t checksum = 0;
+      for (int i = 1; i < 21; i++) { // Sumar bytes del 1 al 20
+        checksum += response[i];
+      }
+      checksum = ~checksum + 1; // Complemento a uno
+
+      // Comparar con el byte de checksum recibido
+      if (checksum == response[21]) {
+        // Mostrar datos en el monitor serie
+        PM25_value = pm2_5;
+        PM1_value = pm1_0;
+        humi = humiZH10;
+        temp = round(temperatureZH10);
+        vocIndex = vocZH10;
+      }
+      else {
+      Serial.printf("Error: Checksum inválido. Calculado: %02X, Recibido: %02X\n", checksum, response[21]);
+      }
+    } 
+    else {
+      Serial.println("Error: Respuesta inválida (cabecera incorrecta)");
+    }
 
 #else
     if (pms.readUntil(data))
@@ -7133,10 +7271,17 @@ void displayAverage(int average)
   tft.setFreeFont(FF92);
   tft.drawString("PM2.5: ", 10, 165);
   tft.drawString(String(round(PM25_value), 0), 90, 165);
+#if ZH10sen
+tft.drawString("Voc: ", 34, 190);
+  tft.drawString(String(vocIndex), 90, 190);
+#else
   tft.drawString("Voc: ", 34, 181);
   tft.drawString(String(round(vocIndex), 0), 90, 181);
+#endif
+#if !ZH10sen
   tft.drawString("Nox: ", 33, 197);
   tft.drawString(String(round(noxIndex), 0), 90, 197);
+#endif
   tft.setTextSize(1);
   tft.setFreeFont(FF90);
 
@@ -7680,20 +7825,29 @@ void Write_Bluetooth()
   Serial.print(", humidity(%): ");
   Serial.println(humi);
 #elif NoxVoxTd
+#if ZH10sen
+  uint16_t vocint = vocIndex;
+#else
   uint16_t vocint = round(vocIndex);
+#endif
   uint16_t noxint = round(noxIndex);
   provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
   provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
-  provider.writeValueToCurrentSample(vocint, SignalType::VOC_INDEX);
+  provider.writeValueToCurrentSample(vocZH10, SignalType::VOC_INDEX);
   provider.writeValueToCurrentSample(noxint, SignalType::NOX_INDEX);
   provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
   provider.commitSample(Bluetooth_loop_time);
   Serial.print("Bluetooth frame PM2.5(ug/m3): ");
   Serial.print(pm25int);
+#if ZH10sen
+  Serial.print(", Voc(ppb): ");
+  Serial.print(vocZH10);
+#else
   Serial.print(", Voc Index: ");
   Serial.print(vocint);
   Serial.print(", Nox index: ");
   Serial.print(noxint);
+#endif
   Serial.print(", temp(°C): ");
   Serial.print(temp);
   Serial.print(", humidity(%): ");
