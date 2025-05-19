@@ -6,7 +6,7 @@ Página web: https://aireciudadano.com/
 
 Página de la plataforma de medidores: https://sensor.aireciudadano.com/
 
-Guía del firmware AireCiudadano generada con DeepWiki: [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/danielbernalb/AireCiudadano)
+Guía del firmware AireCiudadano generada con DeepWiki:    [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/danielbernalb/AireCiudadano)
 
 Guía de construcción medidor AireCiudadano versión fácil
 ========================================================
