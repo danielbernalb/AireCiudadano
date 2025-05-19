@@ -27,44 +27,49 @@
 // 15. Json lib actualizada a v7
 // 16. ESP8285 flag en platformio.ini
 // 17. En Test_Sensor se identifica SEN54 y 55 con HyT y PMS7003T para parpadeo de HyT
-// 18. Ver 2.5
+// 18. Ver 2.6
 // 19. SPS30 ajuste resultado de intercomparacion con SEN y PMS
 // 20. MinVer con SD
 // 21. Conectividad movil, FlagMobData
 // 22. mqtt.loop ser realiza ahora con la duracion  de MQTT_loop_review en milisegundos
-// 23. Wifi Power max con flag MaxWifiTX programada en pagina web Editor AireCiudadano: Resultado no concluyente de incremento de cobertura
+// 23. Wifi Power max con flag MaxWifiTX SOLO programada desde web mqtt AireCiudadano: Resultado no concluyente de incremento de cobertura
+// 24. ZH10 sensor para ESP32
+// 25- SDS011 sensor para ESP8266 y ESP32
 // OK: Revisar BUG cuando una simcard no se ha usado y no ingresa rapido a la red el ESP8266 se resetea y no sigue preguntando la red para ingresar, a diferencia del codigo Arduino y que si lo logra.
 // OK: MONTiny: fail y no sigue y se reinicia y sale 0:0
 
 // Constantes de Ajuste de sensores programables: pendiente e intercepto. ANALIZAR MAS
-// Verificar nueva libreria Bluetooth que parece compatible con Sensirion UPT Core@^0.3.0, Sigue el error con lectura de nox
+// Verificar nueva libreria Bluetooth que parece compatible con Sensirion UPT Core@^0.3.0, Sigue el error con lectura de nox y en algunos modelos es lento
+// La rutina Button2 falla pero con https://github.com/LennartHennigs/Button2.git#2.3.3 OK, no se porque el sensor viejo falla en eso
 
 #include <Arduino.h>
 #include "main.hpp"
 
 ////////////////////////////////
 // Modo de comunicaciones del sensor:
-#define Wifi true        // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
+#define Wifi true       // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
 #define WPA2 false       // Set to true to WPA2 enterprise networks (IEEE 802.1X)
-#define Bluetooth false  // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
+#define Bluetooth false   // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
 #define TwoPMS false     // Set to true if you want 2 PMS7003 sensors
-#define SoundMeter true  // set to true for Sound Meter
-#define SoundAM true     // Set to true to Sound meter airplane mode
-#define Influxver true   // Set to true for InfluxDB version
+#define SoundMeter false // set to true for Sound Meter
+#define SoundAM false    // Set to true to Sound meter airplane mode
+#define Influxver false  // Set to true for InfluxDB version
 
+#define ZH10sen true     // Set to true for ZH10 instead PMSX003
+#define SDS011sen false  // Set to true for SDS011 instead PMSX003
 #define LedNeo false     // Set to true for Led Neo multicolor
 #define LTR390UV false
 #define NoxVoxTd false
 
 // Seleccion de operador de telefonia movil
 #define TigoKalleyExito false
-#define MovistarVirgin true
+#define MovistarVirgin false
 #define Claro false
 #define Wom false
 
-#define A7670 true
+#define A7670 false
 #define SIM7070 false
 #define SIM800 false
 
@@ -73,9 +78,9 @@
 #define OLED66display false   // Pantalla OLED 0.66"
 #define OLED96display false   // Pantalla OLED 0.96"
 
-#define CO2sensor false        // Set to true for CO2 sensors: SCD30 and SenseAir S8
+#define CO2sensor false          // Set to true for CO2 sensors: SCD30 and SenseAir S8
 #define SiteAltitude 0         // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
-// #define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
+//define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
 
 // Boards diferentes
 #define TTGO_TQ false
@@ -159,6 +164,7 @@ bool FlagpmsHyT = false;
 bool FlagMQTTcon = false;
 bool FlagPoweroff = false;
 bool MaxWifiTX = false;
+bool FlagAdjustSensor;
 
 uint8_t Contacon = 0;
 
@@ -175,7 +181,7 @@ uint32_t chipId = 0;
 #endif
 
 // device id, automatically filled by concatenating the last three fields of the wifi mac address, removing the ":" in betweeen, in HEX format. Example: ChipId (HEX) = 85e646, ChipId (DEC) = 8775238, macaddress = E0:98:06:85:E6:46
-String sw_version = "2.5";
+String sw_version = "2.9";
 String aireciudadano_device_id;
 uint8_t Swver;
 
@@ -448,6 +454,44 @@ float ambientTemperature;
 float vocIndex;
 float noxIndex;
 
+#if SDS011sen
+
+#include <SDS011.h>
+SDS011 my_sds;
+float p10, p25;
+int errSDS011;
+
+#if ESP32
+HardwareSerial port(2);     // PIN 17 y 16 ESP32
+#endif
+
+#if ESP8266
+#include <SoftwareSerial.h>
+#define SDS_TX 14 // PMS TX pin
+#define SDS_RX 12 // PMS RX pin
+#endif
+
+#endif
+
+#if ZH10sen     // Funciona para ESP32, falta ESP8266
+
+#define RX_PIN_ZH10 17  // Pin RX del ESP32
+#define TX_PIN_ZH10 15  // Pin TX del ESP32
+HardwareSerial mySerial(2);
+uint8_t command[] = {0xFF, 0x01, 0x35, 0x00, 0x00, 0x00, 0x00, 0x00, 0xCA}; // Comando para leer datos
+uint8_t response[22];
+uint8_t checksum = 0;
+float temperatureZH10;
+float vocZH10;
+uint16_t vocsint;
+uint16_t pm1_0;
+uint16_t pm2_5;
+uint16_t pm10ZH10;
+uint16_t rawTemp;
+uint16_t humiZH10;
+
+#endif
+
 #endif
 
 #include "PMS.h"
@@ -621,7 +665,7 @@ float hpa;
 // Bluetooth in TTGO T-Display
 #if Bluetooth
 #include <Sensirion_Gadget_BLE.h> // to connect to Sensirion MyAmbience Android App available on Google Play
-#include <BLE2902.h>
+//#include <BLE2902.h>
 // #include <BLEDevice.h>
 // #include <BLEServer.h>
 // #include <BLEUtils.h>
@@ -630,11 +674,12 @@ NimBLELibraryWrapper lib;
 #if (LTR390 || SoundMeter)
 DataProvider provider(lib, DataType::PM10_PM25_PM40_PM100);
 #elif CO2sensor
-DataProvider provider(lib, DataType::T_RH_CO2_ALT);
+DataProvider provider(lib, DataType::T_RH_CO2);
 #elif NoxVoxTd
 //DataProvider provider(lib, DataType::T_RH_VOC_NOX_PM25); // Por error al bajar los datos con nox: assert failed: void ByteArray<SIZE>
 DataProvider provider(lib, DataType::T_RH_VOC_PM25_V2);
 #else
+//DataProvider provider(lib, DataType::PM10_PM25_PM40_PM100);
 DataProvider provider(lib, DataType::T_RH_VOC_PM25_V2);
 #endif
 #endif
@@ -829,8 +874,16 @@ Adafruit_NeoPixel LED_RGB(1, PinLedNeo, NEO_GRBW + NEO_KHZ800);  // Creamos el o
 #endif
 
 #if LTR390UV
-#include <bb_ltr390.h>
-LTR390 ltr;
+#include <Wire.h>
+#include <LTR390.h>
+#define I2C_ADDRESS 0x53
+LTR390 ltr390(I2C_ADDRESS);
+float getUVIval;
+uint32_t rawUVS;
+
+#define EnLTR390 13
+//#define EnLTR390 26
+
 #endif
 
 // MOBILE DATA TRANSMISION
@@ -906,6 +959,22 @@ void setup()
   pinMode(OUT_EN, OUTPUT);
   // Off sensors
   digitalWrite(OUT_EN, LOW); // step-up off
+
+#if LTR390UV
+  pinMode(EnLTR390, OUTPUT);
+
+  // Configurar el pin con resistencia pulldown interna
+  gpio_pulldown_en((gpio_num_t)EnLTR390);
+  gpio_pullup_dis((gpio_num_t)EnLTR390);
+  
+  // Opcionalmente, configurar el estado del pin durante deep sleep
+  //gpio_hold_en((gpio_num_t)EnLTR390);
+
+
+  // Off sensors
+  digitalWrite(EnLTR390, LOW); // LTR390 off
+#endif
+
 #endif
 
 #if SIM7070
@@ -1127,6 +1196,11 @@ void setup()
 #if Tdisplaydisp
   // On sensors
   digitalWrite(OUT_EN, HIGH); // step-up on
+
+#if EnLTR390
+  digitalWrite(EnLTR390, HIGH); // LTR390 on
+#endif
+
   delay(100);
 #endif
 
@@ -1562,7 +1636,7 @@ void loop()
     Serial.print(dBAmax, 1);
     Serial.println(F(" dBA"));
 #elif LTR390UV
-    Serial.print(F("UV Index: "));
+    Serial.print(F("UV Index int: "));
     Serial.println(pm25int);
 #else
     Serial.print(F("PM2.5: "));
@@ -2493,22 +2567,38 @@ void Start_Captive_Portal()
 
   if (eepromConfig.ConfigValues[7] == '0')
   {
+#if SDS011sen
+    const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0' checked> None<br><input type='radio' name='customSenPM' value='1'> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> SDS011";
+#else
     const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0' checked> None<br><input type='radio' name='customSenPM' value='1'> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> Plantower PMS adjusted";
+#endif
     new (&custom_sensorPM_type) WiFiManagerParameter(custom_senPM_str);
   }
   else if (eepromConfig.ConfigValues[7] == '1')
   {
+#if SDS011sen   
+    const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1' checked> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> SDS011";
+#else
     const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1' checked> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> Plantower PMS adjusted";
+#endif
     new (&custom_sensorPM_type) WiFiManagerParameter(custom_senPM_str);
   }
   else if (eepromConfig.ConfigValues[7] == '2')
   {
+#if SDS011sen
+    const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1'> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2' checked> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> SDS011";
+#else
     const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1'> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2' checked> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> Plantower PMS adjusted";
+#endif
     new (&custom_sensorPM_type) WiFiManagerParameter(custom_senPM_str);
   }
   else if (eepromConfig.ConfigValues[7] == '3')
   {
+#if SDS011sen
+    const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1'> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3' checked> SDS011";
+#else
     const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1'> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3' checked> Plantower PMS adjusted";
+#endif
     new (&custom_sensorPM_type) WiFiManagerParameter(custom_senPM_str);
   }
 
@@ -4301,14 +4391,29 @@ void Setup_Sensor()
     {
 #endif
 #endif
+
+#if SDS011sen
+    Serial.println(F("Test SDS011 Sensor"));
+#elif ZH10sen
+    Serial.println(F("Test ZH10 Sensor"));
+#else
     Serial.println(F("Test Plantower Sensor"));
+#endif
 
 #if !ESP8266
 
 #if !TwoPMS
 
 #if !TTGO_TQ
+
+#if SDS011sen
+	  my_sds.begin(&port);
+#elif ZH10sen
+    mySerial.begin(9600, SERIAL_8N1, RX_PIN_ZH10, TX_PIN_ZH10); // Comunicación con el sensor
+#else
     Serial1.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX, PMS_RX);
+#endif
+
 #else
     Serial2.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX, PMS_RX);
 #endif
@@ -4316,8 +4421,6 @@ void Setup_Sensor()
 #else
     pmsSerial1.begin(PMS::BAUD_RATE); // SoftwareSerial PMS1
     pmsSerial2.begin(PMS::BAUD_RATE); // SoftwareSerial PMS2
-    //    Serial0.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX1, PMS_RX1);    //Opción HardwareSerial PMS1
-    //    Serial1.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX2, PMS_RX2);    //Opción HardwareSerial PMS2
     delay(100);
     pms1.activeMode();
     pms2.activeMode();
@@ -4329,7 +4432,12 @@ void Setup_Sensor()
 #if !SoundMeter
 #if !ESP8266SH
 #if !TwoPMS
+//ESP8266
+#if SDS011sen
+    my_sds.begin(SDS_TX, SDS_RX); // SoftwareSerial SDS011 9600 baudrate  
+#else
     pmsSerial.begin(9600); // Software serial begin for PMS sensor
+#endif
 #else
     pmsSerial1.begin(9600); // Software serial begin for PMS1 sensor
     pmsSerial2.begin(9600); // Software serial begin for PMS2 sensor
@@ -4347,9 +4455,68 @@ void Setup_Sensor()
 #if !(TwoPMS || SoundMeter)
     delay(1000);
 
+#if SDS011sen
+	  errSDS011 = my_sds.read(&p25, &p10);
+	  if (!errSDS011) {
+		  Serial.println(F("SDS011 sensor found!"));
+
+#elif ZH10sen
+
+    mySerial.write(command, sizeof(command)); // Enviar comando al sensor
+    delay(100); // Esperar respuesta del sensor
+
+    if (mySerial.available() >= 22) { // Se esperan 22 bytes en total
+      Serial.print("Trama recibida: ");
+
+      // Leer y mostrar la trama recibida
+      for (int i = 0; i < 22; i++) {
+        response[i] = mySerial.read();
+        Serial.printf("%02X ", response[i]);
+      }
+      Serial.println();
+
+      // Validar cabecera
+      if (response[0] == 0xFF && response[1] == 0x01 && response[2] == 0x35) {
+        // Extraer datos
+        vocsint = (response[3] << 8) | response[4];
+        pm1_0 = (response[7] << 8) | response[8];
+        pm2_5 = (response[9] << 8) | response[10];
+        pm10ZH10 = (response[11] << 8) | response[12];
+        rawTemp = (response[13] << 8) | response[14];
+        humiZH10 = (response[15] << 8) | response[16];
+
+        // Convertir datos
+        temperatureZH10 = (rawTemp - 500) / 10.0;
+        vocZH10 = vocsint / 10.0;
+
+        // Calcular checksum
+        uint8_t checksum = 0;
+        for (int i = 1; i < 21; i++) { // Sumar bytes del 1 al 20
+          checksum += response[i];
+        }
+        checksum = ~checksum + 1; // Complemento a uno
+
+        // Comparar con el byte de checksum recibido
+        if (checksum == response[21]) {
+          PM25_value = pm2_5;
+          PM1_value = pm1_0;
+          humi = humiZH10;
+          temp = round(temperatureZH10);
+          vocIndex = vocZH10;
+
+        } else {
+          Serial.printf("Error: Checksum inválido. Calculado: %02X, Recibido: %02X\n", checksum, response[21]);
+        }
+      } else {
+        Serial.println("Error: Respuesta inválida (cabecera incorrecta)");
+      }
+
+#else
     if (pms.readUntil(data))
     {
       Serial.println(F("Plantower sensor found!"));
+#endif
+
       PMSsen = true;
 #if ESP8285
       digitalWrite(LEDPIN, LOW); // turn the LED off by making the voltage LOW
@@ -4359,7 +4526,15 @@ void Setup_Sensor()
     }
     else
     {
+
+#if SDS011sen
+      Serial.println(F("Could not find SDS011 sensor!"));
+#elif ZH10sen
+      Serial.println(F("Could not find ZH10 sensor!")); 
+#else
       Serial.println(F("Could not find Plantower sensor!"));
+#endif
+
     }
 #elif TwoPMS
     delay(500);
@@ -4499,7 +4674,7 @@ void Read_Sensor()
         Serial.print("Error during reading values: ");
         Serial.println(ret);
       }
-      if (failpm > 14)
+      if (failpm > 120)
       {
         failpm = 0;
         Serial.print(F("Reset lectura sensor erronea 1"));
@@ -4518,7 +4693,7 @@ void Read_Sensor()
     {
       if ((PM25_value == 0 && PM1_value == 0) || (PM25_value == PM25_valueold))
       { // Recuperación de error en 0
-        if (failpm > 20)
+        if (failpm > 120)
         {
           failpm = 0;
           Serial.print(F("Reset lectura sensor erronea 2"));
@@ -4534,8 +4709,19 @@ void Read_Sensor()
       Serial.print(PM25_value);
       Serial.print(F(" ug/m3   "));
       PM25_value_ori = PM25_value;
+
+#if Bluetooth
+      if (FlagAdjustSensor == 0){
+        Serial.print("No ");
+      }
+      else{
+        //Serial.println("Adjust PM2.5 SPS30");
+        PM25_value = ((1207 * PM25_value_ori) / 1000) - 1.01; // Ajuste propuesto por paper USA, falta calibracion propia  
+      }
+#else
       // PM25_value = ((1280 * PM25_value_ori) / 1000) + 1.78; // Ajuste propuesto por paper USA, falta calibracion propia
       PM25_value = ((1207 * PM25_value_ori) / 1000) - 1.01; // Ajuste propuesto por paper USA, falta calibracion propia
+#endif
       if (PM25_value < 0)
         PM25_value = 0;
       Serial.print(F("Adjust: "));
@@ -4562,7 +4748,7 @@ void Read_Sensor()
       Setup_Sensor();
       Serial.println(F("Reinit I2C"));
       delay(10);
-      if (failpm > 20)
+      if (failpm > 120)
       {
         failpm = 0;
         ESP.restart();
@@ -4574,7 +4760,7 @@ void Read_Sensor()
     {
       if (PM25_value == 0 && PM1_value == 0)
       { // Recuperación de error en 0
-        if (failpm > 20)
+        if (failpm > 120)
         {
           failpm = 0;
           ESP.restart();
@@ -4628,6 +4814,67 @@ void Read_Sensor()
 #endif
   {
 #if !TwoPMS
+
+#if SDS011sen
+    errSDS011 = my_sds.read(&p25, &p10);
+	  if (!errSDS011) 
+    {
+      failpm = 0;
+      PM25_value = p25;
+      Serial.print(F("PMS PM2.5: "));
+      Serial.print(PM25_value);
+      Serial.print(F(" ug/m3   "));
+
+#elif ZH10sen
+
+    mySerial.write(command, sizeof(command)); // Enviar comando al sensor
+    delay(100); // Esperar respuesta del sensor
+
+    if (mySerial.available() >= 22) { // Se esperan 22 bytes en total
+      // Leer y mostrar la trama recibida
+      for (int i = 0; i < 22; i++) {
+      response[i] = mySerial.read();
+    }
+
+    // Validar cabecera
+    if (response[0] == 0xFF && response[1] == 0x01 && response[2] == 0x35) {
+      // Extraer datos
+      vocsint = (response[3] << 8) | response[4];
+      pm1_0 = (response[7] << 8) | response[8];
+      pm2_5 = (response[9] << 8) | response[10];
+      pm10ZH10 = (response[11] << 8) | response[12];
+      rawTemp = (response[13] << 8) | response[14];
+      humiZH10 = (response[15] << 8) | response[16];
+
+      // Convertir datos
+      temperatureZH10 = (rawTemp - 500) / 10.0;
+      vocZH10 = vocsint / 10.0;
+
+      // Calcular checksum
+      uint8_t checksum = 0;
+      for (int i = 1; i < 21; i++) { // Sumar bytes del 1 al 20
+        checksum += response[i];
+      }
+      checksum = ~checksum + 1; // Complemento a uno
+
+      // Comparar con el byte de checksum recibido
+      if (checksum == response[21]) {
+        // Mostrar datos en el monitor serie
+        PM25_value = pm2_5;
+        PM1_value = pm1_0;
+        humi = humiZH10;
+        temp = round(temperatureZH10);
+        vocIndex = vocZH10;
+      }
+      else {
+      Serial.printf("Error: Checksum inválido. Calculado: %02X, Recibido: %02X\n", checksum, response[21]);
+      }
+    } 
+    else {
+      Serial.println("Error: Respuesta inválida (cabecera incorrecta)");
+    }
+
+#else
     if (pms.readUntil(data))
     {
       failpm = 0;
@@ -4636,18 +4883,47 @@ void Read_Sensor()
       Serial.print(PM25_value);
       Serial.print(F(" ug/m3   "));
       PM1_value = data.PM_AE_UG_1_0;
+#endif
+
       PM25_value_ori = PM25_value;
+
+#if Bluetooth
+      if (FlagAdjustSensor == 0){
+        Serial.print("No ");
+      }
+      else{
+        //Serial.println("Adjust PM2.5 PMSx003");
+        // PM25_value = ((562 * PM25_value_ori) / 1000) - 1; // Ecuación de ajuste resultado de 13 intercomparaciones entre PMS7003 y SPS30 por meses
+        // PM25_value = ((553 * PM25_value_ori) / 1000) + 1.3; // Segundo ajuste
+        PM25_value = ((630 * PM25_value_ori) / 1000) + 1.56; // Tercer ajuste a los que salio en Lima y pruebas aqui
+      }
+#else
+
+#if SDS011sen
+      PM25_value = PM25_value;
+#else
       // PM25_value = ((562 * PM25_value_ori) / 1000) - 1; // Ecuación de ajuste resultado de 13 intercomparaciones entre PMS7003 y SPS30 por meses
       // PM25_value = ((553 * PM25_value_ori) / 1000) + 1.3; // Segundo ajuste
       PM25_value = ((630 * PM25_value_ori) / 1000) + 1.56; // Tercer ajuste a los que salio en Lima y pruebas aqui
+#endif
+
+#endif
+      if (PM25_value < 0)
+        PM25_value = 0;
       Serial.print(F("Adjust: "));
       Serial.print(PM25_value);
       Serial.println(F(" ug/m3"));
     }
     else
     {
+
+#if SDS011sen
+      Serial.println(F("No data by SDS011 sensor!"));
+#else
       Serial.println(F("No data by Plantower sensor!"));
-      if (failpm > 20)
+#endif
+
+      if (failpm > 120)
       {
         failpm = 0;
         ESP.restart();
@@ -4673,7 +4949,7 @@ void Read_Sensor()
     else
     {
       Serial.println(F("No data by Plantower1 sensor!"));
-      if (failpm > 20)
+      if (failpm > 120)
       {
         failpm = 0;
         ESP.restart();
@@ -4699,7 +4975,7 @@ void Read_Sensor()
     else
     {
       Serial.println(F("No data by Plantower2 sensor!"));
-      if (failpm > 20)
+      if (failpm > 120)
       {
         failpm = 0;
         ESP.restart();
@@ -4981,19 +5257,83 @@ void Read_SoundMeter()
 
 void Setup_UV()
 {
-  if (ltr.init(-1, -1, 0) == LTR390_SUCCESS)  // found a supported device
-    Serial.println("LTR390 init success!");
+  Wire.begin();
+  if(!ltr390.init())
+  {
+    Serial.println("Couldn't find LTR sensor!");
+  }
   else
-    Serial.println("LTR390 not init");
+  {
+    Serial.println("Found LTR sensor!");
+
+  ltr390.setMode(LTR390_MODE_UVS);
+  if (ltr390.getMode() == LTR390_MODE_ALS) {
+    Serial.println("In ALS mode");
+  } else {
+    Serial.println("In UVS mode");
+  }
+
+  ltr390.setGain(LTR390_GAIN_18);
+  Serial.print("Gain: ");
+  switch (ltr390.getGain()) {
+    case LTR390_GAIN_1: Serial.println(1); break;
+    case LTR390_GAIN_3: Serial.println(3); break;
+    case LTR390_GAIN_6: Serial.println(6); break;
+    case LTR390_GAIN_9: Serial.println(9); break;
+    case LTR390_GAIN_18: Serial.println(18); break;
+  }
+
+  ltr390.setResolution(LTR390_RESOLUTION_20BIT);
+  Serial.print("Resolution: ");
+  switch (ltr390.getResolution()) {
+    case LTR390_RESOLUTION_13BIT: Serial.println(13); break;
+    case LTR390_RESOLUTION_16BIT: Serial.println(16); break;
+    case LTR390_RESOLUTION_17BIT: Serial.println(17); break;
+    case LTR390_RESOLUTION_18BIT: Serial.println(18); break;
+    case LTR390_RESOLUTION_19BIT: Serial.println(19); break;
+    case LTR390_RESOLUTION_20BIT: Serial.println(20); break;
+  }
+  //ltr390.setThresholds(100, 1000);
+  //ltr390.configInterrupt(true, LTR390_MODE_UVS);
+  }
 }
 
 void Read_UV()
 {
-  if (ltr.start(true) == LTR390_SUCCESS) { // start sampling
-    ltr.getSample();
-    PM25_value = ltr.getUVI();
-    Serial.print("UV index:");
-    Serial.println(PM25_value);
+  if (ltr390.newDataAvailable()) 
+  { 
+//    getUVIval = ltr390.getUVI();
+    getUVIval = ltr390.getUVI();
+    PM25_value = round(getUVIval);
+//    PM25_value = int(getUVIval / 2.7f);
+    Serial.print("UV index: ");
+    Serial.print(getUVIval);
+    Serial.print("   intori: ");
+    Serial.println(PM25_value, 0);
+    rawUVS = ltr390.readUVS();
+    Serial.print("UVraw: ");
+    Serial.println(rawUVS);
+
+/*
+    Serial.print("Gain: ");
+    switch (ltr390.getGain()) {
+      case LTR390_GAIN_1: Serial.println(1); break;
+      case LTR390_GAIN_3: Serial.println(3); break;
+      case LTR390_GAIN_6: Serial.println(6); break;
+      case LTR390_GAIN_9: Serial.println(9); break;
+      case LTR390_GAIN_18: Serial.println(18); break;
+    }
+    Serial.print("Resolution: ");
+    switch (ltr390.getResolution()) {
+      case LTR390_RESOLUTION_13BIT: Serial.println(13); break;
+      case LTR390_RESOLUTION_16BIT: Serial.println(16); break;
+      case LTR390_RESOLUTION_17BIT: Serial.println(17); break;
+      case LTR390_RESOLUTION_18BIT: Serial.println(18); break;
+      case LTR390_RESOLUTION_19BIT: Serial.println(19); break;
+      case LTR390_RESOLUTION_20BIT: Serial.println(20); break;
+    }
+*/
+  
   }
   else
     Serial.print("LTR390 not connected");
@@ -5455,7 +5795,8 @@ void Button_Init()
 #if Wifi
     tft.drawString("ID " + aireciudadano_device_id, 8, 5);         //!!!Arreglar por nuevo tamaño String
 #elif Bluetooth
-    tft.drawString("ID MyAm 00:" + provider.getDeviceIdString(), 8, 5);         //!!!Arreglar por nuevo tamaño String
+//    tft.drawString("ID MyAm 00:" + provider.getDeviceIdString(), 8, 5);         //!!!Arreglar por nuevo tamaño String
+    tft.drawString("ID MyAm:" + provider.getDeviceIdString(), 8, 5);         //!!!Arreglar por nuevo tamaño String
 #endif
     tft.drawString("SW ver: " + sw_version, 8, 22);
 #if Bluetooth
@@ -5488,6 +5829,29 @@ void Button_Init()
   // Bottom button short click: show buttons info
   button_bottom.setClickHandler([](Button2 & b)
   {
+
+///////////////
+/*
+    if (GainLTR390 == 1) {
+        GainLTR390 = 3;
+    }
+    else if (GainLTR390 == 3) {
+        GainLTR390 = 6;
+    }
+    else if (GainLTR390 == 6) {
+        GainLTR390 = 9;
+    }
+    else if (GainLTR390 == 9) {
+        GainLTR390 = 18;
+    }
+    else if (GainLTR390 == 18) {
+        GainLTR390 = 1;
+    }
+   
+    ltr.setGain(GainLTR390);
+*/
+//////////////
+
     Serial.println(F("Bottom button short click"));
     tft.fillScreen(TFT_WHITE);
     tft.setTextColor(TFT_BLUE, TFT_WHITE);
@@ -5504,7 +5868,30 @@ void Button_Init()
     tft.drawString("Right button", 3, 75);
     tft.drawString("  Short: Info", 3, 91);
     tft.drawString("  Long: Sleep", 3, 107);
-    delay(5000);
+    if (FlagAdjustSensor == 0)
+      tft.drawString("NO Adjust Sensor", 3, 150);
+    else
+      tft.drawString("Adjust Sensor", 3, 150);
+    delay(2500);
+    if (digitalRead(BUTTON_TOP) == false){
+      delay(100);
+      if (digitalRead(BUTTON_TOP) == false){
+        delay(100);
+        if (digitalRead(BUTTON_TOP) == false){
+          if (FlagAdjustSensor == 0){
+            FlagAdjustSensor = 1;
+            Serial.println("Adjust Sensor");
+            tft.drawString("Adjust Sens        ", 3, 150);
+          }
+          else{
+            FlagAdjustSensor = 0;
+            Serial.println("No Adjust Sensor");
+            tft.drawString("NO Adjust Sens  ", 3, 150);
+          }
+        }
+      }
+    }
+    delay(2500);
     Update_Display();
   });
 
@@ -6529,6 +6916,10 @@ void Suspend_Device()
     // Off sensors
     digitalWrite(OUT_EN, LOW); // step-up off
 
+#if LTR390UV
+    digitalWrite(EnLTR390, LOW); // LTR390 off
+#endif  
+
 #if Tdisplaydisp
 
     if (TDisplay == true)
@@ -6546,6 +6937,7 @@ void Suspend_Device()
       tft.writecommand(TFT_SLPIN);
       // #endif
     }
+
 #else
     espDelay(3000);
 #endif
@@ -6565,6 +6957,13 @@ void Suspend_Device()
 #if !ESP32C3AG        // REVISAR!!! para el caso ESP32C3AG
   esp_sleep_enable_ext0_wakeup(GPIO_NUM_35, 0); // Top button
   // esp_sleep_enable_ext0_wakeup(GPIO_NUM_0, 0); // Bottom button
+
+  // Antes de entrar en deep sleep:
+
+#if LTR390UV
+  digitalWrite(EnLTR390, LOW);
+  gpio_deep_sleep_hold_en();  // Mantener el estado de los pines durante deep sleep
+#endif
 
   delay(200);
   esp_deep_sleep_start();
@@ -6840,7 +7239,10 @@ void displayAverage(int average)
   // Draw PM25 units
   tft.setTextSize(1);
   tft.setFreeFont(FF90);
-  tft.drawString("PM2.5: ", 30, 197);
+  if (FlagAdjustSensor == 0)
+    tft.drawString("PM2.5: ", 30, 197);
+  else
+    tft.drawString("PM2.5. ", 30, 197);
   tft.drawString(String(round(PM25_value), 0), 90, 197);
 
   if (temp != 0 || humi != 0)
@@ -6869,10 +7271,17 @@ void displayAverage(int average)
   tft.setFreeFont(FF92);
   tft.drawString("PM2.5: ", 10, 165);
   tft.drawString(String(round(PM25_value), 0), 90, 165);
+#if ZH10sen
+tft.drawString("Voc: ", 34, 190);
+  tft.drawString(String(vocIndex), 90, 190);
+#else
   tft.drawString("Voc: ", 34, 181);
   tft.drawString(String(round(vocIndex), 0), 90, 181);
+#endif
+#if !ZH10sen
   tft.drawString("Nox: ", 33, 197);
   tft.drawString(String(round(noxIndex), 0), 90, 197);
+#endif
   tft.setTextSize(1);
   tft.setFreeFont(FF90);
 
@@ -7086,9 +7495,10 @@ void displayAverage(int average)
   // Draw PM25 units
   tft.setTextSize(1);
   tft.setFreeFont(FF90);
-  tft.drawString("UV index", 28, 197);
-  tft.drawString(String(round(PM25_value), 0), 107, 197);
-  tft.drawString("r: " + String(ltr.uv()), 60, 220);
+  tft.drawString("UVindex", 25, 197);
+  tft.drawString(String(getUVIval, 1), 99, 197);
+//  tft.drawString("r: " + String(ltr.uv()), 60, 220);
+  tft.drawString("r: " + String(rawUVS), 58, 220);
 
 #if Wifi
   int rssi;
@@ -7415,20 +7825,29 @@ void Write_Bluetooth()
   Serial.print(", humidity(%): ");
   Serial.println(humi);
 #elif NoxVoxTd
+#if ZH10sen
+  uint16_t vocint = vocIndex;
+#else
   uint16_t vocint = round(vocIndex);
+#endif
   uint16_t noxint = round(noxIndex);
   provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
   provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
-  provider.writeValueToCurrentSample(vocint, SignalType::VOC_INDEX);
+  provider.writeValueToCurrentSample(vocZH10, SignalType::VOC_INDEX);
   provider.writeValueToCurrentSample(noxint, SignalType::NOX_INDEX);
   provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
   provider.commitSample(Bluetooth_loop_time);
   Serial.print("Bluetooth frame PM2.5(ug/m3): ");
   Serial.print(pm25int);
+#if ZH10sen
+  Serial.print(", Voc(ppb): ");
+  Serial.print(vocZH10);
+#else
   Serial.print(", Voc Index: ");
   Serial.print(vocint);
   Serial.print(", Nox index: ");
   Serial.print(noxint);
+#endif
   Serial.print(", temp(°C): ");
   Serial.print(temp);
   Serial.print(", humidity(%): ");
