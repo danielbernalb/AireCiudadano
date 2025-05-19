@@ -57,7 +57,7 @@
 #define SoundAM false    // Set to true to Sound meter airplane mode
 #define Influxver false  // Set to true for InfluxDB version
 
-#define ZH10sen false     // Set to true for ZH10 instead PMSX003
+#define ZH10sen true     // Set to true for ZH10 instead PMSX003
 #define SDS011sen false  // Set to true for SDS011 instead PMSX003
 #define LedNeo false     // Set to true for Led Neo multicolor
 #define LTR390UV false
