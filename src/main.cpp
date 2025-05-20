@@ -2,7 +2,7 @@
 // AireCiudadano medidor Fijo - Medidor de PM2.5 abierto, medición opcional de humedad y temperatura.
 // Más información en: aireciudadano.com
 // Este firmware es un fork del proyecto Anaire (https://www.anaire.org/) recomendado para la medición de CO2.
-// 21/03/2024 info@aireciudadano.com
+// 19/05/2025 info@aireciudadano.com
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Novedades:
@@ -35,8 +35,6 @@
 // 23. Wifi Power max con flag MaxWifiTX SOLO programada desde web mqtt AireCiudadano: Resultado no concluyente de incremento de cobertura
 // 24. ZH10 sensor para ESP32
 // 25- SDS011 sensor para ESP8266 y ESP32
-// OK: Revisar BUG cuando una simcard no se ha usado y no ingresa rapido a la red el ESP8266 se resetea y no sigue preguntando la red para ingresar, a diferencia del codigo Arduino y que si lo logra.
-// OK: MONTiny: fail y no sigue y se reinicia y sale 0:0
 
 // Constantes de Ajuste de sensores programables: pendiente e intercepto. ANALIZAR MAS
 // Verificar nueva libreria Bluetooth que parece compatible con Sensirion UPT Core@^0.3.0, Sigue el error con lectura de nox y en algunos modelos es lento
@@ -46,22 +44,26 @@
 #include "main.hpp"
 
 ////////////////////////////////
-// Modo de comunicaciones del sensor:
-#define Wifi true       // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
+// Flags para configuracion del sensor:
+////////////////////////////////
+
+// Comunicaciones:
+#define Wifi true        // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
 #define WPA2 false       // Set to true to WPA2 enterprise networks (IEEE 802.1X)
-#define Bluetooth false   // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
+#define Bluetooth false  // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
+
+// Opciones para sensores:
 #define TwoPMS false     // Set to true if you want 2 PMS7003 sensors
 #define SoundMeter false // set to true for Sound Meter
 #define SoundAM false    // Set to true to Sound meter airplane mode
-#define Influxver false  // Set to true for InfluxDB version
-
+#define Influxver false  // Set to true for InfluxDB version SP
 #define ZH10sen true     // Set to true for ZH10 instead PMSX003
 #define SDS011sen false  // Set to true for SDS011 instead PMSX003
 #define LedNeo false     // Set to true for Led Neo multicolor
-#define LTR390UV false
-#define NoxVoxTd false
+#define LTR390UV false   // LTR390 version
+#define NoxVoxTd false   // Lectura de NoxVox
 
 // Seleccion de operador de telefonia movil
 #define TigoKalleyExito false
@@ -78,14 +80,15 @@
 #define OLED66display false   // Pantalla OLED 0.66"
 #define OLED96display false   // Pantalla OLED 0.96"
 
-#define CO2sensor false          // Set to true for CO2 sensors: SCD30 and SenseAir S8
-#define SiteAltitude 0         // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
-//define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
+// CO2:
+#define CO2sensor false       // Set to true for CO2 sensors: SCD30 and SenseAir S8
+#define SiteAltitude 0        // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
+//define SiteAltitude 2600    // 2600 meters above sea level: Bogota, Colombia
 
 // Boards diferentes
 #define TTGO_TQ false
 
-// Definiciones opcionales para version Wifi
+// Definiciones adicionales:
 #define BrownoutOFF false   // Colocar en true en boards con problemas de RESET por Brownout o bajo voltaje
 #define ESP8266SH false     // Colocar para PMS en pin 0 - Hardware Serial
 #define PreProgSensor false // Variables de sensor preprogramadas:
@@ -94,32 +97,34 @@
                             // Valores de configuración: char ConfigValues[9] = "000xxxxx";
                             // Nombre estación: char aireciudadano_device_name[36] = "xxxxxxxxxxxxxx";
 
+// Define de diferentes versiones de plataformas:
+
 #ifdef ESP32S3def
-#define ESP32S3 true      // Set to true in case you use an ESP32S3
+#define ESP32S3 true      // ESP32S3
 #else
-#define ESP32S3 false     // Set to true in case you use an ESP32S3
+#define ESP32S3 false
 #endif
 
 #ifdef ESP32C3AGdef
-#define ESP32C3AG true    // Set to true in case you use an ESP32C3 version AirGrad
+#define ESP32C3AG true    // ESP32C3 version AirGrad
 #else
-#define ESP32C3AG false   // Set to true in case you use an ESP32C3 version AirGrad
+#define ESP32C3AG false
 #endif
 
 #ifdef ESP8285def
-#define ESP8285 true      // Set to true in case you use an ESP8285 switch
+#define ESP8285 true      // ESP8285 switch
 #else
 #define ESP8285 false
 #endif
 
 #ifdef Rosverdef
-#define Rosver true       // Set to true in case you use an ESP32S3
+#define Rosver true       // Rosario version
 #else
-#define Rosver false      // Set to true in case you use an ESP32S3
+#define Rosver false
 #endif
 
 #ifdef MinVerdef
-#define MinVer true       // Set to true for a minimum version like Rosver but without SD support and any sensor
+#define MinVer true       // Version minima como Rosver pero sin soporte SD y sensores
 #else
 #define MinVer false
 #endif
@@ -137,12 +142,14 @@
 #endif
 
 #ifdef MobDataSPver
-#define MobDataSP true
+#define MobDataSP true    // Version Mobil para SP
 #else
 #define MobDataSP false
 #endif
 
-// Fin definiciones opcionales Wifi
+////////////////////////////////
+// Definiciones y variables iniciales:
+////////////////////////////////
 
 bool SPS30sen = false;  // Sensor Sensirion SPS30
 bool SEN5Xsen = false;  // Sensor Sensirion SEN5X
@@ -233,7 +240,6 @@ char aireciudadano_device_nameTemp[30] = {0};
 #endif
 
 #if BrownoutOFF
-// OFF BROWNOUT/////////////////////
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
 #endif
