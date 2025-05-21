@@ -34,7 +34,31 @@
 // 22. mqtt.loop ser realiza ahora con la duracion  de MQTT_loop_review en milisegundos
 // 23. Wifi Power max con flag MaxWifiTX SOLO programada desde web mqtt AireCiudadano: Resultado no concluyente de incremento de cobertura
 // 24. ZH10 sensor para ESP32
-// 25- SDS011 sensor para ESP8266 y ESP32
+// 25. SDS011 sensor para ESP8266 y ESP32
+// 26. Refactorizacion de codigo por bloques:
+// * INIT
+// * SETUP
+// * CONTROL LOOP
+// * FUNCTIONS
+// - Communications / Data save
+// 1. Wifi
+// 1.1. Status
+// 1.2. Wifi Connection
+// 1.3. HTTP / browser Connection
+// 1.4. Captive Portal
+// 2. MQTT
+// 3. Mobile data
+// 4. Bluetooth
+//- Sensor routines
+// 6. Sensors
+// - General functions
+// 7. Device Info
+// 8. Firmware Update
+// 9. EEPROM
+// 10. LedNeo
+// * Display
+// 11. TTGO TDisplay routines
+// 12. LCD Display routines
 
 // Constantes de Ajuste de sensores programables: pendiente e intercepto. ANALIZAR MAS
 // Verificar nueva libreria Bluetooth que parece compatible con Sensirion UPT Core@^0.3.0, Sigue el error con lectura de nox y en algunos modelos es lento
@@ -42,6 +66,10 @@
 
 #include <Arduino.h>
 #include "main.hpp"
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// * INIT
+///////////////////////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////
 // Flags para configuracion del sensor:
@@ -59,7 +87,7 @@
 #define SoundMeter false // set to true for Sound Meter
 #define SoundAM false    // Set to true to Sound meter airplane mode
 #define Influxver false  // Set to true for InfluxDB version SP
-#define ZH10sen true     // Set to true for ZH10 instead PMSX003
+#define ZH10sen false    // Set to true for ZH10 instead PMSX003
 #define SDS011sen false  // Set to true for SDS011 instead PMSX003
 #define LedNeo false     // Set to true for Led Neo multicolor
 #define LTR390UV false   // LTR390 version
@@ -528,22 +556,31 @@ PMS::DATA data;
 
 #else     // esTwoPMS test AirGrad
 
+#if ESP8266
 #include <SoftwareSerial.h>
-//#include <HardwareSerial.h>
+#else
+#include <HardwareSerial.h>
+#endif
 
 #define PMS_TX1 20 // PMS TX pin
 #define PMS_RX1 21 // PMS RX pin
 #define PMS_TX2 0 // PMS TX pin      
 #define PMS_RX2 1  // PMS RX pin
 
+#if ESP8266
 SoftwareSerial pmsSerial1(PMS_TX1, PMS_RX1);    //SoftwareSerial
-//PMS pms1(Serial0);    // HardwareSerial
 PMS pms1(pmsSerial1);   //SoftwareSerial
+#else
+PMS pms1(Serial2);    // HardwareSerial
+#endif
 PMS::DATA data;
 
+#if ESP8266
 SoftwareSerial pmsSerial2(PMS_TX2, PMS_RX2);    //SoftwareSerial
-//PMS pms2(Serial1);    // HardwareSerial
 PMS pms2(pmsSerial2);   // SoftwareSerial
+#else
+PMS pms2(Serial1);    // HardwareSerial
+#endif
 PMS::DATA data2;
 
 #endif
@@ -948,7 +985,7 @@ PubSubClient MQTT_client(client);
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// SETUP
+// * SETUP
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 void setup()
@@ -1455,8 +1492,9 @@ connectstart:
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// CONTROL LOOP
+// * CONTROL LOOP
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+
 void loop()
 {
   // If a firmware update is in progress do not do anything else
@@ -1919,8 +1957,21 @@ void loop()
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// FUNCTIONS
+// * FUNCTIONS
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// - Communications / Data save
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
+//  1. Wifi
+////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
+//  1.1. Status
+////////////////////////////////////////////////////////////////////////////////
+
 
 #if (Wifi || MobData)
 
@@ -2013,6 +2064,95 @@ void WiFiEvent(WiFiEvent_t event)
   }
 }
 
+void Print_WiFi_Status()
+{ // Print wifi status on serial monitor
+
+  // Get current status
+  //  WL_CONNECTED: assigned when connected to a WiFi network;
+  //  WL_NO_SHIELD: assigned when no WiFi shield is present;
+  //  WL_IDLE_STATUS: it is a temporary status assigned when WiFi.begin() is called and remains active until the number of attempts expires (resulting in WL_CONNECT_FAILED) or a connection is established (resulting in WL_CONNECTED);
+  //  WL_NO_SSID_AVAIL: assigned when no SSID are available;
+  //  WL_SCAN_COMPLETED: assigned when the scan networks is completed;
+  //  WL_CONNECT_FAILED: assigned when the connection fails for all the attempts;
+  //  WL_CONNECTION_LOST: assigned when the connection is lost;
+  //  WL_DISCONNECTED: assigned when disconnected from a network;
+
+  Serial.print(F("wifi_status: "));
+#if (OLED66 == true || OLED96 == true)
+  pageStart();
+  u8g2.setFont(u8g2_font_5x7_tf);
+  u8g2.setCursor(10, dh / 2);
+#endif
+  switch (WiFi.status())
+  {
+    case WL_CONNECTED:
+      Serial.println(F(" WIFI CONNECTED!!!"));
+#if (OLED66 == true || OLED96 == true)
+      u8g2.print("OK WIFI :)");
+#endif
+      break;
+    case WL_NO_SHIELD:
+      Serial.println(F("No WiFi HW detected"));
+      break;
+    case WL_IDLE_STATUS:
+      Serial.println(F("Attempting..."));
+      break;
+    case WL_NO_SSID_AVAIL:
+      Serial.println(F("No SSID available"));
+#if (OLED66 == true || OLED96 == true)
+      u8g2.print("NO WIFI :(");
+#endif
+      break;
+    case WL_SCAN_COMPLETED:
+      Serial.println(F("Networks scan completed"));
+      break;
+    case WL_CONNECT_FAILED:
+      Serial.println(F("Connect failed"));
+#if (OLED66 == true || OLED96 == true)
+      u8g2.print("NO WIFI :(");
+#endif
+      break;
+    case WL_CONNECTION_LOST:
+      Serial.println(F("Connection lost"));
+#if (OLED66 == true || OLED96 == true)
+      u8g2.print("NO WIFI :(");
+#endif
+      break;
+    case WL_DISCONNECTED:
+      Serial.println(F("Disconnected"));
+#if (OLED66 == true || OLED96 == true)
+      u8g2.print("NO WIFI :(");
+#endif
+      break;
+    default:
+      Serial.println(F("Unknown status"));
+      break;
+  }
+  Serial.println(F(""));
+  delay(3000);
+#if (OLED66 == true || OLED96 == true)
+  pageEnd();
+#endif
+
+  // Print the SSID of the network you're attached to:
+  Serial.print(F("SSID: "));
+  Serial.println(WiFi.SSID());
+
+  // Print your WiFi shield's IP address:
+  Serial.print(F("IP Address: "));
+  Serial.println(WiFi.localIP());
+
+  // Print your WiFi shield's MAC address:
+  Serial.print(F("MAC Adress: "));
+  Serial.println(WiFi.macAddress());
+
+  // Print the received signal strength:
+  Serial.print(F("Signal strength (RSSI): "));
+
+  Serial.print(WiFi.RSSI());
+  Serial.println(F(" dBm"));
+}
+
 #else
 // Print wifi status on serial monitor
 // ESP8266
@@ -2055,6 +2195,11 @@ void Print_WiFi_Status_ESP8266()
 }
 
 #endif
+
+////////////////////////////////////////////////////////////////////////////////
+//  1.2. Wifi Connection
+////////////////////////////////////////////////////////////////////////////////
+
 
 void Connect_WiFi()
 { // Connect to WiFi
@@ -2217,94 +2362,9 @@ void Connect_WiFi()
 #endif
 }
 
-void Print_WiFi_Status()
-{ // Print wifi status on serial monitor
-
-  // Get current status
-  //  WL_CONNECTED: assigned when connected to a WiFi network;
-  //  WL_NO_SHIELD: assigned when no WiFi shield is present;
-  //  WL_IDLE_STATUS: it is a temporary status assigned when WiFi.begin() is called and remains active until the number of attempts expires (resulting in WL_CONNECT_FAILED) or a connection is established (resulting in WL_CONNECTED);
-  //  WL_NO_SSID_AVAIL: assigned when no SSID are available;
-  //  WL_SCAN_COMPLETED: assigned when the scan networks is completed;
-  //  WL_CONNECT_FAILED: assigned when the connection fails for all the attempts;
-  //  WL_CONNECTION_LOST: assigned when the connection is lost;
-  //  WL_DISCONNECTED: assigned when disconnected from a network;
-
-  Serial.print(F("wifi_status: "));
-#if (OLED66 == true || OLED96 == true)
-  pageStart();
-  u8g2.setFont(u8g2_font_5x7_tf);
-  u8g2.setCursor(10, dh / 2);
-#endif
-  switch (WiFi.status())
-  {
-    case WL_CONNECTED:
-      Serial.println(F(" WIFI CONNECTED!!!"));
-#if (OLED66 == true || OLED96 == true)
-      u8g2.print("OK WIFI :)");
-#endif
-      break;
-    case WL_NO_SHIELD:
-      Serial.println(F("No WiFi HW detected"));
-      break;
-    case WL_IDLE_STATUS:
-      Serial.println(F("Attempting..."));
-      break;
-    case WL_NO_SSID_AVAIL:
-      Serial.println(F("No SSID available"));
-#if (OLED66 == true || OLED96 == true)
-      u8g2.print("NO WIFI :(");
-#endif
-      break;
-    case WL_SCAN_COMPLETED:
-      Serial.println(F("Networks scan completed"));
-      break;
-    case WL_CONNECT_FAILED:
-      Serial.println(F("Connect failed"));
-#if (OLED66 == true || OLED96 == true)
-      u8g2.print("NO WIFI :(");
-#endif
-      break;
-    case WL_CONNECTION_LOST:
-      Serial.println(F("Connection lost"));
-#if (OLED66 == true || OLED96 == true)
-      u8g2.print("NO WIFI :(");
-#endif
-      break;
-    case WL_DISCONNECTED:
-      Serial.println(F("Disconnected"));
-#if (OLED66 == true || OLED96 == true)
-      u8g2.print("NO WIFI :(");
-#endif
-      break;
-    default:
-      Serial.println(F("Unknown status"));
-      break;
-  }
-  Serial.println(F(""));
-  delay(3000);
-#if (OLED66 == true || OLED96 == true)
-  pageEnd();
-#endif
-
-  // Print the SSID of the network you're attached to:
-  Serial.print(F("SSID: "));
-  Serial.println(WiFi.SSID());
-
-  // Print your WiFi shield's IP address:
-  Serial.print(F("IP Address: "));
-  Serial.println(WiFi.localIP());
-
-  // Print your WiFi shield's MAC address:
-  Serial.print(F("MAC Adress: "));
-  Serial.println(WiFi.macAddress());
-
-  // Print the received signal strength:
-  Serial.print(F("Signal strength (RSSI): "));
-
-  Serial.print(WiFi.RSSI());
-  Serial.println(F(" dBm"));
-}
+////////////////////////////////////////////////////////////////////////////////
+//  1.3. HTTP / browser Connection
+////////////////////////////////////////////////////////////////////////////////
 
 void Check_WiFi_Server()                    // Server access by http when you put the ip address in a web browser !!!!!!!!!!!!!!!!!!!!!!!!!!!
 { // Wifi server
@@ -2453,6 +2513,10 @@ void Check_WiFi_Server()                    // Server access by http when you pu
     Serial.println(F("client disconnected"));
   }
 }
+
+////////////////////////////////////////////////////////////////////////////////
+//  1.4. Captive Portal
+////////////////////////////////////////////////////////////////////////////////
 
 void Start_Captive_Portal()
 { // Run a captive portal to configure WiFi and MQTT
@@ -2899,64 +2963,9 @@ void saveParamCallback()
   ConfigPortalSave = true;
 }
 
-#if (Rosver || MinVerSD)
-#if !WPA2
-void RTCadjustTime()
-{
-  String Valdate_year = Valdate_time_id.substring(0, 4);
-  String Valdate_month = Valdate_time_id.substring(5, 7);
-  String Valdate_day = Valdate_time_id.substring(8, 10);
-  String Valdate_hour = Valdate_time_id.substring(11, 13);
-  String Valdate_min = Valdate_time_id.substring(14, 16);
-  String Valdate_sec = Valdate_time_id.substring(17, 19);
-
-  uint16_t year = Valdate_year.toInt();
-  uint8_t month = Valdate_month.toInt();
-  uint8_t day = Valdate_day.toInt();
-  uint8_t hour = Valdate_hour.toInt();
-  uint8_t min = Valdate_min.toInt();
-  uint8_t sec = Valdate_sec.toInt();
-
-  Serial.print("year = ");
-  Serial.print(year);
-  Serial.print(", month = ");
-  Serial.print(month);
-  Serial.print(", day = ");
-  Serial.print(day);
-  Serial.print(", hour = ");
-  Serial.print(hour);
-  Serial.print(", min = ");
-  Serial.print(min);
-  Serial.print(", sec = ");
-  Serial.println(sec);
-
-  Serial.print(F("Initializing RTC ds1307: "));
-
-  if (!rtc.begin())
-  {
-    Serial.println(F("Couldn't find RTC"));
-    Serial.flush();
-  }
-  else
-  {
-    Serial.println(F("OK, ds1307 init"));
-    Serial.print(F("RTC let's set the time!: "));
-    Serial.println(Valdate_time_id);
-
-    rtc.adjust(DateTime(year, month, day, hour, min, sec));
-
-    digitalWrite(LEDPIN, LOW);  // turn the LED on (HIGH is the voltage level)
-    delay(200);                 // wait for a 500 msecond
-    digitalWrite(LEDPIN, HIGH); // turn the LED off by making the voltage LOW
-    delay(200);                 // wait for a 500 msecond
-    digitalWrite(LEDPIN, LOW);  // turn the LED on (HIGH is the voltage level)
-    delay(200);                 // wait for a 500 msecond
-    digitalWrite(LEDPIN, HIGH); // turn the LED off by making the voltage LOW
-  }
-}
-
-#endif
-#endif
+////////////////////////////////////////////////////////////////////////////////
+//  2. MQTT
+////////////////////////////////////////////////////////////////////////////////
 
 void Init_MQTT()
 { // MQTT Init function
@@ -3625,249 +3634,9 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
   }
 }
 
-void Firmware_Update()
-{
-
-  // ESP32 Firmware Update
-
-#if !ESP8266
-
-  Serial.println(F("### FIRMWARE UPDATE ###"));
-
-  // For remote firmware update
-  WiFiClientSecure UpdateClient;
-  UpdateClient.setInsecure();
-
-  // Reading data over SSL may be slow, use an adequate timeout
-  UpdateClient.setTimeout(30); // timeout argument is defined in seconds for setTimeout
-  Serial.println(F("ACTUALIZACION EN CURSO"));
-
-#if Tdisplaydisp
-  // Update display
-  tft.fillScreen(TFT_ORANGE);
-  tft.setTextColor(TFT_BLACK, TFT_ORANGE);
-  tft.setTextSize(1);
-  tft.setFreeFont(FF90);
-  tft.setTextDatum(MC_DATUM);
-  tft.drawString("ACTUALIZACION EN CURSO", tft.width() / 2, tft.height() / 2);
-#elif (OLED66 == true || OLED96 == true)
-  pageStart();
-  u8g2.setFont(u8g2_font_5x8_tf);
-  u8g2.setCursor(0, (dh / 2 - 4));
-  u8g2.print("Actualizacion");
-  delay(1000);
-  pageEnd();
-#endif
-
-  httpUpdate.setLedPin(LEDPIN, HIGH);
-
-  httpUpdate.onStart(update_started);
-  httpUpdate.onEnd(update_finished);
-  httpUpdate.onProgress(update_progress);
-  httpUpdate.onError(update_error);
-
-#if !WPA2
-#if Tdisplaydisp
-  Serial.println("Firmware WITD");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WITD.bin");
-#elif OLED96display
-  Serial.println("Firmware WI96");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI96.bin");
-#elif OLED66display
-  Serial.println("Firmware WI66");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI66.bin");
-#elif SoundMeter
-#if !SoundAM
-  Serial.println("Firmware WISP SoundMeter");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISMeter.bin");
-#else
-  Serial.println("Firmware WISP SoundMeter AM");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISMeteram.bin");
-#endif
-#elif Minver
-  Serial.println("Firmware WISP MinVer");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISPMV.bin");
-#else
-  Serial.println("Firmware WISP");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISP.bin");
-#endif
-#else
-#if Tdisplaydisp
-  Serial.println("Firmware WITD WPA2");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WITDWPA2.bin");
-#elif OLED96display
-  Serial.println("Firmware WI96 WPA2");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI96WPA2.bin");
-#elif OLED66display
-  Serial.println("Firmware WI66 WPA2");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI66WPA2.bin");
-#elif SoundMeter
-  Serial.println("Firmware WISP SoundMeter");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISMeterWPA2.bin");
-#else
-  Serial.println("Firmware WISP WPA2");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISPWPA2.bin");
-#endif
-#endif
-
-  switch (ret)
-  {
-
-    case HTTP_UPDATE_FAILED:
-      Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
-
-#if Tdisplaydisp
-      tft.fillScreen(TFT_ORANGE);
-      tft.drawString("ACTUALIZACION FALLIDA", tft.width() / 2, tft.height() / 2);
-#elif (OLED66 == true || OLED96 == true)
-      pageStart();
-      u8g2.setFont(u8g2_font_5x8_tf);
-      u8g2.setCursor(0, (dh / 2 - 4));
-      u8g2.print("Act Fallo");
-      pageEnd();
-#endif
-      delay(1000);
-      break;
-
-    case HTTP_UPDATE_NO_UPDATES:
-      Serial.println(F("HTTP_FIRMWARE_UPDATE_NO_UPDATES"));
-      break;
-
-    case HTTP_UPDATE_OK:
-      Serial.println(F("HTTP_FIRMWARE_UPDATE_OK"));
-
-#if Tdisplaydisp
-      tft.fillScreen(TFT_ORANGE);
-      tft.drawString("ACTUALIZACION COMPLETA", tft.width() / 2, tft.height() / 2);
-#elif (OLED66 == true || OLED96 == true)
-      pageStart();
-      u8g2.setFont(u8g2_font_5x8_tf);
-      u8g2.setCursor(0, (dh / 2 - 4));
-      u8g2.print("Act OK");
-      pageEnd();
-#endif
-      delay(1000);
-      break;
-  }
-
-  // ESP8266 Firmware Update
-
-#else
-
-  // For remote firmware update
-  BearSSL::WiFiClientSecure UpdateClient;
-  int freeheap = ESP.getFreeHeap();
-
-  Serial.println(F("### FIRMWARE UPGRADE ###"));
-
-  ESPhttpUpdate.setLedPin(LEDPIN, LOW);
-
-  // Add optional callback notifiers
-  ESPhttpUpdate.onStart(update_started);
-  ESPhttpUpdate.onEnd(update_finished);
-  ESPhttpUpdate.onProgress(update_progress);
-  ESPhttpUpdate.onError(update_error);
-  UpdateClient.setInsecure();
-
-  // Try to set a smaller buffer size for BearSSL update
-  bool mfln = UpdateClient.probeMaxFragmentLength("raw.githubusercontent.com", 443, 512);
-  Serial.printf("\nConnecting to https://raw.githubusercontent.com\n");
-  Serial.printf("MFLN supported: %s\n", mfln ? "yes" : "no");
-  if (mfln)
-  {
-    UpdateClient.setBufferSizes(512, 512);
-  }
-  UpdateClient.connect("raw.githubusercontent.com", 443);
-  if (UpdateClient.connected())
-  {
-    Serial.printf("MFLN status: %s\n", UpdateClient.getMFLNStatus() ? "true" : "false");
-    Serial.printf("Memory used: %d\n", freeheap - ESP.getFreeHeap());
-    freeheap -= ESP.getFreeHeap();
-  }
-  else
-  {
-    Serial.printf("Unable to connect\n");
-  }
-
-  // Run http update
-  // CAMBIAR A MAIN no en branch
-
-#if WPA2
-#if Rosver
-  Serial.println("Firmware ESP8266WISP_WPA2Rosver");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISP_WPA2Rosver.bin");
-#else
-  Serial.println("Firmware ESP8266WISP_WPA2");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISP_WPA2.bin");
-#endif
-#else
-#if Rosver
-  Serial.println("Firmware ESP8266WISP_Rosver");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISP_Rosver.bin");
-#elif MinVer
-  Serial.println("Firmware ESP8266WISP_MinVer");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISPMV.bin");
-#elif MinVerSD
-  Serial.println("Firmware ESP8266WISP_MinVerSD");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISPMVSD.bin");
-#elif MobData
-  Serial.println("Firmware ESP8266WISP_MobData");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISPMobData.bin");
-#elif SoundMeter
-#if !Influxver
-  Serial.println("Firmware ESP8266WISP_SoundMeter");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISMeter.bin");
-#else
-  Serial.println("Firmware ESP8266WISP_SoundMeter_InfluxDB");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISMeterInflux.bin");
-#endif
-#else
-  Serial.println("Firmware ESP8266WISP");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISP.bin");
-#endif
-#endif
-
-  switch (ret)
-  {
-    case HTTP_UPDATE_FAILED:
-      Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
-      break;
-
-    case HTTP_UPDATE_NO_UPDATES:
-      Serial.println(F("HTTP_UPDATE_NO_UPDATES"));
-      break;
-
-    case HTTP_UPDATE_OK:
-      Serial.println(F("HTTP_UPDATE_OK"));
-      break;
-  }
-
-#endif
-}
-
-void update_started()
-{
-  Serial.println(F("CALLBACK:  HTTP update process started"));
-  updating = true;
-}
-
-void update_finished()
-{
-  Serial.println(F("CALLBACK:  HTTP update process finished"));
-  Serial.println(F("### FIRMWARE UPGRADE COMPLETED - REBOOT ###"));
-  updating = false;
-}
-
-void update_progress(int cur, int total)
-{
-  Serial.printf("CALLBACK:  HTTP update process at %d of %d bytes...\n", cur, total);
-}
-
-void update_error(int err)
-{
-  Serial.printf("CALLBACK:  HTTP update fatal error code %d\n", err);
-  updating = false;
-}
+////////////////////////////////////////////////////////////////////////////////
+//  3. Mobile data
+////////////////////////////////////////////////////////////////////////////////
 
 #if MobData
 
@@ -4122,6 +3891,221 @@ void ResetMobDataConn()
 
 #endif
 
+////////////////////////////////////////////////////////////////////////////////
+//  4. Bluetooth
+////////////////////////////////////////////////////////////////////////////////
+
+#if Bluetooth
+void Write_Bluetooth()
+{ // Write measurements to Bluetooth
+
+#if SoundMeter
+  provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
+  provider.commitSample(Bluetooth_loop_time);
+  Serial.print("Bluetooth frame SPL(dBA): ");
+  Serial.println(pm25int);
+#elif LTR390UV
+  provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
+  provider.commitSample(Bluetooth_loop_time);
+  Serial.print("Bluetooth frame UV Index: ");
+  Serial.println(pm25int);
+#elif CO2sensor
+  provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
+  provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
+  provider.writeValueToCurrentSample(pm25int, SignalType::CO2_PARTS_PER_MILLION);
+  provider.commitSample(Bluetooth_loop_time);
+  Serial.print("Bluetooth frame CO2(ppm): ");
+  Serial.print(pm25int);
+  Serial.print(", temp(°C): ");
+  Serial.print(temp);
+  Serial.print(", humidity(%): ");
+  Serial.println(humi);
+#elif NoxVoxTd
+#if ZH10sen
+  uint16_t vocint = vocIndex;
+#else
+  uint16_t vocint = round(vocIndex);
+#endif
+  uint16_t noxint = round(noxIndex);
+  provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
+  provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
+  provider.writeValueToCurrentSample(vocIndex, SignalType::VOC_INDEX);    //???????????????????????????
+  provider.writeValueToCurrentSample(noxint, SignalType::NOX_INDEX);
+  provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
+  provider.commitSample(Bluetooth_loop_time);
+  Serial.print("Bluetooth frame PM2.5(ug/m3): ");
+  Serial.print(pm25int);
+#if ZH10sen
+  Serial.print(", Voc(ppb): ");
+  Serial.print(vocIndex);               //???????????????????????????
+#else
+  Serial.print(", Voc Index: ");
+  Serial.print(vocint);
+  Serial.print(", Nox index: ");
+  Serial.print(noxint);
+#endif
+  Serial.print(", temp(°C): ");
+  Serial.print(temp);
+  Serial.print(", humidity(%): ");
+  Serial.println(humi);
+#else
+  if (SHT31sen == true || SHT4xsen == true || AM2320sen == true || data.HUMI != 0 || FlagSENHyT == true)
+  {
+    provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
+    provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
+    provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
+    provider.commitSample(Bluetooth_loop_time);
+    Serial.print("Bluetooth frame PM2.5(ug/m3): ");
+    Serial.print(pm25int);
+    Serial.print(", temp(°C): ");
+    Serial.print(temp);
+    Serial.print(", humidity(%): ");
+    Serial.println(humi);
+  }
+  else
+  {
+    provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
+    provider.writeValueToCurrentSample(0, SignalType::TEMPERATURE_DEGREES_CELSIUS);
+    provider.writeValueToCurrentSample(0, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
+    provider.commitSample(Bluetooth_loop_time);
+    Serial.print("Bluetooth frame PM2.5(ug/m3): ");
+    Serial.println(pm25int);
+  }
+#endif
+}
+#endif
+
+////////////////////////////////////////////////////////////////////////////////
+//  5. RTC y SD
+////////////////////////////////////////////////////////////////////////////////
+
+#if (Rosver || MinVerSD)
+
+void RTCadjustTime()
+{
+  String Valdate_year = Valdate_time_id.substring(0, 4);
+  String Valdate_month = Valdate_time_id.substring(5, 7);
+  String Valdate_day = Valdate_time_id.substring(8, 10);
+  String Valdate_hour = Valdate_time_id.substring(11, 13);
+  String Valdate_min = Valdate_time_id.substring(14, 16);
+  String Valdate_sec = Valdate_time_id.substring(17, 19);
+
+  uint16_t year = Valdate_year.toInt();
+  uint8_t month = Valdate_month.toInt();
+  uint8_t day = Valdate_day.toInt();
+  uint8_t hour = Valdate_hour.toInt();
+  uint8_t min = Valdate_min.toInt();
+  uint8_t sec = Valdate_sec.toInt();
+
+  Serial.print("year = ");
+  Serial.print(year);
+  Serial.print(", month = ");
+  Serial.print(month);
+  Serial.print(", day = ");
+  Serial.print(day);
+  Serial.print(", hour = ");
+  Serial.print(hour);
+  Serial.print(", min = ");
+  Serial.print(min);
+  Serial.print(", sec = ");
+  Serial.println(sec);
+
+  Serial.print(F("Initializing RTC ds1307: "));
+
+  if (!rtc.begin())
+  {
+    Serial.println(F("Couldn't find RTC"));
+    Serial.flush();
+  }
+  else
+  {
+    Serial.println(F("OK, ds1307 init"));
+    Serial.print(F("RTC let's set the time!: "));
+    Serial.println(Valdate_time_id);
+
+    rtc.adjust(DateTime(year, month, day, hour, min, sec));
+
+    digitalWrite(LEDPIN, LOW);  // turn the LED on (HIGH is the voltage level)
+    delay(200);                 // wait for a 500 msecond
+    digitalWrite(LEDPIN, HIGH); // turn the LED off by making the voltage LOW
+    delay(200);                 // wait for a 500 msecond
+    digitalWrite(LEDPIN, LOW);  // turn the LED on (HIGH is the voltage level)
+    delay(200);                 // wait for a 500 msecond
+    digitalWrite(LEDPIN, HIGH); // turn the LED off by making the voltage LOW
+  }
+}
+
+#endif
+
+#if (SDyRTC || SaveSDyRTC || Rosver || MinVerSD)
+
+void Write_SD()
+{ // Write date - time and measurements to SD card
+
+  DateTime now = rtc.now();
+
+  char buf1[] = "YYYY/MM/DD_hh:mm:ss";
+  String dataString = "";
+
+  // make a string for assembling the data to log:
+
+  dataString = now.toString(buf1);
+  dataString += "_";
+  dataString += pm25int;
+  if (SHT31sen == true || SHT4xsen == true || AM2320sen == true || data.HUMI != 0 || FlagSENHyT == true)
+  {
+    dataString += "_";
+    dataString += humi;
+    dataString += "_";
+    dataString += temp;
+  }
+
+  Serial.print(F("SDreset: "));
+  Serial.println(SDreset);
+  SDreset = SDreset - 1;
+
+  if (SDreset == 0)
+    dataString += "_RESET";
+
+  // dataFile = SD.open("datalog.txt", FILE_WRITE);
+  dataFile = SD.open(aireciudadano_device_id + ".txt", FILE_WRITE);
+
+  // if the file is available, write to it:
+  if (dataFile)
+  {
+    dataFile.println(dataString);
+    dataFile.close();
+    // print to the serial port too:
+    Serial.print(F("SD write: "));
+    Serial.println(dataString);
+    // LED Routine
+    digitalWrite(LEDPIN, LOW);
+    FlagLED = true;
+  }
+  // if the file isn't open, pop up an error:
+  else
+  {
+    Serial.println("SD write: error opening file");
+  }
+
+  if (SDreset == 0)
+  {
+    Serial.print(F("SD reset cycles: "));
+    Serial.println(ValSDreset);
+    ESP.restart();
+  }
+}
+
+#endif
+
+////////////////////////////////////////////////////////////////////////////////
+//  - Sensor routines
+////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
+//  6. Sensors
+////////////////////////////////////////////////////////////////////////////////
+
 #if !MobDataSP
 
 #if (Rosver || MinVer || MobData || MinVerSD)
@@ -4149,7 +4133,7 @@ void Test_Sensor()
   else
   {
     Serial.println(F("Detected I2C Sensirion Sensor"));
-    GetDeviceInfo();
+    GetDeviceInfo_SPS30();
     ErrorFlag ++;
   }
   Serial.println(F("Test Sensirion SEN5X sensor"));
@@ -4173,11 +4157,19 @@ void Test_Sensor()
 #if !ESP8266
   Serial1.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX, PMS_RX);
 #else
+#if !TwoPMS
   pmsSerial.begin(9600); // Software serial begin for PMS sensor
+#else
+  pmsSerial1.begin(9600); // Software serial begin for PMS sensor
+#endif
 #endif
   delay(100);
 
+#if !TwoPMS
   if (pms.readUntil(data))
+#else
+  if (pms1.readUntil(data))
+#endif
   {
     Serial.println(F("Test Plantower sensor found!"));
     PMSsen = true;
@@ -4318,7 +4310,7 @@ void Setup_Sensor()
     else
     {
       Serial.println(F("Detected I2C Sensirion Sensor"));
-      GetDeviceInfo();
+      GetDeviceInfo_SPS30();
     }
     if (SPS30sen == true)
     {
@@ -4332,7 +4324,6 @@ void Setup_Sensor()
 #if Wifi
   }
 
-  //////////////////////////////////////////////////////////////////////////////////////////////
   // Test PM2.5 SEN5X
 
   if (SEN5Xsen == true)
@@ -4390,8 +4381,6 @@ void Setup_Sensor()
 #else
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
-
     // PMS7003 PMSA003
     if (PMSsen == true)
     {
@@ -4425,8 +4414,14 @@ void Setup_Sensor()
 #endif
 
 #else
+#if ESP8266
     pmsSerial1.begin(PMS::BAUD_RATE); // SoftwareSerial PMS1
     pmsSerial2.begin(PMS::BAUD_RATE); // SoftwareSerial PMS2
+#else
+    // Probar en hardware
+    Serial1.begin(PMS::BAUD_RATE, SERIAL_8N1);
+    Serial2.begin(PMS::BAUD_RATE, SERIAL_8N1);
+#endif
     delay(100);
     pms1.activeMode();
     pms2.activeMode();
@@ -5346,13 +5341,9 @@ void Read_UV()
 }
 #endif
 
-/**
-   @brief : read and display device info
-*/
-
 #if !MobDataSP
 #if !Rosver
-void GetDeviceInfo()
+void GetDeviceInfo_SPS30()
 {
   char buf[32];
   uint8_t ret;
@@ -5435,12 +5426,6 @@ void Errorloop(char *mess, uint8_t r)
   Serial.println(F("No SPS30 connected"));
 }
 
-/**
-    @brief : display error message
-    @param mess : message to display
-    @param r : error code
-
-*/
 void ErrtoMess(char *mess, uint8_t r)
 {
   char buf[80];
@@ -5540,8 +5525,6 @@ void printSerialNumber()
 #endif
 
 #endif
-
-///////////////////////////////////////////////////////////////////////////////
 
 #if !SoundMeter
 
@@ -5702,7 +5685,13 @@ void ReadHyT()
 }
 #endif
 
-///////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+//  - General functions
+////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
+//  7. Device Info
+////////////////////////////////////////////////////////////////////////////////
 
 void Print_Config()
 { // print AireCiudadano device settings
@@ -5768,455 +5757,6 @@ void espDelay(int ms)
   esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
   esp_light_sleep_start();
 }
-#endif
-
-#if (Tdisplaydisp || OLED96display || OLED66display)
-
-#if !ESP8266
-#if Tdisplaydisp
-
-void Button_Init()
-{ // Manage TTGO T-Display board buttons
-
-  // Buttons design:
-  //   - Top button short click: info about the device
-  //   - Top button long click: sleep
-  //   - Bottom button short click: buttons usage
-  //   - Bottom button long click: config device
-
-  // Long clicks: keep pressing more than 2 second
-  button_top.setLongClickTime(2000);
-  button_bottom.setLongClickTime(2000);
-  //  Serial.println(F("Button_Init");
-
-  // Top button short click: show info about the device
-  button_top.setClickHandler([](Button2 & b)
-  {
-    Serial.println(F("Top button short click"));
-    tft.fillScreen(TFT_WHITE);
-    tft.setTextColor(TFT_RED, TFT_WHITE);
-    tft.setTextDatum(TL_DATUM); // top left
-    tft.setTextSize(1);
-    tft.setFreeFont(FF90);
-#if Wifi
-    tft.drawString("ID " + aireciudadano_device_id, 8, 5);         //!!!Arreglar por nuevo tamaño String
-#elif Bluetooth
-//    tft.drawString("ID MyAm 00:" + provider.getDeviceIdString(), 8, 5);         //!!!Arreglar por nuevo tamaño String
-    tft.drawString("ID MyAm:" + provider.getDeviceIdString(), 8, 5);         //!!!Arreglar por nuevo tamaño String
-#endif
-    tft.drawString("SW ver: " + sw_version, 8, 22);
-#if Bluetooth
-    tft.drawString("Sam int: " + String(Bluetooth_loop_time), 8, 39);
-    tft.drawString("Bluetooth ver", 8, 56);
-#elif SDyRTC
-    tft.drawString("SDyRTC ver", 8, 39);
-    tft.drawString("Log int: " + String(SDyRTCtime), 8, 56);
-#elif Wifi
-    tft.drawString("Wifi ver", 8, 39);
-    tft.drawString("Pubtime min: " + String(eepromConfig.PublicTime), 8, 56);
-    tft.drawString("SSID " + String(WiFi.SSID()), 8, 73);
-    tft.drawString("IP " + WiFi.localIP().toString(), 8, 90);
-    tft.drawString("MAC " + String(WiFi.macAddress()), 8, 107);
-    tft.drawString("RSSI " + String(WiFi.RSSI()), 8, 124);
-#endif
-
-    delay(5000); // keep the info in the display for 5s
-    Update_Display();
-  });
-
-  // Top button long click: toggle acoustic alarm
-  button_top.setLongClickDetectedHandler([](Button2 & b)
-  {
-    Serial.println(F("Top button long click"));
-
-    Suspend_Device();
-  });
-
-  // Bottom button short click: show buttons info
-  button_bottom.setClickHandler([](Button2 & b)
-  {
-
-///////////////
-/*
-    if (GainLTR390 == 1) {
-        GainLTR390 = 3;
-    }
-    else if (GainLTR390 == 3) {
-        GainLTR390 = 6;
-    }
-    else if (GainLTR390 == 6) {
-        GainLTR390 = 9;
-    }
-    else if (GainLTR390 == 9) {
-        GainLTR390 = 18;
-    }
-    else if (GainLTR390 == 18) {
-        GainLTR390 = 1;
-    }
-   
-    ltr.setGain(GainLTR390);
-*/
-//////////////
-
-    Serial.println(F("Bottom button short click"));
-    tft.fillScreen(TFT_WHITE);
-    tft.setTextColor(TFT_BLUE, TFT_WHITE);
-    tft.setTextDatum(TL_DATUM); // top left
-    tft.setTextSize(1);
-    tft.setFreeFont(FF90);
-    tft.drawString("Left button", 3, 5);
-    tft.drawString("  Short: Menu", 3, 21);
-#if !CO2sensor
-    tft.drawString("  Long: SampTi", 3, 37);
-#else
-    tft.drawString("  Long: Calibr", 3, 37);
-#endif
-    tft.drawString("Right button", 3, 75);
-    tft.drawString("  Short: Info", 3, 91);
-    tft.drawString("  Long: Sleep", 3, 107);
-    if (FlagAdjustSensor == 0)
-      tft.drawString("NO Adjust Sensor", 3, 150);
-    else
-      tft.drawString("Adjust Sensor", 3, 150);
-    delay(2500);
-    if (digitalRead(BUTTON_TOP) == false){
-      delay(100);
-      if (digitalRead(BUTTON_TOP) == false){
-        delay(100);
-        if (digitalRead(BUTTON_TOP) == false){
-          if (FlagAdjustSensor == 0){
-            FlagAdjustSensor = 1;
-            Serial.println("Adjust Sensor");
-            tft.drawString("Adjust Sens        ", 3, 150);
-          }
-          else{
-            FlagAdjustSensor = 0;
-            Serial.println("No Adjust Sensor");
-            tft.drawString("NO Adjust Sens  ", 3, 150);
-          }
-        }
-      }
-    }
-    delay(2500);
-    Update_Display();
-  });
-
-  // Bottom button long click: deactivate self calibration and perform sensor forced recalibration
-  button_bottom.setLongClickDetectedHandler([](Button2 & b)
-  {
-    Serial.println(F("Bottom button long click"));
-    tft.fillScreen(TFT_WHITE);
-    tft.setTextColor(TFT_RED, TFT_WHITE);
-    tft.setTextSize(1);
-    tft.setFreeFont(FF90);
-    tft.setTextDatum(MC_DATUM);
-#if Bluetooth
-#if !CO2sensor
-    tft.drawString("Eval Time:", tft.width() / 2, tft.height() / 2 - 15);
-    tft.drawString(String(eepromConfig.BluetoothTime) + " seg", tft.width() / 2, tft.height() / 2 + 15);
-    delay(1000);
-    Bluetooth_loop_time = eepromConfig.BluetoothTime;
-
-    while (digitalRead(BUTTON_BOTTOM) == false)
-    {
-      if (Bluetooth_loop_time == 2)
-        Bluetooth_loop_time = 10;
-      else if (Bluetooth_loop_time == 10)
-        Bluetooth_loop_time = 60;
-      else if (Bluetooth_loop_time == 60)
-        Bluetooth_loop_time = 120;
-      else if (Bluetooth_loop_time == 120)
-        Bluetooth_loop_time = 300;
-      else if (Bluetooth_loop_time == 300)
-        Bluetooth_loop_time = 600;
-      else if (Bluetooth_loop_time == 600)
-        Bluetooth_loop_time = 3600;
-      else if (Bluetooth_loop_time == 3600)
-        Bluetooth_loop_time = 10800;
-      else
-        Bluetooth_loop_time = 2;
-      tft.drawString("                    ", tft.width() / 2, tft.height() / 2 + 15);
-      tft.drawString(String(Bluetooth_loop_time) + " seg", tft.width() / 2, tft.height() / 2 + 15);
-      delay(1000);
-    }
-    tft.drawString(String(Bluetooth_loop_time) + " seg", tft.width() / 2, tft.height() / 2 + 15);
-    delay(1000);
-    FlashBluetoothTime();
-#else
-    Serial.print("CALIBRATION:");
-    for (int i = 180; i > -1; i--)
-    { // loop from 0 to 180
-      tft.drawString("Calib Time:", tft.width() / 2, tft.height() / 2 - 15);
-      tft.drawString("                    ", tft.width() / 2, tft.height() / 2 + 15);
-      tft.drawString(String(i) + " seg", tft.width() / 2, tft.height() / 2 + 15);
-      delay(1000); // wait 1000 ms
-
-      if (toggleLive == false)
-      {
-        if (SCD30sen == true)
-        {
-          pm25int = airSensor.getCO2();
-          Serial.print(i);
-          Serial.print(" CO2(ppm):");
-          Serial.println(pm25int);
-          toggleLive = true;
-        }
-        else if (S8sen == true)
-        {
-          // Get CO2 measure
-          pm25int = sensor_S8->get_co2();
-          Serial.print(i);
-          Serial.print(" CO2(ppm):");
-          Serial.println(pm25int);
-          toggleLive = true;
-        }
-      }
-      else
-        toggleLive = false;
-    }
-    if (SCD30sen == true)
-      airSensor.setForcedRecalibrationFactor(400);
-    else if (S8sen == true)
-      sensor_S8->manual_calibration();
-    Serial.println("Resetting forced calibration factor to 400: done");
-    tft.drawString("Reset calib:", tft.width() / 2, tft.height() / 2 - 15);
-    tft.drawString("400 ppm", tft.width() / 2, tft.height() / 2 + 15);
-    delay(5000);
-#endif
-
-#else
-    tft.drawString("Reiniciando", tft.width() / 2, tft.height() / 2 - 5);
-    delay(2000);
-    ESP.restart();
-#endif
-  });
-}
-
-void Display_Init()
-{ // TTGO T-Display init
-  tft.init();
-  tft.setRotation(0);
-}
-
-void Display_Splash_Screen()
-{ // Display AireCiudadano splash screen
-  tft.setSwapBytes(true);
-  tft.pushImage(0, 0, 135, 240, Icono_AireCiudadano);
-}
-
-void Update_Display()
-{ // Update display
-
-  tft.setTextDatum(TL_DATUM); // top left
-
-  // Set screen and text colours based on PM25 value
-
-  displayAverage(pm25int);
-
-  if (FlagDATAicon == true)
-  {
-    if (pm25int < 57)
-      tft.drawXBitmap(5, 194, Icono_data_on_BIG, 19, 19, TFT_BLACK);
-    else
-      tft.drawXBitmap(5, 194, Icono_data_on_BIG, 19, 19, TFT_WHITE);
-    FlagDATAicon = false;
-  }
-  if (toggleLive)
-  {
-#if Bluetooth
-#if SoundMeter
-    if (pm25int < 86)
-      tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_BLACK);
-    else
-      tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_WHITE);
-#elif CO2sensor
-    if (pm25int < 801)
-      tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_BLACK);
-    else
-      tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_WHITE);
-#elif LTR390UV
-    if (pm25int < 8)
-      tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_BLACK);
-    else
-      tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_WHITE);
-#else
-    if (pm25int < 57)
-      tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_BLACK);
-    else
-      tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_WHITE);
-#endif
-#endif
-  }
-  toggleLive = !toggleLive;
-}
-
-#endif
-#endif
-
-#if (OLED96display || OLED66display)
-
-void UpdateOLED()
-{
-  //  Serial.println(F("Sensor Read Update OLED");
-  pageStart();
-  displaySensorAverage(pm25int);
-#if Wifi
-
-  displaySensorData(round(PM25_value), humi, temp, WiFi.RSSI());
-
-  if (FlagDATAicon == true)
-  {
-    u8g2.drawBitmap(dw - 25, dh - 7, 1, 8, Icono_data_on);
-    FlagDATAicon = false;
-  }
-#else
-  displaySensorData(round(PM25_value), humi, temp, 0);
-  TimeConfig();
-#endif
-  if (toggleLive)
-#if Bluetooth
-    u8g2.drawBitmap(dw - 19, dh - 8, 1, 8, Icono_bt_on);
-#else
-    u8g2.drawBitmap(dw - 15, dh - 7, 1, 8, Icono_sensor_live);
-#endif
-  toggleLive = !toggleLive;
-  pageEnd();
-}
-#endif
-#endif
-
-#if Bluetooth
-void TimeConfig()
-{
-  if (digitalRead(BUTTON_BOTTOM) == false)
-  {
-    delay(500);
-    if (digitalRead(BUTTON_BOTTOM) == false)
-    {
-#if !CO2sensor
-#if (OLED96display || OLED66display)
-
-      pageStart();
-      u8g2.setFont(u8g2_font_6x10_tf);
-      u8g2.setCursor(0, dh / 2 - 7);
-      u8g2.print("Eval time:");
-      u8g2.setCursor(10, dh / 2 + 7);
-      u8g2.print(String(eepromConfig.BluetoothTime) + " seg");
-      pageEnd();
-
-#endif
-
-      delay(1000);
-
-      Bluetooth_loop_time = eepromConfig.BluetoothTime;
-
-      while (digitalRead(BUTTON_BOTTOM) == false)
-      {
-        if (Bluetooth_loop_time == 2)
-          Bluetooth_loop_time = 10;
-        else if (Bluetooth_loop_time == 10)
-          Bluetooth_loop_time = 60;
-        else if (Bluetooth_loop_time == 60)
-          Bluetooth_loop_time = 120;
-        else if (Bluetooth_loop_time == 120)
-          Bluetooth_loop_time = 300;
-        else if (Bluetooth_loop_time == 300)
-          Bluetooth_loop_time = 600;
-        else if (Bluetooth_loop_time == 600)
-          Bluetooth_loop_time = 3600;
-        else if (Bluetooth_loop_time == 3600)
-          Bluetooth_loop_time = 10800;
-        else
-          Bluetooth_loop_time = 2;
-
-#if (OLED96display || OLED66display)
-
-        pageStart();
-        u8g2.setCursor(0, dh / 2 - 7);
-        u8g2.print("Eval time");
-        u8g2.setCursor(8, dh / 2 + 7);
-        u8g2.print(String(Bluetooth_loop_time) + " seg");
-        pageEnd();
-
-#endif
-        Serial.print(F("Evaluation time: "));
-        Serial.print(Bluetooth_loop_time);
-        Serial.println(F(" seg"));
-        delay(1000);
-      }
-      FlashBluetoothTime();
-#else
-#if (OLED96display || OLED66display)
-      u8g2.setFont(u8g2_font_6x10_tf);
-#endif
-      Serial.print("CALIBRATION:");
-      for (int i = 180; i > -1; i--)
-      { // loop from 0 to 180
-#if (OLED96display || OLED66display)
-        pageStart();
-        u8g2.setCursor(0, dh / 2 - 7);
-        u8g2.print("Calib time:");
-        u8g2.setCursor(8, dh / 2 + 7);
-        u8g2.print(String(i) + " seg");
-        pageEnd();
-#endif
-        delay(1000); // wait 1000 ms
-
-        if (toggleLive == false)
-        {
-          if (SCD30sen == true)
-          {
-            pm25int = airSensor.getCO2();
-            Serial.print(i);
-            Serial.print(" CO2(ppm):");
-            Serial.println(pm25int);
-            toggleLive = true;
-          }
-          else if (S8sen == true)
-          {
-            // Get CO2 measure
-            pm25int = sensor_S8->get_co2();
-            Serial.print(i);
-            Serial.print(" CO2(ppm):");
-            Serial.println(pm25int);
-            toggleLive = true;
-          }
-        }
-        else
-          toggleLive = false;
-      }
-      if (SCD30sen == true)
-        airSensor.setForcedRecalibrationFactor(400);
-      else if (S8sen == true)
-        sensor_S8->manual_calibration();
-      Serial.println("Resetting forced calibration factor to 400: done");
-#if (OLED96display || OLED66display)
-      pageStart();
-      u8g2.setCursor(0, dh / 2 - 2);
-      u8g2.print("Reset calib:");
-      u8g2.setCursor(8, dh / 2 + 7);
-      u8g2.print("400 ppm");
-      pageEnd();
-#endif
-      delay(5000);
-#endif
-    }
-  }
-}
-
-void FlashBluetoothTime()
-{
-  //  gadgetBle.setSampleIntervalMs(Bluetooth_loop_time * 1000); // Rutina para configurar el tiempo de muestreo del sensor y la app
-
-  if (eepromConfig.BluetoothTime != Bluetooth_loop_time)
-  {
-    eepromConfig.BluetoothTime = Bluetooth_loop_time;
-    Serial.print(F("Bluetooth time: "));
-    Serial.println(eepromConfig.BluetoothTime);
-    Write_EEPROM();
-  }
-}
-
 #endif
 
 void Get_AireCiudadano_DeviceId()
@@ -6729,6 +6269,326 @@ void Aireciudadano_Characteristics()
 #endif
 }
 
+#if !ESP8266
+
+void print_reset_reason(RESET_REASON reason)
+{
+  switch (reason)
+  {
+    case 1:
+      Serial.println(F("POWERON_RESET"));
+      ResetFlag = true;
+      DeepSleepFlag = false;
+      break; /**<1,  Vbat power on reset*/
+    case 3:
+      Serial.println(F("SW_RESET"));
+      break; /**<3,  Software reset digital core*/
+    case 4:
+      Serial.println(F("OWDT_RESET"));
+      break; /**<4,  Legacy watch dog reset digital core*/
+    case 5:
+      Serial.println(F("DEEPSLEEP_RESET"));
+      DeepSleepFlag = true;
+      ResetFlag = false;
+      break; /**<5,  Deep Sleep reset digital core*/
+    case 6:
+      Serial.println(F("SDIO_RESET"));
+      break; /**<6,  Reset by SLC module, reset digital core*/
+    case 7:
+      Serial.println(F("TG0WDT_SYS_RESET"));
+      break; /**<7,  Timer Group0 Watch dog reset digital core*/
+    case 8:
+      Serial.println(F("TG1WDT_SYS_RESET"));
+      break; /**<8,  Timer Group1 Watch dog reset digital core*/
+    case 9:
+      Serial.println(F("RTCWDT_SYS_RESET"));
+      break; /**<9,  RTC Watch dog Reset digital core*/
+    case 10:
+      Serial.println(F("INTRUSION_RESET"));
+      break; /**<10, Instrusion tested to reset CPU*/
+    case 11:
+      Serial.println(F("TGWDT_CPU_RESET"));
+      break; /**<11, Time Group reset CPU*/
+    case 12:
+      Serial.println(F("SW_CPU_RESET"));
+      ResetFlag = false;
+      DeepSleepFlag = false;
+      break; /**<12, Software reset CPU*/
+    case 13:
+      Serial.println(F("RTCWDT_CPU_RESET"));
+      break; /**<13, RTC Watch dog Reset CPU*/
+    case 14:
+      Serial.println(F("EXT_CPU_RESET"));
+      break; /**<14, for APP CPU, reseted by PRO CPU*/
+    case 15:
+      Serial.println(F("RTCWDT_BROWN_OUT_RESET"));
+      break; /**<15, Reset when the vdd voltage is not stable*/
+    case 16:
+      Serial.println(F("RTCWDT_RTC_RESET"));
+      break; /**<16, RTC Watch dog reset digital core and rtc module*/
+    default:
+      Serial.println(F("NO_MEAN"));
+  }
+}
+
+#endif
+
+////////////////////////////////////////////////////////////////////////////////
+//  8. Firmware Update
+////////////////////////////////////////////////////////////////////////////////
+
+#if Wifi
+
+void Firmware_Update()
+{
+
+  // ESP32 Firmware Update
+
+#if !ESP8266
+
+  Serial.println(F("### FIRMWARE UPDATE ###"));
+
+  // For remote firmware update
+  WiFiClientSecure UpdateClient;
+  UpdateClient.setInsecure();
+
+  // Reading data over SSL may be slow, use an adequate timeout
+  UpdateClient.setTimeout(30); // timeout argument is defined in seconds for setTimeout
+  Serial.println(F("ACTUALIZACION EN CURSO"));
+
+#if Tdisplaydisp
+  // Update display
+  tft.fillScreen(TFT_ORANGE);
+  tft.setTextColor(TFT_BLACK, TFT_ORANGE);
+  tft.setTextSize(1);
+  tft.setFreeFont(FF90);
+  tft.setTextDatum(MC_DATUM);
+  tft.drawString("ACTUALIZACION EN CURSO", tft.width() / 2, tft.height() / 2);
+#elif (OLED66 == true || OLED96 == true)
+  pageStart();
+  u8g2.setFont(u8g2_font_5x8_tf);
+  u8g2.setCursor(0, (dh / 2 - 4));
+  u8g2.print("Actualizacion");
+  delay(1000);
+  pageEnd();
+#endif
+
+  httpUpdate.setLedPin(LEDPIN, HIGH);
+
+  httpUpdate.onStart(update_started);
+  httpUpdate.onEnd(update_finished);
+  httpUpdate.onProgress(update_progress);
+  httpUpdate.onError(update_error);
+
+#if !WPA2
+#if Tdisplaydisp
+  Serial.println("Firmware WITD");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WITD.bin");
+#elif OLED96display
+  Serial.println("Firmware WI96");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI96.bin");
+#elif OLED66display
+  Serial.println("Firmware WI66");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI66.bin");
+#elif SoundMeter
+#if !SoundAM
+  Serial.println("Firmware WISP SoundMeter");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISMeter.bin");
+#else
+  Serial.println("Firmware WISP SoundMeter AM");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISMeteram.bin");
+#endif
+#elif Minver
+  Serial.println("Firmware WISP MinVer");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISPMV.bin");
+#else
+  Serial.println("Firmware WISP");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISP.bin");
+#endif
+#else
+#if Tdisplaydisp
+  Serial.println("Firmware WITD WPA2");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WITDWPA2.bin");
+#elif OLED96display
+  Serial.println("Firmware WI96 WPA2");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI96WPA2.bin");
+#elif OLED66display
+  Serial.println("Firmware WI66 WPA2");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI66WPA2.bin");
+#elif SoundMeter
+  Serial.println("Firmware WISP SoundMeter");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISMeterWPA2.bin");
+#else
+  Serial.println("Firmware WISP WPA2");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISPWPA2.bin");
+#endif
+#endif
+
+  switch (ret)
+  {
+
+    case HTTP_UPDATE_FAILED:
+      Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
+
+#if Tdisplaydisp
+      tft.fillScreen(TFT_ORANGE);
+      tft.drawString("ACTUALIZACION FALLIDA", tft.width() / 2, tft.height() / 2);
+#elif (OLED66 == true || OLED96 == true)
+      pageStart();
+      u8g2.setFont(u8g2_font_5x8_tf);
+      u8g2.setCursor(0, (dh / 2 - 4));
+      u8g2.print("Act Fallo");
+      pageEnd();
+#endif
+      delay(1000);
+      break;
+
+    case HTTP_UPDATE_NO_UPDATES:
+      Serial.println(F("HTTP_FIRMWARE_UPDATE_NO_UPDATES"));
+      break;
+
+    case HTTP_UPDATE_OK:
+      Serial.println(F("HTTP_FIRMWARE_UPDATE_OK"));
+
+#if Tdisplaydisp
+      tft.fillScreen(TFT_ORANGE);
+      tft.drawString("ACTUALIZACION COMPLETA", tft.width() / 2, tft.height() / 2);
+#elif (OLED66 == true || OLED96 == true)
+      pageStart();
+      u8g2.setFont(u8g2_font_5x8_tf);
+      u8g2.setCursor(0, (dh / 2 - 4));
+      u8g2.print("Act OK");
+      pageEnd();
+#endif
+      delay(1000);
+      break;
+  }
+
+  // ESP8266 Firmware Update
+
+#else
+
+  // For remote firmware update
+  BearSSL::WiFiClientSecure UpdateClient;
+  int freeheap = ESP.getFreeHeap();
+
+  Serial.println(F("### FIRMWARE UPGRADE ###"));
+
+  ESPhttpUpdate.setLedPin(LEDPIN, LOW);
+
+  // Add optional callback notifiers
+  ESPhttpUpdate.onStart(update_started);
+  ESPhttpUpdate.onEnd(update_finished);
+  ESPhttpUpdate.onProgress(update_progress);
+  ESPhttpUpdate.onError(update_error);
+  UpdateClient.setInsecure();
+
+  // Try to set a smaller buffer size for BearSSL update
+  bool mfln = UpdateClient.probeMaxFragmentLength("raw.githubusercontent.com", 443, 512);
+  Serial.printf("\nConnecting to https://raw.githubusercontent.com\n");
+  Serial.printf("MFLN supported: %s\n", mfln ? "yes" : "no");
+  if (mfln)
+  {
+    UpdateClient.setBufferSizes(512, 512);
+  }
+  UpdateClient.connect("raw.githubusercontent.com", 443);
+  if (UpdateClient.connected())
+  {
+    Serial.printf("MFLN status: %s\n", UpdateClient.getMFLNStatus() ? "true" : "false");
+    Serial.printf("Memory used: %d\n", freeheap - ESP.getFreeHeap());
+    freeheap -= ESP.getFreeHeap();
+  }
+  else
+  {
+    Serial.printf("Unable to connect\n");
+  }
+
+  // Run http update
+  // CAMBIAR A MAIN no en branch
+
+#if WPA2
+#if Rosver
+  Serial.println("Firmware ESP8266WISP_WPA2Rosver");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISP_WPA2Rosver.bin");
+#else
+  Serial.println("Firmware ESP8266WISP_WPA2");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISP_WPA2.bin");
+#endif
+#else
+#if Rosver
+  Serial.println("Firmware ESP8266WISP_Rosver");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISP_Rosver.bin");
+#elif MinVer
+  Serial.println("Firmware ESP8266WISP_MinVer");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISPMV.bin");
+#elif MinVerSD
+  Serial.println("Firmware ESP8266WISP_MinVerSD");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISPMVSD.bin");
+#elif MobData
+  Serial.println("Firmware ESP8266WISP_MobData");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISPMobData.bin");
+#elif SoundMeter
+#if !Influxver
+  Serial.println("Firmware ESP8266WISP_SoundMeter");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISMeter.bin");
+#else
+  Serial.println("Firmware ESP8266WISP_SoundMeter_InfluxDB");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISMeterInflux.bin");
+#endif
+#else
+  Serial.println("Firmware ESP8266WISP");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISP.bin");
+#endif
+#endif
+
+  switch (ret)
+  {
+    case HTTP_UPDATE_FAILED:
+      Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
+      break;
+
+    case HTTP_UPDATE_NO_UPDATES:
+      Serial.println(F("HTTP_UPDATE_NO_UPDATES"));
+      break;
+
+    case HTTP_UPDATE_OK:
+      Serial.println(F("HTTP_UPDATE_OK"));
+      break;
+  }
+
+#endif
+}
+
+void update_started()
+{
+  Serial.println(F("CALLBACK:  HTTP update process started"));
+  updating = true;
+}
+
+void update_finished()
+{
+  Serial.println(F("CALLBACK:  HTTP update process finished"));
+  Serial.println(F("### FIRMWARE UPGRADE COMPLETED - REBOOT ###"));
+  updating = false;
+}
+
+void update_progress(int cur, int total)
+{
+  Serial.printf("CALLBACK:  HTTP update process at %d of %d bytes...\n", cur, total);
+}
+
+void update_error(int err)
+{
+  Serial.printf("CALLBACK:  HTTP update fatal error code %d\n", err);
+  updating = false;
+}
+
+#endif
+
+////////////////////////////////////////////////////////////////////////////////
+//  9. EEPROM
+////////////////////////////////////////////////////////////////////////////////
+
 void Read_EEPROM()
 {
 #if ESP8266
@@ -6837,6 +6697,355 @@ void Wipe_EEPROM()
 
 #endif
 }
+
+#if Bluetooth
+
+void FlashBluetoothTime()
+{
+  //  gadgetBle.setSampleIntervalMs(Bluetooth_loop_time * 1000); // Rutina para configurar el tiempo de muestreo del sensor y la app
+
+  if (eepromConfig.BluetoothTime != Bluetooth_loop_time)
+  {
+    eepromConfig.BluetoothTime = Bluetooth_loop_time;
+    Serial.print(F("Bluetooth time: "));
+    Serial.println(eepromConfig.BluetoothTime);
+    Write_EEPROM();
+  }
+}
+
+#endif
+
+////////////////////////////////////////////////////////////////////////////////
+//  10. LedNeo
+////////////////////////////////////////////////////////////////////////////////
+
+#if LedNeo
+
+void LedNeoAverage(int average)
+{
+  if (average < 13)
+  {
+    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(0, 255, 0))); // Encendemos el led verde
+    Serial.println("Led RGB Verde");
+  }
+  else if (average < 36)
+  {
+    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(180, 180, 0))); // Encendemos el led amarillo
+    Serial.println("Led RGB Amarillo");
+  }
+  else if (average < 56)
+  {
+    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(255, 125, 0))); // Encendemos el led naranja
+    Serial.println("Led RGB Naranja");
+  }
+  else if (average < 151)
+  {
+    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(255, 0, 0))); // Encendemos el led rojo
+    Serial.println("Led RGB Rojo");
+  }
+  else if (average < 251)
+  {
+    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(128, 0, 255))); // Encendemos el led morado
+    Serial.println("Led RGB Morado");
+  }
+  else
+  {
+    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(128, 128, 128))); // Encendemos el led blanco bajo brillo
+    Serial.println("Led RGB Cafe = Blanco");
+  }
+  LED_RGB.show(); // Enciende el color
+}
+#endif
+
+////////////////////////////////////////////////////////////////////////////////
+//  - Display
+////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
+//  11. TTGO TDisplay routines
+////////////////////////////////////////////////////////////////////////////////
+
+#if (Tdisplaydisp || OLED96display || OLED66display)
+#if !ESP8266
+#if Tdisplaydisp
+
+void Button_Init()
+{ // Manage TTGO T-Display board buttons
+
+  // Buttons design:
+  //   - Top button short click: info about the device
+  //   - Top button long click: sleep
+  //   - Bottom button short click: buttons usage
+  //   - Bottom button long click: config device
+
+  // Long clicks: keep pressing more than 2 second
+  button_top.setLongClickTime(2000);
+  button_bottom.setLongClickTime(2000);
+  //  Serial.println(F("Button_Init");
+
+  // Top button short click: show info about the device
+  button_top.setClickHandler([](Button2 & b)
+  {
+    Serial.println(F("Top button short click"));
+    tft.fillScreen(TFT_WHITE);
+    tft.setTextColor(TFT_RED, TFT_WHITE);
+    tft.setTextDatum(TL_DATUM); // top left
+    tft.setTextSize(1);
+    tft.setFreeFont(FF90);
+#if Wifi
+    tft.drawString("ID " + aireciudadano_device_id, 8, 5);         //!!!Arreglar por nuevo tamaño String
+#elif Bluetooth
+//    tft.drawString("ID MyAm 00:" + provider.getDeviceIdString(), 8, 5);         //!!!Arreglar por nuevo tamaño String
+    tft.drawString("ID MyAm:" + provider.getDeviceIdString(), 8, 5);         //!!!Arreglar por nuevo tamaño String
+#endif
+    tft.drawString("SW ver: " + sw_version, 8, 22);
+#if Bluetooth
+    tft.drawString("Sam int: " + String(Bluetooth_loop_time), 8, 39);
+    tft.drawString("Bluetooth ver", 8, 56);
+#elif SDyRTC
+    tft.drawString("SDyRTC ver", 8, 39);
+    tft.drawString("Log int: " + String(SDyRTCtime), 8, 56);
+#elif Wifi
+    tft.drawString("Wifi ver", 8, 39);
+    tft.drawString("Pubtime min: " + String(eepromConfig.PublicTime), 8, 56);
+    tft.drawString("SSID " + String(WiFi.SSID()), 8, 73);
+    tft.drawString("IP " + WiFi.localIP().toString(), 8, 90);
+    tft.drawString("MAC " + String(WiFi.macAddress()), 8, 107);
+    tft.drawString("RSSI " + String(WiFi.RSSI()), 8, 124);
+#endif
+
+    delay(5000); // keep the info in the display for 5s
+    Update_Display();
+  });
+
+  // Top button long click: toggle acoustic alarm
+  button_top.setLongClickDetectedHandler([](Button2 & b)
+  {
+    Serial.println(F("Top button long click"));
+
+    Suspend_Device();
+  });
+
+  // Bottom button short click: show buttons info
+  button_bottom.setClickHandler([](Button2 & b)
+  {
+
+///////////////
+/*
+    if (GainLTR390 == 1) {
+        GainLTR390 = 3;
+    }
+    else if (GainLTR390 == 3) {
+        GainLTR390 = 6;
+    }
+    else if (GainLTR390 == 6) {
+        GainLTR390 = 9;
+    }
+    else if (GainLTR390 == 9) {
+        GainLTR390 = 18;
+    }
+    else if (GainLTR390 == 18) {
+        GainLTR390 = 1;
+    }
+   
+    ltr.setGain(GainLTR390);
+*/
+//////////////
+
+    Serial.println(F("Bottom button short click"));
+    tft.fillScreen(TFT_WHITE);
+    tft.setTextColor(TFT_BLUE, TFT_WHITE);
+    tft.setTextDatum(TL_DATUM); // top left
+    tft.setTextSize(1);
+    tft.setFreeFont(FF90);
+    tft.drawString("Left button", 3, 5);
+    tft.drawString("  Short: Menu", 3, 21);
+#if !CO2sensor
+    tft.drawString("  Long: SampTi", 3, 37);
+#else
+    tft.drawString("  Long: Calibr", 3, 37);
+#endif
+    tft.drawString("Right button", 3, 75);
+    tft.drawString("  Short: Info", 3, 91);
+    tft.drawString("  Long: Sleep", 3, 107);
+    if (FlagAdjustSensor == 0)
+      tft.drawString("NO Adjust Sensor", 3, 150);
+    else
+      tft.drawString("Adjust Sensor", 3, 150);
+    delay(2500);
+    if (digitalRead(BUTTON_TOP) == false){
+      delay(100);
+      if (digitalRead(BUTTON_TOP) == false){
+        delay(100);
+        if (digitalRead(BUTTON_TOP) == false){
+          if (FlagAdjustSensor == 0){
+            FlagAdjustSensor = 1;
+            Serial.println("Adjust Sensor");
+            tft.drawString("Adjust Sens        ", 3, 150);
+          }
+          else{
+            FlagAdjustSensor = 0;
+            Serial.println("No Adjust Sensor");
+            tft.drawString("NO Adjust Sens  ", 3, 150);
+          }
+        }
+      }
+    }
+    delay(2500);
+    Update_Display();
+  });
+
+  // Bottom button long click: deactivate self calibration and perform sensor forced recalibration
+  button_bottom.setLongClickDetectedHandler([](Button2 & b)
+  {
+    Serial.println(F("Bottom button long click"));
+    tft.fillScreen(TFT_WHITE);
+    tft.setTextColor(TFT_RED, TFT_WHITE);
+    tft.setTextSize(1);
+    tft.setFreeFont(FF90);
+    tft.setTextDatum(MC_DATUM);
+#if Bluetooth
+#if !CO2sensor
+    tft.drawString("Eval Time:", tft.width() / 2, tft.height() / 2 - 15);
+    tft.drawString(String(eepromConfig.BluetoothTime) + " seg", tft.width() / 2, tft.height() / 2 + 15);
+    delay(1000);
+    Bluetooth_loop_time = eepromConfig.BluetoothTime;
+
+    while (digitalRead(BUTTON_BOTTOM) == false)
+    {
+      if (Bluetooth_loop_time == 2)
+        Bluetooth_loop_time = 10;
+      else if (Bluetooth_loop_time == 10)
+        Bluetooth_loop_time = 60;
+      else if (Bluetooth_loop_time == 60)
+        Bluetooth_loop_time = 120;
+      else if (Bluetooth_loop_time == 120)
+        Bluetooth_loop_time = 300;
+      else if (Bluetooth_loop_time == 300)
+        Bluetooth_loop_time = 600;
+      else if (Bluetooth_loop_time == 600)
+        Bluetooth_loop_time = 3600;
+      else if (Bluetooth_loop_time == 3600)
+        Bluetooth_loop_time = 10800;
+      else
+        Bluetooth_loop_time = 2;
+      tft.drawString("                    ", tft.width() / 2, tft.height() / 2 + 15);
+      tft.drawString(String(Bluetooth_loop_time) + " seg", tft.width() / 2, tft.height() / 2 + 15);
+      delay(1000);
+    }
+    tft.drawString(String(Bluetooth_loop_time) + " seg", tft.width() / 2, tft.height() / 2 + 15);
+    delay(1000);
+    FlashBluetoothTime();
+#else
+    Serial.print("CALIBRATION:");
+    for (int i = 180; i > -1; i--)
+    { // loop from 0 to 180
+      tft.drawString("Calib Time:", tft.width() / 2, tft.height() / 2 - 15);
+      tft.drawString("                    ", tft.width() / 2, tft.height() / 2 + 15);
+      tft.drawString(String(i) + " seg", tft.width() / 2, tft.height() / 2 + 15);
+      delay(1000); // wait 1000 ms
+
+      if (toggleLive == false)
+      {
+        if (SCD30sen == true)
+        {
+          pm25int = airSensor.getCO2();
+          Serial.print(i);
+          Serial.print(" CO2(ppm):");
+          Serial.println(pm25int);
+          toggleLive = true;
+        }
+        else if (S8sen == true)
+        {
+          // Get CO2 measure
+          pm25int = sensor_S8->get_co2();
+          Serial.print(i);
+          Serial.print(" CO2(ppm):");
+          Serial.println(pm25int);
+          toggleLive = true;
+        }
+      }
+      else
+        toggleLive = false;
+    }
+    if (SCD30sen == true)
+      airSensor.setForcedRecalibrationFactor(400);
+    else if (S8sen == true)
+      sensor_S8->manual_calibration();
+    Serial.println("Resetting forced calibration factor to 400: done");
+    tft.drawString("Reset calib:", tft.width() / 2, tft.height() / 2 - 15);
+    tft.drawString("400 ppm", tft.width() / 2, tft.height() / 2 + 15);
+    delay(5000);
+#endif
+
+#else
+    tft.drawString("Reiniciando", tft.width() / 2, tft.height() / 2 - 5);
+    delay(2000);
+    ESP.restart();
+#endif
+  });
+}
+
+void Display_Init()
+{ // TTGO T-Display init
+  tft.init();
+  tft.setRotation(0);
+}
+
+void Display_Splash_Screen()
+{ // Display AireCiudadano splash screen
+  tft.setSwapBytes(true);
+  tft.pushImage(0, 0, 135, 240, Icono_AireCiudadano);
+}
+
+void Update_Display()
+{ // Update display
+
+  tft.setTextDatum(TL_DATUM); // top left
+
+  // Set screen and text colours based on PM25 value
+
+  displayAverage(pm25int);
+
+  if (FlagDATAicon == true)
+  {
+    if (pm25int < 57)
+      tft.drawXBitmap(5, 194, Icono_data_on_BIG, 19, 19, TFT_BLACK);
+    else
+      tft.drawXBitmap(5, 194, Icono_data_on_BIG, 19, 19, TFT_WHITE);
+    FlagDATAicon = false;
+  }
+  if (toggleLive)
+  {
+#if Bluetooth
+#if SoundMeter
+    if (pm25int < 86)
+      tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_BLACK);
+    else
+      tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_WHITE);
+#elif CO2sensor
+    if (pm25int < 801)
+      tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_BLACK);
+    else
+      tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_WHITE);
+#elif LTR390UV
+    if (pm25int < 8)
+      tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_BLACK);
+    else
+      tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_WHITE);
+#else
+    if (pm25int < 57)
+      tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_BLACK);
+    else
+      tft.drawXBitmap(6, 192, Icono_bt_on_BIG, 19, 19, TFT_WHITE);
+#endif
+#endif
+  }
+  toggleLive = !toggleLive;
+}
+
+#endif
+#endif
 
 #if Tdisplaydisp
 
@@ -6976,182 +7185,7 @@ void Suspend_Device()
 #endif
 }
 
-void print_reset_reason(RESET_REASON reason)
-{
-  switch (reason)
-  {
-    case 1:
-      Serial.println(F("POWERON_RESET"));
-      ResetFlag = true;
-      DeepSleepFlag = false;
-      break; /**<1,  Vbat power on reset*/
-    case 3:
-      Serial.println(F("SW_RESET"));
-      break; /**<3,  Software reset digital core*/
-    case 4:
-      Serial.println(F("OWDT_RESET"));
-      break; /**<4,  Legacy watch dog reset digital core*/
-    case 5:
-      Serial.println(F("DEEPSLEEP_RESET"));
-      DeepSleepFlag = true;
-      ResetFlag = false;
-      break; /**<5,  Deep Sleep reset digital core*/
-    case 6:
-      Serial.println(F("SDIO_RESET"));
-      break; /**<6,  Reset by SLC module, reset digital core*/
-    case 7:
-      Serial.println(F("TG0WDT_SYS_RESET"));
-      break; /**<7,  Timer Group0 Watch dog reset digital core*/
-    case 8:
-      Serial.println(F("TG1WDT_SYS_RESET"));
-      break; /**<8,  Timer Group1 Watch dog reset digital core*/
-    case 9:
-      Serial.println(F("RTCWDT_SYS_RESET"));
-      break; /**<9,  RTC Watch dog Reset digital core*/
-    case 10:
-      Serial.println(F("INTRUSION_RESET"));
-      break; /**<10, Instrusion tested to reset CPU*/
-    case 11:
-      Serial.println(F("TGWDT_CPU_RESET"));
-      break; /**<11, Time Group reset CPU*/
-    case 12:
-      Serial.println(F("SW_CPU_RESET"));
-      ResetFlag = false;
-      DeepSleepFlag = false;
-      break; /**<12, Software reset CPU*/
-    case 13:
-      Serial.println(F("RTCWDT_CPU_RESET"));
-      break; /**<13, RTC Watch dog Reset CPU*/
-    case 14:
-      Serial.println(F("EXT_CPU_RESET"));
-      break; /**<14, for APP CPU, reseted by PRO CPU*/
-    case 15:
-      Serial.println(F("RTCWDT_BROWN_OUT_RESET"));
-      break; /**<15, Reset when the vdd voltage is not stable*/
-    case 16:
-      Serial.println(F("RTCWDT_RTC_RESET"));
-      break; /**<16, RTC Watch dog reset digital core and rtc module*/
-    default:
-      Serial.println(F("NO_MEAN"));
-  }
-}
-
 #endif
-
-#if (OLED96display || OLED66display)
-
-void displayInit()
-{
-  u8g2.setBusClock(100000);
-  u8g2.begin();
-  u8g2.setFont(u8g2_font_6x10_tf);
-  u8g2.setContrast(255);
-  u8g2.setFontRefHeightExtendedText();
-  u8g2.setDrawColor(1);
-  u8g2.setFontPosTop();
-  u8g2.setFontDirection(0);
-  u8g2.setFontMode(0);
-  dw = u8g2.getDisplayWidth();
-  dh = u8g2.getDisplayHeight();
-  //  Serial.println(F("OLED display ready"));
-}
-
-void showWelcome()
-{
-  u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_5x8_tf);
-  u8g2.drawStr(0, 0, "AireCiudadano");
-  u8g2.sendBuffer();
-  u8g2.drawStr(0, 8, "ver: ");
-  u8g2.sendBuffer();
-  u8g2.drawStr(22, 8, sw_version.c_str());
-  u8g2.sendBuffer();
-  lastDrawedLine = 10;
-  Serial.println(F("OLED display ready"));
-  u8g2.sendBuffer();
-}
-
-void welcomeAddMessage(String msg)
-{
-  u8g2.setFont(u8g2_font_4x6_tf);
-  u8g2.drawStr(0, lastDrawedLine, msg.c_str());
-  lastDrawedLine = lastDrawedLine + 7;
-  u8g2.sendBuffer();
-}
-
-void AddMessage(String msg)
-{
-  u8g2.setFont(u8g2_font_4x6_tf);
-  u8g2.drawStr(7, lastDrawedLine, msg.c_str());
-  u8g2.sendBuffer();
-}
-
-void displayCenterBig(String msg)
-{
-#if !CO2sensor
-  if (dw > 64)
-  {
-    u8g2.setCursor(dw - 64, 6);
-    u8g2.setFont(u8g2_font_inb24_mn);
-  }
-  else
-  {
-    u8g2.setCursor(dw - 28, 9);
-    u8g2.setFont(u8g2_font_9x18B_tf);
-  }
-  u8g2.print(msg.c_str());
-
-  u8g2.setCursor(100, 37);
-  u8g2.setFont(u8g2_font_5x7_tf);
-  u8g2.print("ug/m3");
-#else
-  if (dw > 64)
-  {
-    u8g2.setCursor(dw - 62, 10);
-    u8g2.setFont(u8g2_font_inb19_mn);
-  }
-  else
-  {
-    u8g2.setCursor(dw - 27, 9);
-    u8g2.setFont(u8g2_font_7x13B_tf);
-  }
-  u8g2.print(msg.c_str());
-
-  u8g2.setCursor(100, 37);
-  u8g2.setFont(u8g2_font_5x7_tf);
-  u8g2.print("ppm");
-#endif
-}
-
-void displayBottomLine(String msg)
-{
-  u8g2.setFont(u8g2_font_4x6_tf);
-  u8g2.print(msg);
-}
-
-void displayEmoticonLabel(int cursor, String msg)
-{
-  u8g2.setFont(u8g2_font_unifont_t_emoticons);
-  u8g2.drawGlyph(76, 12, cursor);
-  u8g2.setFont(u8g2_font_4x6_tf);
-  u8g2.setCursor(77, 17);
-  u8g2.print(msg);
-}
-
-void displayTextLevel(String msg)
-{
-  u8g2.setFont(u8g2_font_5x7_tf);
-  u8g2.setCursor(29, 31); //(35, 26);; (25, 29); (30, 29); (29, 28); (25, 30)(30, 29)
-  u8g2.print(msg);        // 4 8 7 6 7 6
-}
-
-void displayColorLevel(int cursor, String msg)
-{
-  u8g2.setFont(u8g2_font_4x6_tf);
-  u8g2.setCursor(35, 22);
-  u8g2.print(msg);
-}
-
 #endif
 
 #if !ESP8266
@@ -7637,6 +7671,279 @@ tft.drawString("Voc: ", 34, 190);
 #endif
 #endif
 
+////////////////////////////////////////////////////////////////////////////////
+//  12. LCD Display routines
+////////////////////////////////////////////////////////////////////////////////
+
+#if (OLED96display || OLED66display)
+
+void UpdateOLED()
+{
+  //  Serial.println(F("Sensor Read Update OLED");
+  pageStart();
+  displaySensorAverage(pm25int);
+#if Wifi
+
+  displaySensorData(round(PM25_value), humi, temp, WiFi.RSSI());
+
+  if (FlagDATAicon == true)
+  {
+    u8g2.drawBitmap(dw - 25, dh - 7, 1, 8, Icono_data_on);
+    FlagDATAicon = false;
+  }
+#else
+  displaySensorData(round(PM25_value), humi, temp, 0);
+  TimeConfig();
+#endif
+  if (toggleLive)
+#if Bluetooth
+    u8g2.drawBitmap(dw - 19, dh - 8, 1, 8, Icono_bt_on);
+#else
+    u8g2.drawBitmap(dw - 15, dh - 7, 1, 8, Icono_sensor_live);
+#endif
+  toggleLive = !toggleLive;
+  pageEnd();
+}
+#endif
+// #endif ?????????????????????????????????????????
+
+#if Bluetooth
+void TimeConfig()
+{
+  if (digitalRead(BUTTON_BOTTOM) == false)
+  {
+    delay(500);
+    if (digitalRead(BUTTON_BOTTOM) == false)
+    {
+#if !CO2sensor
+#if (OLED96display || OLED66display)
+
+      pageStart();
+      u8g2.setFont(u8g2_font_6x10_tf);
+      u8g2.setCursor(0, dh / 2 - 7);
+      u8g2.print("Eval time:");
+      u8g2.setCursor(10, dh / 2 + 7);
+      u8g2.print(String(eepromConfig.BluetoothTime) + " seg");
+      pageEnd();
+
+#endif
+
+      delay(1000);
+
+      Bluetooth_loop_time = eepromConfig.BluetoothTime;
+
+      while (digitalRead(BUTTON_BOTTOM) == false)
+      {
+        if (Bluetooth_loop_time == 2)
+          Bluetooth_loop_time = 10;
+        else if (Bluetooth_loop_time == 10)
+          Bluetooth_loop_time = 60;
+        else if (Bluetooth_loop_time == 60)
+          Bluetooth_loop_time = 120;
+        else if (Bluetooth_loop_time == 120)
+          Bluetooth_loop_time = 300;
+        else if (Bluetooth_loop_time == 300)
+          Bluetooth_loop_time = 600;
+        else if (Bluetooth_loop_time == 600)
+          Bluetooth_loop_time = 3600;
+        else if (Bluetooth_loop_time == 3600)
+          Bluetooth_loop_time = 10800;
+        else
+          Bluetooth_loop_time = 2;
+
+#if (OLED96display || OLED66display)
+
+        pageStart();
+        u8g2.setCursor(0, dh / 2 - 7);
+        u8g2.print("Eval time");
+        u8g2.setCursor(8, dh / 2 + 7);
+        u8g2.print(String(Bluetooth_loop_time) + " seg");
+        pageEnd();
+
+#endif
+        Serial.print(F("Evaluation time: "));
+        Serial.print(Bluetooth_loop_time);
+        Serial.println(F(" seg"));
+        delay(1000);
+      }
+      FlashBluetoothTime();
+#else
+#if (OLED96display || OLED66display)
+      u8g2.setFont(u8g2_font_6x10_tf);
+#endif
+      Serial.print("CALIBRATION:");
+      for (int i = 180; i > -1; i--)
+      { // loop from 0 to 180
+#if (OLED96display || OLED66display)
+        pageStart();
+        u8g2.setCursor(0, dh / 2 - 7);
+        u8g2.print("Calib time:");
+        u8g2.setCursor(8, dh / 2 + 7);
+        u8g2.print(String(i) + " seg");
+        pageEnd();
+#endif
+        delay(1000); // wait 1000 ms
+
+        if (toggleLive == false)
+        {
+          if (SCD30sen == true)
+          {
+            pm25int = airSensor.getCO2();
+            Serial.print(i);
+            Serial.print(" CO2(ppm):");
+            Serial.println(pm25int);
+            toggleLive = true;
+          }
+          else if (S8sen == true)
+          {
+            // Get CO2 measure
+            pm25int = sensor_S8->get_co2();
+            Serial.print(i);
+            Serial.print(" CO2(ppm):");
+            Serial.println(pm25int);
+            toggleLive = true;
+          }
+        }
+        else
+          toggleLive = false;
+      }
+      if (SCD30sen == true)
+        airSensor.setForcedRecalibrationFactor(400);
+      else if (S8sen == true)
+        sensor_S8->manual_calibration();
+      Serial.println("Resetting forced calibration factor to 400: done");
+#if (OLED96display || OLED66display)
+      pageStart();
+      u8g2.setCursor(0, dh / 2 - 2);
+      u8g2.print("Reset calib:");
+      u8g2.setCursor(8, dh / 2 + 7);
+      u8g2.print("400 ppm");
+      pageEnd();
+#endif
+      delay(5000);
+#endif
+    }
+  }
+}
+
+#endif
+
+#if (OLED96display || OLED66display)
+
+void displayInit()
+{
+  u8g2.setBusClock(100000);
+  u8g2.begin();
+  u8g2.setFont(u8g2_font_6x10_tf);
+  u8g2.setContrast(255);
+  u8g2.setFontRefHeightExtendedText();
+  u8g2.setDrawColor(1);
+  u8g2.setFontPosTop();
+  u8g2.setFontDirection(0);
+  u8g2.setFontMode(0);
+  dw = u8g2.getDisplayWidth();
+  dh = u8g2.getDisplayHeight();
+  //  Serial.println(F("OLED display ready"));
+}
+
+void showWelcome()
+{
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_5x8_tf);
+  u8g2.drawStr(0, 0, "AireCiudadano");
+  u8g2.sendBuffer();
+  u8g2.drawStr(0, 8, "ver: ");
+  u8g2.sendBuffer();
+  u8g2.drawStr(22, 8, sw_version.c_str());
+  u8g2.sendBuffer();
+  lastDrawedLine = 10;
+  Serial.println(F("OLED display ready"));
+  u8g2.sendBuffer();
+}
+
+void welcomeAddMessage(String msg)
+{
+  u8g2.setFont(u8g2_font_4x6_tf);
+  u8g2.drawStr(0, lastDrawedLine, msg.c_str());
+  lastDrawedLine = lastDrawedLine + 7;
+  u8g2.sendBuffer();
+}
+
+void AddMessage(String msg)
+{
+  u8g2.setFont(u8g2_font_4x6_tf);
+  u8g2.drawStr(7, lastDrawedLine, msg.c_str());
+  u8g2.sendBuffer();
+}
+
+void displayCenterBig(String msg)
+{
+#if !CO2sensor
+  if (dw > 64)
+  {
+    u8g2.setCursor(dw - 64, 6);
+    u8g2.setFont(u8g2_font_inb24_mn);
+  }
+  else
+  {
+    u8g2.setCursor(dw - 28, 9);
+    u8g2.setFont(u8g2_font_9x18B_tf);
+  }
+  u8g2.print(msg.c_str());
+
+  u8g2.setCursor(100, 37);
+  u8g2.setFont(u8g2_font_5x7_tf);
+  u8g2.print("ug/m3");
+#else
+  if (dw > 64)
+  {
+    u8g2.setCursor(dw - 62, 10);
+    u8g2.setFont(u8g2_font_inb19_mn);
+  }
+  else
+  {
+    u8g2.setCursor(dw - 27, 9);
+    u8g2.setFont(u8g2_font_7x13B_tf);
+  }
+  u8g2.print(msg.c_str());
+
+  u8g2.setCursor(100, 37);
+  u8g2.setFont(u8g2_font_5x7_tf);
+  u8g2.print("ppm");
+#endif
+}
+
+void displayBottomLine(String msg)
+{
+  u8g2.setFont(u8g2_font_4x6_tf);
+  u8g2.print(msg);
+}
+
+void displayEmoticonLabel(int cursor, String msg)
+{
+  u8g2.setFont(u8g2_font_unifont_t_emoticons);
+  u8g2.drawGlyph(76, 12, cursor);
+  u8g2.setFont(u8g2_font_4x6_tf);
+  u8g2.setCursor(77, 17);
+  u8g2.print(msg);
+}
+
+void displayTextLevel(String msg)
+{
+  u8g2.setFont(u8g2_font_5x7_tf);
+  u8g2.setCursor(29, 31); //(35, 26);; (25, 29); (30, 29); (29, 28); (25, 30)(30, 29)
+  u8g2.print(msg);        // 4 8 7 6 7 6
+}
+
+void displayColorLevel(int cursor, String msg)
+{
+  u8g2.setFont(u8g2_font_4x6_tf);
+  u8g2.setCursor(35, 22);
+  u8g2.print(msg);
+}
+
+#endif
+
 #if (OLED96display || OLED66display)
 
 void displaySensorAverage(int average)
@@ -7765,183 +8072,4 @@ void pageEnd()
   u8g2.nextPage();
 }
 
-#endif
-
-#if LedNeo
-
-void LedNeoAverage(int average)
-{
-  if (average < 13)
-  {
-    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(0, 255, 0))); // Encendemos el led verde
-    Serial.println("Led RGB Verde");
-  }
-  else if (average < 36)
-  {
-    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(180, 180, 0))); // Encendemos el led amarillo
-    Serial.println("Led RGB Amarillo");
-  }
-  else if (average < 56)
-  {
-    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(255, 125, 0))); // Encendemos el led naranja
-    Serial.println("Led RGB Naranja");
-  }
-  else if (average < 151)
-  {
-    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(255, 0, 0))); // Encendemos el led rojo
-    Serial.println("Led RGB Rojo");
-  }
-  else if (average < 251)
-  {
-    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(128, 0, 255))); // Encendemos el led morado
-    Serial.println("Led RGB Morado");
-  }
-  else
-  {
-    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(128, 128, 128))); // Encendemos el led blanco bajo brillo
-    Serial.println("Led RGB Cafe = Blanco");
-  }
-  LED_RGB.show(); // Enciende el color
-}
-#endif
-
-#if Bluetooth
-void Write_Bluetooth()
-{ // Write measurements to Bluetooth
-
-#if SoundMeter
-  provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
-  provider.commitSample(Bluetooth_loop_time);
-  Serial.print("Bluetooth frame SPL(dBA): ");
-  Serial.println(pm25int);
-#elif LTR390UV
-  provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
-  provider.commitSample(Bluetooth_loop_time);
-  Serial.print("Bluetooth frame UV Index: ");
-  Serial.println(pm25int);
-#elif CO2sensor
-  provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
-  provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
-  provider.writeValueToCurrentSample(pm25int, SignalType::CO2_PARTS_PER_MILLION);
-  provider.commitSample(Bluetooth_loop_time);
-  Serial.print("Bluetooth frame CO2(ppm): ");
-  Serial.print(pm25int);
-  Serial.print(", temp(°C): ");
-  Serial.print(temp);
-  Serial.print(", humidity(%): ");
-  Serial.println(humi);
-#elif NoxVoxTd
-#if ZH10sen
-  uint16_t vocint = vocIndex;
-#else
-  uint16_t vocint = round(vocIndex);
-#endif
-  uint16_t noxint = round(noxIndex);
-  provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
-  provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
-  provider.writeValueToCurrentSample(vocZH10, SignalType::VOC_INDEX);
-  provider.writeValueToCurrentSample(noxint, SignalType::NOX_INDEX);
-  provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
-  provider.commitSample(Bluetooth_loop_time);
-  Serial.print("Bluetooth frame PM2.5(ug/m3): ");
-  Serial.print(pm25int);
-#if ZH10sen
-  Serial.print(", Voc(ppb): ");
-  Serial.print(vocZH10);
-#else
-  Serial.print(", Voc Index: ");
-  Serial.print(vocint);
-  Serial.print(", Nox index: ");
-  Serial.print(noxint);
-#endif
-  Serial.print(", temp(°C): ");
-  Serial.print(temp);
-  Serial.print(", humidity(%): ");
-  Serial.println(humi);
-#else
-  if (SHT31sen == true || SHT4xsen == true || AM2320sen == true || data.HUMI != 0 || FlagSENHyT == true)
-  {
-    provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
-    provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
-    provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
-    provider.commitSample(Bluetooth_loop_time);
-    Serial.print("Bluetooth frame PM2.5(ug/m3): ");
-    Serial.print(pm25int);
-    Serial.print(", temp(°C): ");
-    Serial.print(temp);
-    Serial.print(", humidity(%): ");
-    Serial.println(humi);
-  }
-  else
-  {
-    provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
-    provider.writeValueToCurrentSample(0, SignalType::TEMPERATURE_DEGREES_CELSIUS);
-    provider.writeValueToCurrentSample(0, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
-    provider.commitSample(Bluetooth_loop_time);
-    Serial.print("Bluetooth frame PM2.5(ug/m3): ");
-    Serial.println(pm25int);
-  }
-#endif
-}
-#endif
-
-#if (SDyRTC || SaveSDyRTC || Rosver || MinVerSD)
-#if !WPA2
-void Write_SD()
-{ // Write date - time and measurements to SD card
-
-  DateTime now = rtc.now();
-
-  char buf1[] = "YYYY/MM/DD_hh:mm:ss";
-  String dataString = "";
-
-  // make a string for assembling the data to log:
-
-  dataString = now.toString(buf1);
-  dataString += "_";
-  dataString += pm25int;
-  if (SHT31sen == true || SHT4xsen == true || AM2320sen == true || data.HUMI != 0 || FlagSENHyT == true)
-  {
-    dataString += "_";
-    dataString += humi;
-    dataString += "_";
-    dataString += temp;
-  }
-
-  Serial.print(F("SDreset: "));
-  Serial.println(SDreset);
-  SDreset = SDreset - 1;
-
-  if (SDreset == 0)
-    dataString += "_RESET";
-
-  // dataFile = SD.open("datalog.txt", FILE_WRITE);
-  dataFile = SD.open(aireciudadano_device_id + ".txt", FILE_WRITE);
-
-  // if the file is available, write to it:
-  if (dataFile)
-  {
-    dataFile.println(dataString);
-    dataFile.close();
-    // print to the serial port too:
-    Serial.print(F("SD write: "));
-    Serial.println(dataString);
-    // LED Routine
-    digitalWrite(LEDPIN, LOW);
-    FlagLED = true;
-  }
-  // if the file isn't open, pop up an error:
-  else
-  {
-    Serial.println("SD write: error opening file");
-  }
-
-  if (SDreset == 0)
-  {
-    Serial.print(F("SD reset cycles: "));
-    Serial.println(ValSDreset);
-    ESP.restart();
-  }
-}
-#endif
 #endif
