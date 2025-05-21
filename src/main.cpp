@@ -35,7 +35,12 @@
 // 23. Wifi Power max con flag MaxWifiTX SOLO programada desde web mqtt AireCiudadano: Resultado no concluyente de incremento de cobertura
 // 24. ZH10 sensor para ESP32
 // 25. SDS011 sensor para ESP8266 y ESP32
-// 26. Refactorizacion de codigo por bloques:
+
+// Constantes de Ajuste de sensores programables: pendiente e intercepto. ANALIZAR MAS
+// Verificar nueva libreria Bluetooth que parece compatible con Sensirion UPT Core@^0.3.0, Sigue el error con lectura de nox y en algunos modelos es lento
+// La rutina Button2 falla pero con https://github.com/LennartHennigs/Button2.git#2.3.3 OK, no se porque el sensor viejo falla en eso
+
+// Refactorizacion de codigo por bloques:
 // * INIT
 // * SETUP
 // * CONTROL LOOP
@@ -59,10 +64,6 @@
 // * Display
 // 11. TTGO TDisplay routines
 // 12. LCD Display routines
-
-// Constantes de Ajuste de sensores programables: pendiente e intercepto. ANALIZAR MAS
-// Verificar nueva libreria Bluetooth que parece compatible con Sensirion UPT Core@^0.3.0, Sigue el error con lectura de nox y en algunos modelos es lento
-// La rutina Button2 falla pero con https://github.com/LennartHennigs/Button2.git#2.3.3 OK, no se porque el sensor viejo falla en eso
 
 #include <Arduino.h>
 #include "main.hpp"
