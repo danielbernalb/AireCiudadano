@@ -112,7 +112,7 @@
 // CO2:
 #define CO2sensor false       // Set to true for CO2 sensors: SCD30 and SenseAir S8
 #define SiteAltitude 0        // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
-//define SiteAltitude 2600    // 2600 meters above sea level: Bogota, Colombia
+//#define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
 
 // Boards diferentes
 #define TTGO_TQ false
@@ -1942,7 +1942,7 @@ void loop()
   // Process Bluetooth events
 #if Bluetooth
   provider.handleDownload();
-  delay(3);
+  delay(20);
 #endif
 
 #if !ESP8266
