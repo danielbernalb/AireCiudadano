@@ -22,7 +22,9 @@
         "ranges": "cpp",
         "*.tpp": "cpp",
         "cstddef": "cpp",
-        "chrono": "cpp"
+        "chrono": "cpp",
+        "algorithm": "cpp",
+        "memory": "cpp"
     },
     "idf.portWin": "COM56",
     "workbench.colorTheme": "Visual Studio 2017 Light - C++",

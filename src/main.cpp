@@ -87,12 +87,13 @@
 #define TwoPMS false     // Set to true if you want 2 PMS7003 sensors
 #define SoundMeter false // set to true for Sound Meter
 #define SoundAM false    // Set to true to Sound meter airplane mode
-#define Influxver false  // Set to true for InfluxDB version SP
+#define Influxver true   // Set to true for InfluxDB version SP - Rain
 #define ZH10sen false    // Set to true for ZH10 instead PMSX003
 #define SDS011sen false  // Set to true for SDS011 instead PMSX003
 #define LedNeo false     // Set to true for Led Neo multicolor
 #define LTR390UV false   // LTR390 version
 #define NoxVoxTd false   // Lectura de NoxVox
+#define Rain true        // Lectura de pluviometro
 
 // Seleccion de operador de telefonia movil
 #define TigoKalleyExito false
@@ -930,6 +931,27 @@ uint32_t rawUVS;
 
 #endif
 
+#if Rain
+// Definición de pines y constantes
+const int REED_SWITCH_PIN = 12;     // Pin D6 en la mayoría de placas ESP8266 (GPIO4)
+const float MM_POR_PULSO = 0.2794;  // Cantidad de lluvia por cada "tip" o pulso (ajusta este valor según tu pluviómetro)
+
+// Variables para el conteo de lluvia
+volatile int contadorPulsos = 0;    // 'volatile' es crucial para variables usadas en interrupciones
+float lluvia1min = 0.0;
+float lluviaTotal = 0.0;
+unsigned int lluvia1minInt = 0;
+unsigned int lluviaTotalInt = 0;
+
+//unsigned int TiempoTotal = 0;
+unsigned int PulsosTotal = 0;
+
+// Variables para el Debouncing (anti-rebote)
+volatile unsigned long ultimoTiempoPulso = 0;
+const long tiempoDebounce = 50;     // Tiempo en milisegundos para ignorar rebotes
+
+#endif
+
 // MOBILE DATA TRANSMISION
 
 #if MobData
@@ -1284,8 +1306,12 @@ void setup()
   {
 #if !MobDataSP
 #if (Rosver || MinVer || MobData || MinVerSD)
+
+#if !Rain
     Serial.println(F("Test_Sensor"));
     Test_Sensor();
+#endif
+
 #endif
 #endif
     Start_Captive_Portal();
@@ -1353,6 +1379,8 @@ connectstart:
   Setup_SoundMeter();
 #elif LTR390UV
   Setup_UV();
+#elif Rain
+  Setup_Rain();
 #else
   Setup_Sensor();
 #endif
@@ -1525,6 +1553,8 @@ void loop()
     Read_SoundMeter();
 #elif LTR390UV
     Read_UV();
+#elif Rain
+    NoSensor == NoSensor;   // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #else
     Read_Sensor();
 #endif
@@ -1811,11 +1841,19 @@ void loop()
       // New timestamp for the loop start time
       MQTT_loop_start = millis();
 
+#if Rain
+      Read_Rain();
+#endif
+
       // Message the MQTT broker in the cloud app to send the measured values
       if ((!err_wifi) && (PM25_samples > 0))
       {
         Send_Message_Cloud_App_MQTT();
       }
+
+#if Rain
+      contadorPulsos = 0;     // Reinicio a 0 del contador de pulsos
+#endif
 
 #if SaveSDyRTC
       Write_SD();
@@ -1956,6 +1994,26 @@ void loop()
 #endif
 #endif
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// * ISR - SERVICIO DE INTERRUPCIÓN PARA PLUVIOMETRO
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+#if Rain
+
+// Esta función se ejecuta CADA VEZ que el pin del reed switch cambia de ALTO a BAJO.
+void IRAM_ATTR contarPulso() {
+  // Comprueba si ha pasado suficiente tiempo desde el último pulso para evitar rebotes
+  if ((millis() - ultimoTiempoPulso) > tiempoDebounce) {
+    contadorPulsos++;
+    ultimoTiempoPulso = millis(); // Actualiza el tiempo del último pulso válido
+    Serial.print("Pulso #: ");
+    Serial.println(contadorPulsos);
+  }
+}
+
+#endif
+
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // * FUNCTIONS
@@ -2723,6 +2781,7 @@ void Start_Captive_Portal()
 
   // Sensor Location menu
 
+  #if !Rain
   if (eepromConfig.ConfigValues[3] == '0')
   {
     const char *custom_outin_str = "<br/><br/><label for='customOutIn'>Location:</label><br/><input type='radio' name='customOutIn' value='1'> Indoors - sensor measures indoors air<br><input type='radio' name='customOutIn' value='0' checked> Outdoors - sensor measures outdoors air";
@@ -2733,6 +2792,7 @@ void Start_Captive_Portal()
     const char *custom_outin_str = "<br/><br/><label for='customOutIn'>Location:</label><br/><input type='radio' name='customOutIn' value='1' checked> Indoors - sensor measures indoors air<br><input type='radio' name='customOutIn' value='0'> Outdoors - sensor measures outdoors air";
     new (&custom_outin_type) WiFiManagerParameter(custom_outin_str);
   }
+#endif
 
 #if (Rosver || MinVerSD)
 #if !WPA2
@@ -2778,7 +2838,9 @@ void Start_Captive_Portal()
   wifiManager.addParameter(&custom_sensorHYT_type);
   wifiManager.addParameter(&custom_display_type);
 #endif
+#if !Rain
   wifiManager.addParameter(&custom_outin_type);
+#endif
 #if (Rosver || MinVerSD)
 #if !WPA2
   wifiManager.addParameter(&custom_endhtmlup);
@@ -2927,8 +2989,10 @@ void saveParamCallback()
   CustomValtotal = CustomValtotal + (CustomValue * 100);
   Serial.println("Value customSD = " + getParam("customSD"));
   CustomValtotal = CustomValtotal + (CustomValue * 1000);
+#if !Rain  
   Serial.println("Value customOutIn = " + getParam("customOutIn"));
   CustomValtotal = CustomValtotal + (CustomValue * 10000);
+#endif
   Serial.println("Value customMobData = " + getParam("customMD"));
   CustomValtotal = CustomValtotal + (CustomValue * 100000);
   Serial.print(F("CustomValtotal: "));
@@ -3131,7 +3195,9 @@ void Send_Message_Cloud_App_MQTT()
   float pm12f;
 #endif
   int8_t RSSI = 0;
+#if !Rain
   int8_t inout;
+#endif
 #if SoundMeter
   int8_t dBAmaxint;
 #endif
@@ -3195,7 +3261,8 @@ void Send_Message_Cloud_App_MQTT()
 
   if (SEN5Xsen == true)
   {
-#if !(Rosver || SoundMeter)
+//#if !(Rosver || SoundMeter)
+#if !(Rosver || SoundMeter || Rain)
     uint8_t voc;
     uint8_t nox;
 
@@ -3260,12 +3327,24 @@ void Send_Message_Cloud_App_MQTT()
     }
     else
     {
+#if !Rain 
       byte temp1 = 0;
       sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d, datavar2: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId, temp1);
+#else
+      sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d, datavar2: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, contadorPulsos, PulsosTotal, lluvia1minInt, lluviaTotalInt);
+#endif
     }
 
 #else
+#if !Rain 
     sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId); // for Telegraf
+#else
+// inout: contadorPulsos
+// configval: PulsosTotal
+// datavar1: lluvia1minInt
+// datavar2: lluviaTotalInt
+    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d, \"datavar2\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, contadorPulsos, PulsosTotal, lluvia1minInt, lluviaTotalInt); // for Telegraf
+#endif
 #endif
 #else
 #if !Influxver
@@ -3545,10 +3624,11 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
     //CustomValtotal2 = CustomValtotal2 + ((int)eepromConfig.ConfigValues[6] - 48) * 10;
   }
 #endif
-  //  CustomValtotal2 = CustomValtotal2 + ((int)eepromConfig.ConfigValues[6] - 48) * 10;
+  // CustomValtotal2 = CustomValtotal2 + ((int)eepromConfig.ConfigValues[6] - 48) * 10;
 
   // CustomOutIn
 
+#if !Rain
   tempcustom = ((uint16_t)jsonBuffer["MQTT_port"]);
 
   if (tempcustom != 0)
@@ -3561,6 +3641,7 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
   else
     CustomValtotal2 = CustomValtotal2 + ((int)eepromConfig.ConfigValues[3] - 48) * 10000;
 
+#endif
   // CustomMobileData
 
 #if MobData
@@ -5342,6 +5423,51 @@ void Read_UV()
 }
 #endif
 
+#if Rain
+
+void Setup_Rain()
+{
+  // Configura el pin del reed switch como entrada con resistencia de pull-up interna
+  // Esto mantiene el pin en HIGH y lo lleva a LOW cuando el switch se cierra
+  pinMode(REED_SWITCH_PIN, INPUT_PULLUP);
+
+  // Configura la interrupción
+  // Se activará la función 'contarPulso' cada vez que el pin cambie de HIGH a LOW (FALLING edge)
+  attachInterrupt(digitalPinToInterrupt(REED_SWITCH_PIN), contarPulso, FALLING);
+}
+
+void Read_Rain()
+{
+  // Deshabilita las interrupciones temporalmente para leer la variable de forma segura
+  noInterrupts();
+  PulsosTotal = PulsosTotal + contadorPulsos;
+  interrupts();           // Vuelve a habilitar las interrupciones
+
+  if (contadorPulsos > 0) {
+    // Calcula la lluvia basada en los pulsos copiados
+    lluvia1min = contadorPulsos * MM_POR_PULSO;
+    lluviaTotal = PulsosTotal * MM_POR_PULSO;
+    lluvia1minInt = (int)(lluvia1min * 10000.0);
+    lluviaTotalInt = (int)(lluviaTotal * 10000.0);
+
+    Serial.print("Pulsos 1 minuto: ");
+    Serial.println(contadorPulsos);
+    Serial.print("Lluvia 1 minuto: ");
+    Serial.print(lluvia1min);
+    Serial.println(" mm");
+  } else {
+    lluvia1minInt = 0;
+    Serial.println("No se ha detectado lluvia en el último minuto.");
+  }
+  Serial.print("Pulsos totales: ");
+  Serial.println(PulsosTotal);
+  Serial.print("Lluvia acumulada total: ");
+  Serial.print(lluviaTotal);
+  Serial.println(" mm");
+}
+
+#endif
+
 #if !MobDataSP
 #if !Rosver
 void GetDeviceInfo_SPS30()
@@ -6001,7 +6127,7 @@ void Aireciudadano_Characteristics()
 #endif
 
 #elif MinVer
-
+#if !Rain
   Serial.print(F("eepromConfig.ConfigValues: "));
   Serial.println(eepromConfig.ConfigValues);
 
@@ -6051,6 +6177,26 @@ void Aireciudadano_Characteristics()
     Serial.println(F("SHT31/SHT4x sensor"));
   else
     Serial.println("No SHT31/SHT4x sensor");
+#else
+  Serial.print(F("eepromConfig.ConfigValues: "));
+  Serial.println(eepromConfig.ConfigValues);
+
+  Serial.print(F("eepromConfig.ConfigValues[6]: "));
+  Serial.println(eepromConfig.ConfigValues[6]);
+  if (eepromConfig.ConfigValues[6] == '0')
+  {
+    MaxWifiTX = false;
+    Serial.println(F("Normal Wifi power TX"));
+  }
+
+  if (eepromConfig.ConfigValues[6] == '1')
+  {
+    MaxWifiTX = true;
+    Serial.println(F("MaxWifiTX activated"));
+  }
+
+  Serial.println("Rain sensor");
+#endif
 
 #elif MinVerSD
 
