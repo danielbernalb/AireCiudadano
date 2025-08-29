@@ -35,6 +35,7 @@
 // 23. Wifi Power max con flag MaxWifiTX SOLO programada desde web mqtt AireCiudadano: Resultado no concluyente de incremento de cobertura
 // 24. ZH10 sensor para ESP32
 // 25. SDS011 sensor para ESP8266 y ESP32
+// 26. Rain Gauge
 
 // Constantes de Ajuste de sensores programables: pendiente e intercepto. ANALIZAR MAS
 // Verificar nueva libreria Bluetooth que parece compatible con Sensirion UPT Core@^0.3.0, Sigue el error con lectura de nox y en algunos modelos es lento
@@ -44,6 +45,7 @@
 // * INIT
 // * SETUP
 // * CONTROL LOOP
+// * ISR Rain
 // * FUNCTIONS
 // - Communications / Data save
 // 1. Wifi
@@ -942,9 +944,7 @@ float lluvia1min = 0.0;
 float lluviaTotal = 0.0;
 unsigned int lluvia1minInt = 0;
 unsigned int lluviaTotalInt = 0;
-
-//unsigned int TiempoTotal = 0;
-unsigned int PulsosTotal = 0;
+unsigned int pulsosTotal = 0;
 
 // Variables para el Debouncing (anti-rebote)
 volatile unsigned long ultimoTiempoPulso = 0;
@@ -1311,7 +1311,6 @@ void setup()
     Serial.println(F("Test_Sensor"));
     Test_Sensor();
 #endif
-
 #endif
 #endif
     Start_Captive_Portal();
@@ -1547,16 +1546,18 @@ void loop()
 
     // Read sensors
 
+    // Rain como es por interrupción no se lee aquí
+
+#if !Rain
 #if CO2sensor
     Read_CO2sensor();
 #elif SoundMeter
     Read_SoundMeter();
 #elif LTR390UV
     Read_UV();
-#elif Rain
-    NoSensor == NoSensor;   // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #else
     Read_Sensor();
+#endif
 #endif
 
     if (FlagLED == true)
@@ -2781,7 +2782,7 @@ void Start_Captive_Portal()
 
   // Sensor Location menu
 
-  #if !Rain
+#if !Rain
   if (eepromConfig.ConfigValues[3] == '0')
   {
     const char *custom_outin_str = "<br/><br/><label for='customOutIn'>Location:</label><br/><input type='radio' name='customOutIn' value='1'> Indoors - sensor measures indoors air<br><input type='radio' name='customOutIn' value='0' checked> Outdoors - sensor measures outdoors air";
@@ -3254,14 +3255,15 @@ void Send_Message_Cloud_App_MQTT()
     Serial.println(F(" dBm"));
   }
 
+#if !Rain
   if (AmbInOutdoors)
     inout = 1;
   else
     inout = 0;
+#endif
 
   if (SEN5Xsen == true)
   {
-//#if !(Rosver || SoundMeter)
 #if !(Rosver || SoundMeter || Rain)
     uint8_t voc;
     uint8_t nox;
@@ -3331,7 +3333,11 @@ void Send_Message_Cloud_App_MQTT()
       byte temp1 = 0;
       sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d, datavar2: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId, temp1);
 #else
-      sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d, datavar2: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, contadorPulsos, PulsosTotal, lluvia1minInt, lluviaTotalInt);
+// inout: contadorPulsos
+// configval: pulsosTotal
+// datavar1: lluvia1minInt
+// datavar2: lluviaTotalInt
+      sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d, datavar2: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, contadorPulsos, pulsosTotal, lluvia1minInt, lluviaTotalInt);
 #endif
     }
 
@@ -3340,10 +3346,10 @@ void Send_Message_Cloud_App_MQTT()
     sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId); // for Telegraf
 #else
 // inout: contadorPulsos
-// configval: PulsosTotal
+// configval: pulsosTotal
 // datavar1: lluvia1minInt
 // datavar2: lluviaTotalInt
-    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d, \"datavar2\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, contadorPulsos, PulsosTotal, lluvia1minInt, lluviaTotalInt); // for Telegraf
+    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d, \"datavar2\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, contadorPulsos, pulsosTotal, lluvia1minInt, lluviaTotalInt); // for Telegraf
 #endif
 #endif
 #else
@@ -3640,8 +3646,8 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
   }
   else
     CustomValtotal2 = CustomValtotal2 + ((int)eepromConfig.ConfigValues[3] - 48) * 10000;
-
 #endif
+
   // CustomMobileData
 
 #if MobData
@@ -5440,13 +5446,13 @@ void Read_Rain()
 {
   // Deshabilita las interrupciones temporalmente para leer la variable de forma segura
   noInterrupts();
-  PulsosTotal = PulsosTotal + contadorPulsos;
+  pulsosTotal = pulsosTotal + contadorPulsos;
   interrupts();           // Vuelve a habilitar las interrupciones
 
   if (contadorPulsos > 0) {
     // Calcula la lluvia basada en los pulsos copiados
     lluvia1min = contadorPulsos * MM_POR_PULSO;
-    lluviaTotal = PulsosTotal * MM_POR_PULSO;
+    lluviaTotal = pulsosTotal * MM_POR_PULSO;
     lluvia1minInt = (int)(lluvia1min * 10000.0);
     lluviaTotalInt = (int)(lluviaTotal * 10000.0);
 
@@ -5460,7 +5466,7 @@ void Read_Rain()
     Serial.println("No se ha detectado lluvia en el último minuto.");
   }
   Serial.print("Pulsos totales: ");
-  Serial.println(PulsosTotal);
+  Serial.println(pulsosTotal);
   Serial.print("Lluvia acumulada total: ");
   Serial.print(lluviaTotal);
   Serial.println(" mm");
