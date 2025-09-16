@@ -3324,7 +3324,12 @@ void Send_Message_Cloud_App_MQTT()
     if (ResetFlagMobDataTemp == true)
     {
       byte temp1 = 1;
+
+#if !Rain
       sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d, datavar2: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId, temp1);
+#else
+      sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d, datavar2: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, contadorPulsos, pulsosTotal, lluvia1minInt, lluviaTotalInt);
+#endif
       ResetFlagMobDataTemp = false;
     }
     else
