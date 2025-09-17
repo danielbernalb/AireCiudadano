@@ -685,7 +685,7 @@ byte failh = 0;
 Adafruit_SHT4x sht4 = Adafruit_SHT4x();
 #endif
 
-#if !(Rosver || MinVer || MobData || MinVerSD)
+#if !(Rosver || MinVer || MobData || MinVerSD || SoundMeter || Rain)
 
 #include "Adafruit_Sensor.h"
 #include "Adafruit_AM2320.h"
@@ -1307,10 +1307,9 @@ void setup()
 #if !MobDataSP
 #if (Rosver || MinVer || MobData || MinVerSD)
 
-#if !Rain
     Serial.println(F("Test_Sensor"));
     Test_Sensor();
-#endif
+
 #endif
 #endif
     Start_Captive_Portal();
@@ -1472,7 +1471,7 @@ connectstart:
 #endif
 
   // Get device id
-#if (Rosver || SoundMeter || MinVer || MinVerSD)
+#if (Rosver || SoundMeter || MinVer || MinVerSD || Rain)
   IDn = 0;
   Aireciudadano_Characteristics();
 #endif
@@ -1750,7 +1749,7 @@ void loop()
       Serial.print(F("PM2.5: "));
       Serial.print(pm25int);
       Serial.print("   ");
-#if !SoundMeter
+#if !(SoundMeter || Rain)
       ReadHyT();
 #endif
 #if SDyRTC
@@ -2648,7 +2647,7 @@ void Start_Captive_Portal()
   WiFiManagerParameter custom_wifi_html("<p>Set WPA2 Enterprise</p>"); // only custom html
   WiFiManagerParameter custom_wifi_user("User", "WPA2 Enterprise identity", eepromConfig.wifi_user, 24);
   WiFiManagerParameter custom_wpa2_pass;
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain)
   WiFiManagerParameter custom_wifi_html2("<p></p>"); // only custom html
 #else
   WiFiManagerParameter custom_wifi_html2("<hr><br/>"); // only custom html
@@ -2671,7 +2670,7 @@ void Start_Captive_Portal()
   WiFiManagerParameter custom_id_name("CustomName", "Set Station Name (25 characters max):", eepromConfig.aireciudadano_device_name, 25);
 #endif
 
-#if !(Rosver || SoundMeter || Minver || MinVerSD)
+#if !(Rosver || SoundMeter || Minver || MinVerSD || Rain)
   char Ptime[5];
   itoa(eepromConfig.PublicTime, Ptime, 10);
   WiFiManagerParameter custom_public_time("Ptime", "Set Publication Time in minutes:", Ptime, 4);
@@ -2679,7 +2678,7 @@ void Start_Captive_Portal()
 #endif
   WiFiManagerParameter custom_sensor_latitude("Latitude", "Latitude (5-4 dec digits are enough)", eepromConfig.sensor_lat, 10);
   WiFiManagerParameter custom_sensor_longitude("Longitude", "Longitude (5-4 dec)", eepromConfig.sensor_lon, 10);
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain)
   WiFiManagerParameter custom_sensorPM_type;
   WiFiManagerParameter custom_sensorHYT_type;
   WiFiManagerParameter custom_display_type;
@@ -2692,7 +2691,7 @@ void Start_Captive_Portal()
 #endif
   WiFiManagerParameter custom_endhtml("<p></p>"); // only custom html
 
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain)
   // Sensor PM menu
 
   if (eepromConfig.ConfigValues[7] == '0')
@@ -2827,14 +2826,14 @@ void Start_Captive_Portal()
 #endif
 
   wifiManager.addParameter(&custom_id_name);
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain)
   wifiManager.addParameter(&custom_public_time);
   wifiManager.addParameter(&custom_sensor_html);
 #endif
 
   wifiManager.addParameter(&custom_sensor_latitude);
   wifiManager.addParameter(&custom_sensor_longitude);
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain)
   wifiManager.addParameter(&custom_sensorPM_type);
   wifiManager.addParameter(&custom_sensorHYT_type);
   wifiManager.addParameter(&custom_display_type);
@@ -2896,7 +2895,7 @@ void Start_Captive_Portal()
     eepromConfig.aireciudadano_device_name[sizeof(eepromConfig.aireciudadano_device_name) - 1] = '\0';
     Serial.println(F("Devname write_eeprom = true"));
 
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain)
     eepromConfig.PublicTime = atoi(custom_public_time.getValue());
     Serial.println(F("PublicTime write_eeprom = true"));
 #endif
@@ -3236,7 +3235,9 @@ void Send_Message_Cloud_App_MQTT()
 #if SoundMeter
   dBAmaxint = round(dBAmax);
 #else
+#if !Rain
   ReadHyT();
+#endif
 #endif
 
   if (FlagMobData == true)
@@ -3342,7 +3343,8 @@ void Send_Message_Cloud_App_MQTT()
 // configval: pulsosTotal
 // datavar1: lluvia1minInt
 // datavar2: lluviaTotalInt
-      sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d, datavar2: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, contadorPulsos, pulsosTotal, lluvia1minInt, lluviaTotalInt);
+//    sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d, datavar2: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, contadorPulsos, pulsosTotal, lluvia1minInt, lluviaTotalInt);
+    sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d, datavar2: %d}", aireciudadano_device_id.c_str(), pm25int, contadorPulsos, pulsosTotal, humi, temp, RSSI, latitudef, longitudef, 0, IDn, lluvia1minInt, lluviaTotalInt);
 #endif
     }
 
@@ -3354,7 +3356,8 @@ void Send_Message_Cloud_App_MQTT()
 // configval: pulsosTotal
 // datavar1: lluvia1minInt
 // datavar2: lluviaTotalInt
-    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d, \"datavar2\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, contadorPulsos, pulsosTotal, lluvia1minInt, lluviaTotalInt); // for Telegraf
+//    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d, \"datavar2\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, contadorPulsos, pulsosTotal, lluvia1minInt, lluviaTotalInt); // for Telegraf
+    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d, \"datavar2\": %d}", aireciudadano_device_id.c_str(), pm25int, contadorPulsos, pulsosTotal, humi, temp, RSSI, latitudef, longitudef, 0, IDn, lluvia1minInt, lluviaTotalInt); // for Telegraf
 #endif
 #endif
 #else
@@ -3589,7 +3592,7 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
 
   // CustomSenPM
 
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain)
 
   tempcustom = ((uint16_t)jsonBuffer["altitude_compensation"]);
   if (tempcustom != 0)
@@ -3605,7 +3608,7 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
 
   // CustomSenHYT OR MaxWifiTX
 
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain)
 
   tempcustom = ((uint16_t)jsonBuffer["FRC_value"]);
 
@@ -4368,6 +4371,7 @@ void Test_Sensor()
 }
 #endif
 
+#if !(SoundMeter || Rain)
 void Setup_Sensor()
 { // Identify and initialize PM25, temperature and humidity sensor
 
@@ -4546,7 +4550,7 @@ void Setup_Sensor()
 #endif
 #endif
 
-#if !(TwoPMS || SoundMeter)
+#if !(TwoPMS || SoundMeter || Rain)
     delay(1000);
 
 #if SDS011sen
@@ -4737,7 +4741,9 @@ void Setup_Sensor()
 
 #endif
 
-#if !SoundMeter
+#endif
+
+#if !(SoundMeter || Rain)
 
 void Read_Sensor()
 { // Read PM25, temperature and humidity values
@@ -5664,7 +5670,7 @@ void printSerialNumber()
 
 #endif
 
-#if !SoundMeter
+#if !(SoundMeter || Rain)
 
 void ReadHyT()
 {
@@ -5979,7 +5985,7 @@ void Get_AireCiudadano_DeviceId()
 void Aireciudadano_Characteristics()
 {
 #if !Bluetooth
-#if !(Rosver || SoundMeter || MinVer || MobData || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer || MobData || MinVerSD || Rain)
   Serial.print(F("eepromConfig.ConfigValues: "));
   Serial.println(eepromConfig.ConfigValues);
 
@@ -6138,7 +6144,6 @@ void Aireciudadano_Characteristics()
 #endif
 
 #elif MinVer
-#if !Rain
   Serial.print(F("eepromConfig.ConfigValues: "));
   Serial.println(eepromConfig.ConfigValues);
 
@@ -6188,26 +6193,6 @@ void Aireciudadano_Characteristics()
     Serial.println(F("SHT31/SHT4x sensor"));
   else
     Serial.println("No SHT31/SHT4x sensor");
-#else
-  Serial.print(F("eepromConfig.ConfigValues: "));
-  Serial.println(eepromConfig.ConfigValues);
-
-  Serial.print(F("eepromConfig.ConfigValues[6]: "));
-  Serial.println(eepromConfig.ConfigValues[6]);
-  if (eepromConfig.ConfigValues[6] == '0')
-  {
-    MaxWifiTX = false;
-    Serial.println(F("Normal Wifi power TX"));
-  }
-
-  if (eepromConfig.ConfigValues[6] == '1')
-  {
-    MaxWifiTX = true;
-    Serial.println(F("MaxWifiTX activated"));
-  }
-
-  Serial.println("Rain sensor");
-#endif
 
 #elif MinVerSD
 
@@ -6320,8 +6305,8 @@ void Aireciudadano_Characteristics()
   Serial.println(F("NO Mobile Data mode"));
 #endif
 
-#else // SoundMeter
-
+#else // SoundMeter & Rain
+#if !Rain
   Serial.print(F("eepromConfig.ConfigValues: "));
   Serial.println(eepromConfig.ConfigValues);
   Serial.print(F("eepromConfig.ConfigValues[3]: "));
@@ -6353,6 +6338,27 @@ void Aireciudadano_Characteristics()
 
   Serial.println(F("Sound Meter MEMS sensor"));
 
+#else
+  Serial.print(F("eepromConfig.ConfigValues: "));
+  Serial.println(eepromConfig.ConfigValues);
+
+  Serial.print(F("eepromConfig.ConfigValues[6]: "));
+  Serial.println(eepromConfig.ConfigValues[6]);
+  if (eepromConfig.ConfigValues[6] == '0')
+  {
+    MaxWifiTX = false;
+    Serial.println(F("Normal Wifi power TX"));
+  }
+
+  if (eepromConfig.ConfigValues[6] == '1')
+  {
+    MaxWifiTX = true;
+    Serial.println(F("MaxWifiTX activated"));
+  }
+
+  Serial.println("Rain sensor");
+#endif
+
 #if !WPA2
   Serial.println(F("No WPA2"));
 #else
@@ -6370,8 +6376,8 @@ void Aireciudadano_Characteristics()
   // SDflag = 64
   // MobData = 128
   // TDisplay = 256
-  // OLED66 = 512
-  // OLED96 = 1024
+  // OLED66 || OLED96 = 512
+  // MaxWifiTX = 1024
   // TwoSensor = 2048
   // AmbInOutdoors (Indoors) = 4096
   // WPA2 = 8192
@@ -6391,8 +6397,8 @@ void Aireciudadano_Characteristics()
     IDn = IDn + 16;
   if (AM2320sen)
     IDn = IDn + 32;
-  //  if (SDflag)
-  //    IDn = IDn + 64;
+  if (SDflag)
+    IDn = IDn + 64;
 #if SaveSDyRTC
   IDn = IDn + 64;
 #endif
@@ -6403,8 +6409,8 @@ void Aireciudadano_Characteristics()
     IDn = IDn + 256;
   if (OLED66 || OLED96)
     IDn = IDn + 512;
-  //  if (OLED96)
-  //    IDn = IDn + 1024;
+  if (MaxWifiTX)
+    IDn = IDn + 1024;
   if (FlagMobData)
     IDn = IDn + 1024;
 #if TwoPMS
@@ -6550,18 +6556,21 @@ void Firmware_Update()
   t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI66.bin");
 #elif SoundMeter
 #if !SoundAM
-  Serial.println("Firmware WISP SoundMeter");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISMeter.bin");
+  Serial.println("Firmware SP SoundMeter");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISPMeter.bin");
 #else
-  Serial.println("Firmware WISP SoundMeter AM");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISMeteram.bin");
+  Serial.println("Firmware SP SoundMeter AM");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISPMeteram.bin");
 #endif
+#elif Rain
+  Serial.println("Firmware Rain");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WIRain.bin");
 #elif Minver
-  Serial.println("Firmware WISP MinVer");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISPMV.bin");
+  Serial.println("Firmware MinVer");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WIMV.bin");
 #else
-  Serial.println("Firmware WISP");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISP.bin");
+  Serial.println("Firmware WIFI");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI.bin");
 #endif
 #else
 #if Tdisplaydisp
@@ -6574,11 +6583,11 @@ void Firmware_Update()
   Serial.println("Firmware WI66 WPA2");
   t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI66WPA2.bin");
 #elif SoundMeter
-  Serial.println("Firmware WISP SoundMeter");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISMeterWPA2.bin");
+  Serial.println("Firmware SP SoundMeter");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISPMeterWPA2.bin");
 #else
-  Serial.println("Firmware WISP WPA2");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISPWPA2.bin");
+  Serial.println("Firmware WPA2");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WIWPA2.bin");
 #endif
 #endif
 
@@ -6666,36 +6675,39 @@ void Firmware_Update()
 
 #if WPA2
 #if Rosver
-  Serial.println("Firmware ESP8266WISP_WPA2Rosver");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISP_WPA2Rosver.bin");
+  Serial.println("Firmware ESP8266WI_WPA2Rosver");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WI_WPA2Rosver.bin");
 #else
-  Serial.println("Firmware ESP8266WISP_WPA2");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISP_WPA2.bin");
+  Serial.println("Firmware ESP8266WI_WPA2");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WI_WPA2.bin");
 #endif
 #else
 #if Rosver
-  Serial.println("Firmware ESP8266WISP_Rosver");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISP_Rosver.bin");
+  Serial.println("Firmware ESP8266WI_Rosver");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WI_Rosver.bin");
 #elif MinVer
-  Serial.println("Firmware ESP8266WISP_MinVer");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISPMV.bin");
+  Serial.println("Firmware ESP8266WI_MinVer");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WIMV.bin");
 #elif MinVerSD
-  Serial.println("Firmware ESP8266WISP_MinVerSD");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISPMVSD.bin");
+  Serial.println("Firmware ESP8266WI_MinVerSD");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WIMVSD.bin");
 #elif MobData
-  Serial.println("Firmware ESP8266WISP_MobData");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISPMobData.bin");
+  Serial.println("Firmware ESP8266WI_MobData");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WIMobData.bin");
 #elif SoundMeter
 #if !Influxver
-  Serial.println("Firmware ESP8266WISP_SoundMeter");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISMeter.bin");
+  Serial.println("Firmware ESP8266WI_SoundMeter");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISPMeter.bin");
 #else
-  Serial.println("Firmware ESP8266WISP_SoundMeter_InfluxDB");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISMeterInflux.bin");
+  Serial.println("Firmware ESP8266WI_SoundMeter_InfluxDB");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISPMeterInflux.bin");
 #endif
+#elif Rain
+  Serial.println("Firmware ESP8266WI_Rain_InfluxDB");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WIRainInfluxDB.bin");
 #else
-  Serial.println("Firmware ESP8266WISP");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISP.bin");
+  Serial.println("Firmware ESP8266WIFI");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WI.bin");
 #endif
 #endif
 
