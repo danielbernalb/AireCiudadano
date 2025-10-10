@@ -89,13 +89,13 @@
 #define TwoPMS false     // Set to true if you want 2 PMS7003 sensors
 #define SoundMeter false // set to true for Sound Meter
 #define SoundAM false    // Set to true to Sound meter airplane mode
-#define Influxver true   // Set to true for InfluxDB version SP - Rain
+#define Influxver false   // Set to true for InfluxDB version SP - Rain
 #define ZH10sen false    // Set to true for ZH10 instead PMSX003
 #define SDS011sen false  // Set to true for SDS011 instead PMSX003
 #define LedNeo false     // Set to true for Led Neo multicolor
 #define LTR390UV false   // LTR390 version
 #define NoxVoxTd false   // Lectura de NoxVox
-#define Rain true        // Lectura de pluviometro
+#define Rain false        // Lectura de pluviometro
 
 // Seleccion de operador de telefonia movil
 #define TigoKalleyExito false
@@ -3412,10 +3412,11 @@ void Send_Message_Cloud_App_MQTT()
     if (responsepublish == 0)
       Serial.println("Reintento fallido, mensaje no publicado");
     else
-      Serial.println("Reintento OK, mensaje publicado");
+      Serial.println("Reintento OK, mensaje publicado");      // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! diagnostico con MQTT BROKER
   }
   else {
-    Serial.println(", OK Mensaje publicado");
+    Serial.println(", OK Mensaje publicado");   // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! diagnostico con MQTT BROKER.
+    // ME parece que el led se enciende sin mensaje publicado o con ERROR MQTT en el Serial, hay que revisar
 #if !ESP8266
     digitalWrite(LEDPIN, HIGH);
 #else
