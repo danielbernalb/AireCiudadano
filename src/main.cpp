@@ -37,6 +37,9 @@
 // 25. SDS011 sensor para ESP8266 y ESP32
 // 26. Rain Gauge
 // 27. ADXL345
+// 28. LTR390UV: inout = 2
+//     Rain:     inout = 3
+//     ADXL345:  inout = 4
 
 // Constantes de Ajuste de sensores programables: pendiente e intercepto. ANALIZAR MAS
 // Verificar nueva libreria Bluetooth que parece compatible con Sensirion UPT Core@^0.3.0, Sigue el error con lectura de nox y en algunos modelos es lento
@@ -93,9 +96,9 @@
 #define Influxver true   // Set to true for InfluxDB version SP - Rain - ADXL
 #define ZH10sen false    // Set to true for ZH10 instead PMSX003
 #define SDS011sen false  // Set to true for SDS011 instead PMSX003
+#define NoxVoxTd false   // Lectura de NoxVox
 #define LedNeo false     // Set to true for Led Neo multicolor
 #define LTR390UV false   // LTR390 version
-#define NoxVoxTd false   // Lectura de NoxVox
 #define Rain false        // Lectura de pluviometro
 #define ADXL true        // Lectura ADXL345 
 
@@ -3248,9 +3251,7 @@ void Send_Message_Cloud_App_MQTT()
   float pm11f;
 #endif
   int8_t RSSI = 0;
-#if !(Rain || ADXL)
   int8_t inout;
-#endif
 #if SoundMeter
   int8_t dBAmaxint;
 #endif
@@ -3323,11 +3324,17 @@ void Send_Message_Cloud_App_MQTT()
     Serial.println(F(" dBm"));
   }
 
-#if !(Rain || ADXL)
+#if !(LTR390UV || Rain || ADXL)
   if (AmbInOutdoors)
     inout = 1;
   else
     inout = 0;
+#elif LTR390UV
+    inout = 2;
+#elif Rain
+    inout = 3;
+#elif ADXL
+    inout = 4;
 #endif
 
   if (SEN5Xsen == true)
@@ -3387,50 +3394,41 @@ void Send_Message_Cloud_App_MQTT()
 #if !Influxver
 
     // TEST PARA CONTAR RESET MOBDATA!!!!!!!!!!!!!!!!!
-    //sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
 
     if (ResetFlagMobDataTemp == true)
     {
       byte temp1 = 1;
-
-#if !(Rain || ADXL)
       sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d, datavar2: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId, temp1);
-#else
-      sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d, datavar2: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, contadorPulsos, pulsosTotal, lluvia1minInt, lluviaTotalInt);
-#endif
       ResetFlagMobDataTemp = false;
     }
     else
     {
-#if !(Rain || ADXL)
       byte temp1 = 0;
       sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d, datavar2: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId, temp1);
-#else
-// inout: contadorPulsos
-// configval: pulsosTotal
-// datavar1: lluvia1minInt
-// datavar2: lluviaTotalInt
-//    sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d, datavar2: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, contadorPulsos, pulsosTotal, lluvia1minInt, lluviaTotalInt);
-    sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d, datavar2: %d}", aireciudadano_device_id.c_str(), pm25int, contadorPulsos, pulsosTotal, humi, temp, RSSI, latitudef, longitudef, 0, IDn, lluvia1minInt, lluviaTotalInt);
-#endif
     }
 
 #else
-#if !(Rain || ADXL)
-    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId); // for Telegraf
-#elif ADXL
+#if !(LTR390UV || Rain || ADXL)
+    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn); // for Telegraf
+#elif LTR390V
+// inout = 2;
+// pm25int: LTR390 value
+    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn); // for Telegraf
+#elif Rain
+// inout = 3;
+// pm25int: contadorPulsos
+// pm25intori: pulsosTotal
+// datavar1: lluvia1minInt
+// datavar2: lluviaTotalInt
+    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d, \"datavar2\": %d}", aireciudadano_device_id.c_str(), contadorPulsos, pulsosTotal, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, lluvia1minInt, lluviaTotalInt); // for Telegraf 
+#else   // ADXL345
+// inout = 4;
 // pm25int: ax X (pm251int)
 // pm25intori: ay Y (pm252int)
 // pm1int: az Z (pm11int)
 // datavar1: roll (pm12int)
 // datavar2: pitch (pm1int)
-    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d, \"datavar2\": %d}", aireciudadano_device_id.c_str(), pm251int, pm252int, pm11int, humi, temp, RSSI, latitudef, longitudef, 0, IDn, pm12int, pm1int); // for Telegraf 
-#else
-// pm25int: contadorPulsos
-// pm25intori: pulsosTotal
-// datavar1: lluvia1minInt
-// datavar2: lluviaTotalInt
-    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d, \"datavar2\": %d}", aireciudadano_device_id.c_str(), contadorPulsos, pulsosTotal, pm1int, humi, temp, RSSI, latitudef, longitudef, 0, IDn, lluvia1minInt, lluviaTotalInt); // for Telegraf 
+    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d, \"datavar2\": %d}", aireciudadano_device_id.c_str(), pm251int, pm252int, pm11int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, pm12int, pm1int); // for Telegraf 
 #endif
 #endif
 #else
@@ -5625,9 +5623,6 @@ void Read_ADXL_1s()
     Serial.print("   Z: "); Serial.print(az, 2);
     Serial.print("   R: "); Serial.print(roll, 2);
     Serial.print("   P: "); Serial.println(pitch, 2);
-    /////////////////////////
-    Serial.print("Samples: "); Serial.println(sample_count);
-
   } else {
     Serial.println("No hay muestras (sample_count == 0)");
   }
@@ -6140,7 +6135,7 @@ void Get_AireCiudadano_DeviceId()
 void Aireciudadano_Characteristics()
 {
 #if !Bluetooth
-#if !(Rosver || SoundMeter || MinVer || MobData || MinVerSD || Rain || ADXL)
+#if !(Rosver || SoundMeter || MinVer || MobData || MinVerSD || LTR390UV || Rain || ADXL)
   Serial.print(F("eepromConfig.ConfigValues: "));
   Serial.println(eepromConfig.ConfigValues);
 
@@ -6460,8 +6455,8 @@ void Aireciudadano_Characteristics()
   Serial.println(F("NO Mobile Data mode"));
 #endif
 
-#else // SoundMeter & Rain & ADXL
-#if !(Rain || ADXL)
+#else // SoundMeter & LTR390UV & Rain & ADXL
+#if !(LTR390UV || Rain || ADXL)
   Serial.print(F("eepromConfig.ConfigValues: "));
   Serial.println(eepromConfig.ConfigValues);
   Serial.print(F("eepromConfig.ConfigValues[3]: "));
@@ -6492,6 +6487,26 @@ void Aireciudadano_Characteristics()
   }
 
   Serial.println(F("Sound Meter MEMS sensor"));
+
+#elif LTR390UV
+  Serial.print(F("eepromConfig.ConfigValues: "));
+  Serial.println(eepromConfig.ConfigValues);
+
+  Serial.print(F("eepromConfig.ConfigValues[6]: "));
+  Serial.println(eepromConfig.ConfigValues[6]);
+  if (eepromConfig.ConfigValues[6] == '0')
+  {
+    MaxWifiTX = false;
+    Serial.println(F("Normal Wifi power TX"));
+  }
+
+  if (eepromConfig.ConfigValues[6] == '1')
+  {
+    MaxWifiTX = true;
+    Serial.println(F("MaxWifiTX activated"));
+  }
+
+  Serial.println("LTR390UV sensor");
   
 #elif ADXL
   Serial.print(F("eepromConfig.ConfigValues: "));
