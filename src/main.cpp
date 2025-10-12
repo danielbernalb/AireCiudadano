@@ -93,14 +93,14 @@
 #define TwoPMS false     // Set to true if you want 2 PMS7003 sensors
 #define SoundMeter false // set to true for Sound Meter
 #define SoundAM false    // Set to true to Sound meter airplane mode
-#define Influxver true   // Set to true for InfluxDB version SP - Rain - ADXL
+#define Influxver false  // Set to true for InfluxDB version SP - Rain - ADXL
 #define ZH10sen false    // Set to true for ZH10 instead PMSX003
 #define SDS011sen false  // Set to true for SDS011 instead PMSX003
 #define NoxVoxTd false   // Lectura de NoxVox
 #define LedNeo false     // Set to true for Led Neo multicolor
 #define LTR390UV false   // LTR390 version
-#define Rain false        // Lectura de pluviometro
-#define ADXL true        // Lectura ADXL345 
+#define Rain false       // Lectura de pluviometro
+#define ADXL false       // Lectura ADXL345 
 
 // Seleccion de operador de telefonia movil
 #define TigoKalleyExito false
