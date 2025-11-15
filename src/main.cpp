@@ -37,9 +37,11 @@
 // 25. SDS011 sensor para ESP8266 y ESP32
 // 26. Rain Gauge
 // 27. ADXL345
+// 28. Nivel = JSN-SR04M-2
 // 28. LTR390UV: inout = 2
 //     Rain:     inout = 3
 //     ADXL345:  inout = 4
+//     Nivel: inout = 5 
 
 // Constantes de Ajuste de sensores programables: pendiente e intercepto. ANALIZAR MAS
 // Verificar nueva libreria Bluetooth que parece compatible con Sensirion UPT Core@^0.3.0, Sigue el error con lectura de nox y en algunos modelos es lento
@@ -93,14 +95,15 @@
 #define TwoPMS false     // Set to true if you want 2 PMS7003 sensors
 #define SoundMeter false // set to true for Sound Meter
 #define SoundAM false    // Set to true to Sound meter airplane mode
-#define Influxver false  // Set to true for InfluxDB version SP - Rain - ADXL
+#define Influxver true   // Set to true for InfluxDB version SP - Rain - ADXL
 #define ZH10sen false    // Set to true for ZH10 instead PMSX003
 #define SDS011sen false  // Set to true for SDS011 instead PMSX003
 #define NoxVoxTd false   // Lectura de NoxVox
 #define LedNeo false     // Set to true for Led Neo multicolor
 #define LTR390UV false   // LTR390 version
 #define Rain false       // Lectura de pluviometro
-#define ADXL false       // Lectura ADXL345 
+#define ADXL false       // Lectura ADXL345
+#define Nivel true    // Lectura Medidor Nivel, JSN-SR04M-2
 
 // Seleccion de operador de telefonia movil
 #define TigoKalleyExito false
@@ -690,7 +693,7 @@ byte failh = 0;
 Adafruit_SHT4x sht4 = Adafruit_SHT4x();
 #endif
 
-#if !(Rosver || MinVer || MobData || MinVerSD || SoundMeter || Rain || ADXL)
+#if !(Rosver || MinVer || MobData || MinVerSD || SoundMeter || Rain || ADXL || Nivel)
 
 #include "Adafruit_Sensor.h"
 #include "Adafruit_AM2320.h"
@@ -987,6 +990,37 @@ float sum_x = 0.0f, sum_y = 0.0f, sum_z = 0.0f;
 unsigned long sample_count = 0;
 unsigned long last_print_ms = 0;
 unsigned long last_read_ms = 0;
+
+#endif
+
+#if Nivel
+
+#if ESP8266
+#define trigPin 12      // D6
+#define echoPin 13      // D7
+#else
+#define trigPin 16      // Pendiente de probar en ESP32
+#define echoPin 17      // Pendiente de probar en ESP32
+#endif
+
+// Variables de medición
+long duration;
+int distance;
+
+// ============================================
+// FILTRO ANTI-OUTLIERS
+// ============================================
+const int VENTANA_HISTORICO = 7;           // Últimas 7 lecturas válidas
+const float DESVIACION_MAXIMA = 50.0;      // 50% de cambio máximo permitido
+
+int historico[VENTANA_HISTORICO];
+int indiceHistorico = 0;
+int countHistorico = 0;
+
+// Estadísticas opcionales
+int outliers_detectados = 0;
+int lecturas_totales = 0;
+
 
 #endif
 
@@ -1419,6 +1453,8 @@ connectstart:
   Setup_Rain();
 #elif ADXL
   Setup_ADXL();
+#elif Nivel
+  Setup_Nivel();
 #else
   Setup_Sensor();
 #endif
@@ -1511,7 +1547,7 @@ connectstart:
 #endif
 
   // Get device id
-#if (Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL)
+#if (Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL || Nivel)
   IDn = 0;
   Aireciudadano_Characteristics();
 #endif
@@ -1600,6 +1636,8 @@ void loop()
     Read_UV();
 #elif ADXL          // Read 1 second ADXL
     Read_ADXL_1s();
+#elif Nivel
+    Read_Nivel();   // Read 1 second Nivel
 #else
     Read_Sensor();
 #endif
@@ -1797,7 +1835,7 @@ void loop()
       Serial.print(F("PM2.5: "));
       Serial.print(pm25int);
       Serial.print("   ");
-#if !(SoundMeter || Rain || ADXL)
+#if !(SoundMeter || Rain || ADXL || Nivel)
       ReadHyT();
 #endif
 #if SDyRTC
@@ -2695,7 +2733,7 @@ void Start_Captive_Portal()
   WiFiManagerParameter custom_wifi_html("<p>Set WPA2 Enterprise</p>"); // only custom html
   WiFiManagerParameter custom_wifi_user("User", "WPA2 Enterprise identity", eepromConfig.wifi_user, 24);
   WiFiManagerParameter custom_wpa2_pass;
-#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL || Nivel)
   WiFiManagerParameter custom_wifi_html2("<p></p>"); // only custom html
 #else
   WiFiManagerParameter custom_wifi_html2("<hr><br/>"); // only custom html
@@ -2718,7 +2756,7 @@ void Start_Captive_Portal()
   WiFiManagerParameter custom_id_name("CustomName", "Set Station Name (25 characters max):", eepromConfig.aireciudadano_device_name, 25);
 #endif
 
-#if !(Rosver || SoundMeter || Minver || MinVerSD || Rain || ADXL)
+#if !(Rosver || SoundMeter || Minver || MinVerSD || Rain || ADXL || Nivel)
   char Ptime[5];
   itoa(eepromConfig.PublicTime, Ptime, 10);
   WiFiManagerParameter custom_public_time("Ptime", "Set Publication Time in minutes:", Ptime, 4);
@@ -2726,7 +2764,7 @@ void Start_Captive_Portal()
 #endif
   WiFiManagerParameter custom_sensor_latitude("Latitude", "Latitude (5-4 dec digits are enough)", eepromConfig.sensor_lat, 10);
   WiFiManagerParameter custom_sensor_longitude("Longitude", "Longitude (5-4 dec)", eepromConfig.sensor_lon, 10);
-#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL || Nivel)
   WiFiManagerParameter custom_sensorPM_type;
   WiFiManagerParameter custom_sensorHYT_type;
   WiFiManagerParameter custom_display_type;
@@ -2739,7 +2777,7 @@ void Start_Captive_Portal()
 #endif
   WiFiManagerParameter custom_endhtml("<p></p>"); // only custom html
 
-#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL || Nivel)
   // Sensor PM menu
 
   if (eepromConfig.ConfigValues[7] == '0')
@@ -2829,7 +2867,7 @@ void Start_Captive_Portal()
 
   // Sensor Location menu
 
-#if !(Rain || ADXL)
+#if !(Rain || ADXL || Nivel)
   if (eepromConfig.ConfigValues[3] == '0')
   {
     const char *custom_outin_str = "<br/><br/><label for='customOutIn'>Location:</label><br/><input type='radio' name='customOutIn' value='1'> Indoors - sensor measures indoors air<br><input type='radio' name='customOutIn' value='0' checked> Outdoors - sensor measures outdoors air";
@@ -2874,19 +2912,19 @@ void Start_Captive_Portal()
 #endif
 
   wifiManager.addParameter(&custom_id_name);
-#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL || Nivel)
   wifiManager.addParameter(&custom_public_time);
   wifiManager.addParameter(&custom_sensor_html);
 #endif
 
   wifiManager.addParameter(&custom_sensor_latitude);
   wifiManager.addParameter(&custom_sensor_longitude);
-#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL || Nivel)
   wifiManager.addParameter(&custom_sensorPM_type);
   wifiManager.addParameter(&custom_sensorHYT_type);
   wifiManager.addParameter(&custom_display_type);
 #endif
-#if !(Rain || ADXL)
+#if !(Rain || ADXL || Nivel)
   wifiManager.addParameter(&custom_outin_type);
 #endif
 #if (Rosver || MinVerSD)
@@ -2943,7 +2981,7 @@ void Start_Captive_Portal()
     eepromConfig.aireciudadano_device_name[sizeof(eepromConfig.aireciudadano_device_name) - 1] = '\0';
     Serial.println(F("Devname write_eeprom = true"));
 
-#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL || Nivel)
     eepromConfig.PublicTime = atoi(custom_public_time.getValue());
     Serial.println(F("PublicTime write_eeprom = true"));
 #endif
@@ -3037,7 +3075,7 @@ void saveParamCallback()
   CustomValtotal = CustomValtotal + (CustomValue * 100);
   Serial.println("Value customSD = " + getParam("customSD"));
   CustomValtotal = CustomValtotal + (CustomValue * 1000);
-#if !(Rain || ADXL)
+#if !(Rain || ADXL || Nivel)
   Serial.println("Value customOutIn = " + getParam("customOutIn"));
   CustomValtotal = CustomValtotal + (CustomValue * 10000);
 #endif
@@ -3303,7 +3341,7 @@ void Send_Message_Cloud_App_MQTT()
 #if SoundMeter
   dBAmaxint = round(dBAmax);
 #else
-#if !(Rain || ADXL)
+#if !(Rain || ADXL || Nivel)
   ReadHyT();
 #endif
 #endif
@@ -3324,7 +3362,7 @@ void Send_Message_Cloud_App_MQTT()
     Serial.println(F(" dBm"));
   }
 
-#if !(LTR390UV || Rain || ADXL)
+#if !(LTR390UV || Rain || ADXL || Nivel)
   if (AmbInOutdoors)
     inout = 1;
   else
@@ -3335,11 +3373,13 @@ void Send_Message_Cloud_App_MQTT()
     inout = 3;
 #elif ADXL
     inout = 4;
+#elif Nivel
+    inout = 5;
 #endif
 
   if (SEN5Xsen == true)
   {
-#if !(Rosver || SoundMeter || Rain || ADXL)
+#if !(Rosver || SoundMeter || Rain || ADXL || Nivel)
     uint8_t voc;
     uint8_t nox;
 
@@ -3408,7 +3448,7 @@ void Send_Message_Cloud_App_MQTT()
     }
 
 #else
-#if !(LTR390UV || Rain || ADXL)
+#if !(LTR390UV || Rain || ADXL || Nivel)
     sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn); // for Telegraf
 #elif LTR390V
 // inout = 2;
@@ -3421,7 +3461,7 @@ void Send_Message_Cloud_App_MQTT()
 // datavar1: lluvia1minInt
 // datavar2: lluviaTotalInt
     sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d, \"datavar2\": %d}", aireciudadano_device_id.c_str(), contadorPulsos, pulsosTotal, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, lluvia1minInt, lluviaTotalInt); // for Telegraf 
-#else   // ADXL345
+#elif ADXL   // ADXL345
 // inout = 4;
 // pm25int: ax X (pm251int)
 // pm25intori: ay Y (pm252int)
@@ -3429,6 +3469,10 @@ void Send_Message_Cloud_App_MQTT()
 // datavar1: roll (pm12int)
 // datavar2: pitch (pm1int)
     sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d, \"datavar2\": %d}", aireciudadano_device_id.c_str(), pm251int, pm252int, pm11int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, pm12int, pm1int); // for Telegraf 
+#else        // JSN-SR04M-2
+// inout = 5;
+// pm25int: Nivel en cm
+    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn); // for Telegraf
 #endif
 #endif
 #else
@@ -3664,7 +3708,7 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
 
   // CustomSenPM
 
-#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL || Nivel)
 
   tempcustom = ((uint16_t)jsonBuffer["altitude_compensation"]);
   if (tempcustom != 0)
@@ -3680,7 +3724,7 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
 
   // CustomSenHYT OR MaxWifiTX
 
-#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL || Nivel)
 
   tempcustom = ((uint16_t)jsonBuffer["FRC_value"]);
 
@@ -3714,7 +3758,7 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
 
   // CustomOutIn
 
-#if !(Rain || ADXL)
+#if !(Rain || ADXL || Nivel)
   tempcustom = ((uint16_t)jsonBuffer["MQTT_port"]);
 
   if (tempcustom != 0)
@@ -4443,7 +4487,7 @@ void Test_Sensor()
 }
 #endif
 
-#if !(SoundMeter || Rain || ADXL)
+#if !(SoundMeter || Rain || ADXL || Nivel)
 void Setup_Sensor()
 { // Identify and initialize PM25, temperature and humidity sensor
 
@@ -4622,7 +4666,7 @@ void Setup_Sensor()
 #endif
 #endif
 
-#if !(TwoPMS || SoundMeter || Rain || ADXL)
+#if !(TwoPMS || SoundMeter || Rain || ADXL || Nivel)
     delay(1000);
 
 #if SDS011sen
@@ -4815,7 +4859,7 @@ void Setup_Sensor()
 
 #endif
 
-#if !(SoundMeter || Rain || ADXL)
+#if !(SoundMeter || Rain || ADXL || Nivel)
 
 void Read_Sensor()
 { // Read PM25, temperature and humidity values
@@ -5635,6 +5679,57 @@ void Read_ADXL_1s()
 
 #endif
 
+#if Nivel
+
+void Setup_Nivel()
+{
+  pinMode(trigPin, OUTPUT);
+  digitalWrite(trigPin, HIGH);
+  pinMode(echoPin, INPUT);
+
+  Serial.println("Lectura medidor de nivel - JSN-SR04M-2");
+
+  // Inicializar histórico
+  for (int i = 0; i < VENTANA_HISTORICO; i++) {
+    historico[i] = -1;
+  }
+}
+
+void Read_Nivel()
+{
+  // Hacer la lectura
+  LeerNivel();
+  
+  // Mostrar lectura individual
+  Serial.print("Distancia: ");
+  if (distance >= 2 && distance <= 600) {
+    Serial.print(distance);
+    Serial.println(" cm");
+    PM25_value = distance;
+  } else {
+    Serial.print(distance);
+    Serial.println(" cm (inválida)");
+  }
+}
+
+// ============================================
+// FUNCIÓN DE LECTURA (MÉTODO DEL VENDEDOR)
+// ============================================
+void LeerNivel() {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(5);
+  
+  digitalWrite(trigPin, HIGH);
+// NO ponemos LOW (requisito específico de este sensor)
+  
+  duration = pulseIn(echoPin, HIGH);
+//  distance = duration * 0.038 / 2;      // Codigo Mactronica
+  distance = duration * 0.0343 / 2;       // Codigo Recomendado en todo lado
+}
+
+#endif
+
+
 #if !MobDataSP
 #if !Rosver
 void GetDeviceInfo_SPS30()
@@ -5820,7 +5915,7 @@ void printSerialNumber()
 
 #endif
 
-#if !(SoundMeter || Rain || ADXL)
+#if !(SoundMeter || Rain || ADXL || Nivel)
 
 void ReadHyT()
 {
@@ -6135,7 +6230,7 @@ void Get_AireCiudadano_DeviceId()
 void Aireciudadano_Characteristics()
 {
 #if !Bluetooth
-#if !(Rosver || SoundMeter || MinVer || MobData || MinVerSD || LTR390UV || Rain || ADXL)
+#if !(Rosver || SoundMeter || MinVer || MobData || MinVerSD || LTR390UV || Rain || ADXL || Nivel)
   Serial.print(F("eepromConfig.ConfigValues: "));
   Serial.println(eepromConfig.ConfigValues);
 
@@ -6455,8 +6550,8 @@ void Aireciudadano_Characteristics()
   Serial.println(F("NO Mobile Data mode"));
 #endif
 
-#else // SoundMeter & LTR390UV & Rain & ADXL
-#if !(LTR390UV || Rain || ADXL)
+#else // SoundMeter & LTR390UV & Rain & ADXL & Nivel
+#if !(LTR390UV || Rain || ADXL || Nivel)
   Serial.print(F("eepromConfig.ConfigValues: "));
   Serial.println(eepromConfig.ConfigValues);
   Serial.print(F("eepromConfig.ConfigValues[3]: "));
@@ -6508,6 +6603,26 @@ void Aireciudadano_Characteristics()
 
   Serial.println("LTR390UV sensor");
   
+#elif Nivel
+  Serial.print(F("eepromConfig.ConfigValues: "));
+  Serial.println(eepromConfig.ConfigValues);
+
+  Serial.print(F("eepromConfig.ConfigValues[6]: "));
+  Serial.println(eepromConfig.ConfigValues[6]);
+  if (eepromConfig.ConfigValues[6] == '0')
+  {
+    MaxWifiTX = false;
+    Serial.println(F("Normal Wifi power TX"));
+  }
+
+  if (eepromConfig.ConfigValues[6] == '1')
+  {
+    MaxWifiTX = true;
+    Serial.println(F("MaxWifiTX activated"));
+  }
+
+  Serial.println("Level sensor - JSN-SR04M-2");
+
 #elif ADXL
   Serial.print(F("eepromConfig.ConfigValues: "));
   Serial.println(eepromConfig.ConfigValues);
@@ -6758,6 +6873,9 @@ void Firmware_Update()
 #elif ADXL
   Serial.println("Firmware ADXL345");
   t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WIADXL.bin");
+#elif Nivel
+  Serial.println("Firmware Nivel - JSN-SR04M-2");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WINivelJSN.bin");
 #elif Minver
   Serial.println("Firmware MinVer");
   t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WIMV.bin");
@@ -6901,6 +7019,9 @@ void Firmware_Update()
 #elif ADXL
   Serial.println("Firmware ESP8266WI_ADXL_InfluxDB");
   t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WIADXLInfluxDB.bin");
+#elif Nivel
+  Serial.println("Firmware ESP8266WI_Nivel_JSN_InfluxDB");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WINivelJSNInfluxDB.bin");
 #else
   Serial.println("Firmware ESP8266WIFI");
   t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WI.bin");
