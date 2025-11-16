@@ -41,7 +41,7 @@
 // 28. LTR390UV: inout = 2
 //     Rain:     inout = 3
 //     ADXL345:  inout = 4
-//     Nivel: inout = 5 
+//     Nivel: inout = 5
 
 // Constantes de Ajuste de sensores programables: pendiente e intercepto. ANALIZAR MAS
 // Verificar nueva libreria Bluetooth que parece compatible con Sensirion UPT Core@^0.3.0, Sigue el error con lectura de nox y en algunos modelos es lento
@@ -132,10 +132,10 @@
 #define BrownoutOFF false   // Colocar en true en boards con problemas de RESET por Brownout o bajo voltaje
 #define ESP8266SH false     // Colocar para PMS en pin 0 - Hardware Serial
 #define PreProgSensor false // Variables de sensor preprogramadas:
-                            // Latitude: char sensor_lat[10] = "xx.xxxx";
-                            // Longitude: char sensor_lon[10] = "xx.xxxx";
-                            // Valores de configuración: char ConfigValues[9] = "000xxxxx";
-                            // Nombre estación: char aireciudadano_device_name[36] = "xxxxxxxxxxxxxx";
+// Latitude: char sensor_lat[10] = "xx.xxxx";
+// Longitude: char sensor_lon[10] = "xx.xxxx";
+// Valores de configuración: char ConfigValues[9] = "000xxxxx";
+// Nombre estación: char aireciudadano_device_name[36] = "xxxxxxxxxxxxxx";
 
 // Define de diferentes versiones de plataformas:
 
@@ -1096,7 +1096,7 @@ void setup()
   // Configurar el pin con resistencia pulldown interna
   gpio_pulldown_en((gpio_num_t)EnLTR390);
   gpio_pullup_dis((gpio_num_t)EnLTR390);
-  
+
   // Opcionalmente, configurar el estado del pin durante deep sleep
   //gpio_hold_en((gpio_num_t)EnLTR390);
 
@@ -1605,7 +1605,7 @@ void loop()
 #endif
 
 #if ADXL              // Read 40ms ADXL
-  Read_ADXL();      
+  Read_ADXL();
 #endif
 
   // Measurement loop 1 seg
@@ -2565,7 +2565,7 @@ void Check_WiFi_Server()                    // Server access by http when you pu
             client.print("MQTT Port: ");
 #if !Influxver
             client.print("80");
-//            client.print("30183");
+            //            client.print("30183");
 #else
             client.print("30183");
 #endif
@@ -2666,10 +2666,10 @@ void Start_Captive_Portal()
 
   if (SDflag == false)
     captiveportaltime = 60;
-//    captiveportaltime = 15;
+  //    captiveportaltime = 15;
   else
-    captiveportaltime = 30; 
-// captiveportaltime = 15;
+    captiveportaltime = 30;
+  // captiveportaltime = 15;
 
   wifiAP = aireciudadano_device_id;
   Serial.println(wifiAP);
@@ -2784,7 +2784,7 @@ void Start_Captive_Portal()
   }
   else if (eepromConfig.ConfigValues[7] == '1')
   {
-#if SDS011sen   
+#if SDS011sen
     const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1' checked> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> SDS011";
 #else
     const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1' checked> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> Plantower PMS adjusted";
@@ -3193,7 +3193,7 @@ void MQTT_Reconnect()
       MQTT_client.subscribe(MQTT_receive_topic.c_str());
       Serial.print(F("Reconnect MQTT connected - Receive topic: "));
       Serial.println(MQTT_receive_topic);
-//      FlagMQTTcon = true;
+      //      FlagMQTTcon = true;
       contmqtt = 0;
 #if !ESP8266
       digitalWrite(LEDPIN, HIGH);
@@ -3232,7 +3232,7 @@ void MQTT_Reconnect()
           cont = 0;
           FlagMQTTcon = true;
           break;
-//          ESP.restart();    // CASO sin MQTT_client.loop();
+          //          ESP.restart();    // CASO sin MQTT_client.loop();
         }
         MQTT_client.setServer("sensor.aireciudadano.com", 80);
         MQTT_client.connect(aireciudadano_device_id.c_str());
@@ -3294,10 +3294,10 @@ void Send_Message_Cloud_App_MQTT()
   pm252int = round(pm252f);
   pm11f = PM11_accumulated / PM25_samples;      // az
   pm11int = round(pm11f);
-//  Roll
+  //  Roll
   pm251fori  = atan2f(pm252f / 1000, pm11f / 1000) * 180.0f / PI;
   pm12int = round(pm251fori * 1000);
-// Pitch
+  // Pitch
   pm252fori = atan2f(-pm251f / 1000, sqrtf(pm252f / 1000 * pm252f / 1000 + pm11f / 1000 * pm11f / 1000)) * 180.0f / PI;
   pm1int = round(pm252fori * 1000);
 #else
@@ -3351,13 +3351,13 @@ void Send_Message_Cloud_App_MQTT()
   else
     inout = 0;
 #elif LTR390UV
-    inout = 2;
+  inout = 2;
 #elif Rain
-    inout = 3;
+  inout = 3;
 #elif ADXL
-    inout = 4;
+  inout = 4;
 #elif Nivel
-    inout = 5;
+  inout = 5;
 #endif
 
   if (SEN5Xsen == true)
@@ -3434,27 +3434,27 @@ void Send_Message_Cloud_App_MQTT()
 #if !(LTR390UV || Rain || ADXL || Nivel)
     sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn); // for Telegraf
 #elif LTR390V
-// inout = 2;
-// pm25int: LTR390 value
+    // inout = 2;
+    // pm25int: LTR390 value
     sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn); // for Telegraf
 #elif Rain
-// inout = 3;
-// pm25int: contadorPulsos
-// pm25intori: pulsosTotal
-// datavar1: lluvia1minInt
-// datavar2: lluviaTotalInt
-    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d, \"datavar2\": %d}", aireciudadano_device_id.c_str(), contadorPulsos, pulsosTotal, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, lluvia1minInt, lluviaTotalInt); // for Telegraf 
+    // inout = 3;
+    // pm25int: contadorPulsos
+    // pm25intori: pulsosTotal
+    // datavar1: lluvia1minInt
+    // datavar2: lluviaTotalInt
+    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d, \"datavar2\": %d}", aireciudadano_device_id.c_str(), contadorPulsos, pulsosTotal, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, lluvia1minInt, lluviaTotalInt); // for Telegraf
 #elif ADXL   // ADXL345
-// inout = 4;
-// pm25int: ax X (pm251int)
-// pm25intori: ay Y (pm252int)
-// pm1int: az Z (pm11int)
-// datavar1: roll (pm12int)
-// datavar2: pitch (pm1int)
-    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d, \"datavar2\": %d}", aireciudadano_device_id.c_str(), pm251int, pm252int, pm11int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, pm12int, pm1int); // for Telegraf 
+    // inout = 4;
+    // pm25int: ax X (pm251int)
+    // pm25intori: ay Y (pm252int)
+    // pm1int: az Z (pm11int)
+    // datavar1: roll (pm12int)
+    // datavar2: pitch (pm1int)
+    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d, \"datavar2\": %d}", aireciudadano_device_id.c_str(), pm251int, pm252int, pm11int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, pm12int, pm1int); // for Telegraf
 #else        // JSN-SR04M-2
-// inout = 5;
-// pm25int: Nivel en cm
+    // inout = 5;
+    // pm25int: Nivel en cm
     sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn); // for Telegraf
 #endif
 #endif
@@ -4588,7 +4588,7 @@ void Setup_Sensor()
 #if !TTGO_TQ
 
 #if SDS011sen
-	  my_sds.begin(&port);
+    my_sds.begin(&port);
 #elif ZH10sen
     mySerial.begin(9600, SERIAL_8N1, RX_PIN_ZH10, TX_PIN_ZH10); // Comunicación con el sensor
 #else
@@ -4619,9 +4619,9 @@ void Setup_Sensor()
 #if !SoundMeter
 #if !ESP8266SH
 #if !TwoPMS
-//ESP8266
+    //ESP8266
 #if SDS011sen
-    my_sds.begin(SDS_TX, SDS_RX); // SoftwareSerial SDS011 9600 baudrate  
+    my_sds.begin(SDS_TX, SDS_RX); // SoftwareSerial SDS011 9600 baudrate
 #else
     pmsSerial.begin(9600); // Software serial begin for PMS sensor
 #endif
@@ -4643,9 +4643,9 @@ void Setup_Sensor()
     delay(1000);
 
 #if SDS011sen
-	  errSDS011 = my_sds.read(&p25, &p10);
-	  if (!errSDS011) {
-		  Serial.println(F("SDS011 sensor found!"));
+    errSDS011 = my_sds.read(&p25, &p10);
+    if (!errSDS011) {
+      Serial.println(F("SDS011 sensor found!"));
 
 #elif ZH10sen
 
@@ -4717,7 +4717,7 @@ void Setup_Sensor()
 #if SDS011sen
       Serial.println(F("Could not find SDS011 sensor!"));
 #elif ZH10sen
-      Serial.println(F("Could not find ZH10 sensor!")); 
+      Serial.println(F("Could not find ZH10 sensor!"));
 #else
       Serial.println(F("Could not find Plantower sensor!"));
 #endif
@@ -4900,12 +4900,12 @@ void Read_Sensor()
       PM25_value_ori = PM25_value;
 
 #if Bluetooth
-      if (FlagAdjustSensor == 0){
+      if (FlagAdjustSensor == 0) {
         Serial.print("No ");
       }
-      else{
+      else {
         //Serial.println("Adjust PM2.5 SPS30");
-        PM25_value = ((1207 * PM25_value_ori) / 1000) - 1.01; // Ajuste propuesto por paper USA, falta calibracion propia  
+        PM25_value = ((1207 * PM25_value_ori) / 1000) - 1.01; // Ajuste propuesto por paper USA, falta calibracion propia
       }
 #else
       // PM25_value = ((1280 * PM25_value_ori) / 1000) + 1.78; // Ajuste propuesto por paper USA, falta calibracion propia
@@ -5006,7 +5006,7 @@ void Read_Sensor()
 
 #if SDS011sen
     errSDS011 = my_sds.read(&p25, &p10);
-	  if (!errSDS011) 
+    if (!errSDS011)
     {
       failpm = 0;
       PM25_value = p25;
@@ -5022,46 +5022,46 @@ void Read_Sensor()
     if (mySerial.available() >= 22) { // Se esperan 22 bytes en total
       // Leer y mostrar la trama recibida
       for (int i = 0; i < 22; i++) {
-      response[i] = mySerial.read();
-    }
-
-    // Validar cabecera
-    if (response[0] == 0xFF && response[1] == 0x01 && response[2] == 0x35) {
-      // Extraer datos
-      vocsint = (response[3] << 8) | response[4];
-      pm1_0 = (response[7] << 8) | response[8];
-      pm2_5 = (response[9] << 8) | response[10];
-      pm10ZH10 = (response[11] << 8) | response[12];
-      rawTemp = (response[13] << 8) | response[14];
-      humiZH10 = (response[15] << 8) | response[16];
-
-      // Convertir datos
-      temperatureZH10 = (rawTemp - 500) / 10.0;
-      vocZH10 = vocsint / 10.0;
-
-      // Calcular checksum
-      uint8_t checksum = 0;
-      for (int i = 1; i < 21; i++) { // Sumar bytes del 1 al 20
-        checksum += response[i];
+        response[i] = mySerial.read();
       }
-      checksum = ~checksum + 1; // Complemento a uno
 
-      // Comparar con el byte de checksum recibido
-      if (checksum == response[21]) {
-        // Mostrar datos en el monitor serie
-        PM25_value = pm2_5;
-        PM1_value = pm1_0;
-        humi = humiZH10;
-        temp = round(temperatureZH10);
-        vocIndex = vocZH10;
+      // Validar cabecera
+      if (response[0] == 0xFF && response[1] == 0x01 && response[2] == 0x35) {
+        // Extraer datos
+        vocsint = (response[3] << 8) | response[4];
+        pm1_0 = (response[7] << 8) | response[8];
+        pm2_5 = (response[9] << 8) | response[10];
+        pm10ZH10 = (response[11] << 8) | response[12];
+        rawTemp = (response[13] << 8) | response[14];
+        humiZH10 = (response[15] << 8) | response[16];
+
+        // Convertir datos
+        temperatureZH10 = (rawTemp - 500) / 10.0;
+        vocZH10 = vocsint / 10.0;
+
+        // Calcular checksum
+        uint8_t checksum = 0;
+        for (int i = 1; i < 21; i++) { // Sumar bytes del 1 al 20
+          checksum += response[i];
+        }
+        checksum = ~checksum + 1; // Complemento a uno
+
+        // Comparar con el byte de checksum recibido
+        if (checksum == response[21]) {
+          // Mostrar datos en el monitor serie
+          PM25_value = pm2_5;
+          PM1_value = pm1_0;
+          humi = humiZH10;
+          temp = round(temperatureZH10);
+          vocIndex = vocZH10;
+        }
+        else {
+          Serial.printf("Error: Checksum inválido. Calculado: %02X, Recibido: %02X\n", checksum, response[21]);
+        }
       }
       else {
-      Serial.printf("Error: Checksum inválido. Calculado: %02X, Recibido: %02X\n", checksum, response[21]);
+        Serial.println("Error: Respuesta inválida (cabecera incorrecta)");
       }
-    } 
-    else {
-      Serial.println("Error: Respuesta inválida (cabecera incorrecta)");
-    }
 
 #else
     if (pms.readUntil(data))
@@ -5077,10 +5077,10 @@ void Read_Sensor()
       PM25_value_ori = PM25_value;
 
 #if Bluetooth
-      if (FlagAdjustSensor == 0){
+      if (FlagAdjustSensor == 0) {
         Serial.print("No ");
       }
-      else{
+      else {
         //Serial.println("Adjust PM2.5 PMSx003");
         // PM25_value = ((562 * PM25_value_ori) / 1000) - 1; // Ecuación de ajuste resultado de 13 intercomparaciones entre PMS7003 y SPS30 por meses
         // PM25_value = ((553 * PM25_value_ori) / 1000) + 1.3; // Segundo ajuste
@@ -5447,7 +5447,7 @@ void Read_SoundMeter()
 void Setup_UV()
 {
   Wire.begin();
-  if(!ltr390.init())
+  if (!ltr390.init())
   {
     Serial.println("Couldn't find LTR sensor!");
   }
@@ -5455,55 +5455,14 @@ void Setup_UV()
   {
     Serial.println("Found LTR sensor!");
 
-  ltr390.setMode(LTR390_MODE_UVS);
-  if (ltr390.getMode() == LTR390_MODE_ALS) {
-    Serial.println("In ALS mode");
-  } else {
-    Serial.println("In UVS mode");
-  }
+    ltr390.setMode(LTR390_MODE_UVS);
+    if (ltr390.getMode() == LTR390_MODE_ALS) {
+      Serial.println("In ALS mode");
+    } else {
+      Serial.println("In UVS mode");
+    }
 
-  ltr390.setGain(LTR390_GAIN_18);
-  Serial.print("Gain: ");
-  switch (ltr390.getGain()) {
-    case LTR390_GAIN_1: Serial.println(1); break;
-    case LTR390_GAIN_3: Serial.println(3); break;
-    case LTR390_GAIN_6: Serial.println(6); break;
-    case LTR390_GAIN_9: Serial.println(9); break;
-    case LTR390_GAIN_18: Serial.println(18); break;
-  }
-
-  ltr390.setResolution(LTR390_RESOLUTION_20BIT);
-  Serial.print("Resolution: ");
-  switch (ltr390.getResolution()) {
-    case LTR390_RESOLUTION_13BIT: Serial.println(13); break;
-    case LTR390_RESOLUTION_16BIT: Serial.println(16); break;
-    case LTR390_RESOLUTION_17BIT: Serial.println(17); break;
-    case LTR390_RESOLUTION_18BIT: Serial.println(18); break;
-    case LTR390_RESOLUTION_19BIT: Serial.println(19); break;
-    case LTR390_RESOLUTION_20BIT: Serial.println(20); break;
-  }
-  //ltr390.setThresholds(100, 1000);
-  //ltr390.configInterrupt(true, LTR390_MODE_UVS);
-  }
-}
-
-void Read_UV()
-{
-  if (ltr390.newDataAvailable()) 
-  { 
-//    getUVIval = ltr390.getUVI();
-    getUVIval = ltr390.getUVI();
-    PM25_value = round(getUVIval);
-//    PM25_value = int(getUVIval / 2.7f);
-    Serial.print("UV index: ");
-    Serial.print(getUVIval);
-    Serial.print("   intori: ");
-    Serial.println(PM25_value, 0);
-    rawUVS = ltr390.readUVS();
-    Serial.print("UVraw: ");
-    Serial.println(rawUVS);
-
-/*
+    ltr390.setGain(LTR390_GAIN_18);
     Serial.print("Gain: ");
     switch (ltr390.getGain()) {
       case LTR390_GAIN_1: Serial.println(1); break;
@@ -5512,6 +5471,8 @@ void Read_UV()
       case LTR390_GAIN_9: Serial.println(9); break;
       case LTR390_GAIN_18: Serial.println(18); break;
     }
+
+    ltr390.setResolution(LTR390_RESOLUTION_20BIT);
     Serial.print("Resolution: ");
     switch (ltr390.getResolution()) {
       case LTR390_RESOLUTION_13BIT: Serial.println(13); break;
@@ -5521,8 +5482,47 @@ void Read_UV()
       case LTR390_RESOLUTION_19BIT: Serial.println(19); break;
       case LTR390_RESOLUTION_20BIT: Serial.println(20); break;
     }
-*/
-  
+    //ltr390.setThresholds(100, 1000);
+    //ltr390.configInterrupt(true, LTR390_MODE_UVS);
+  }
+}
+
+void Read_UV()
+{
+  if (ltr390.newDataAvailable())
+  {
+    //    getUVIval = ltr390.getUVI();
+    getUVIval = ltr390.getUVI();
+    PM25_value = round(getUVIval);
+    //    PM25_value = int(getUVIval / 2.7f);
+    Serial.print("UV index: ");
+    Serial.print(getUVIval);
+    Serial.print("   intori: ");
+    Serial.println(PM25_value, 0);
+    rawUVS = ltr390.readUVS();
+    Serial.print("UVraw: ");
+    Serial.println(rawUVS);
+
+    /*
+        Serial.print("Gain: ");
+        switch (ltr390.getGain()) {
+          case LTR390_GAIN_1: Serial.println(1); break;
+          case LTR390_GAIN_3: Serial.println(3); break;
+          case LTR390_GAIN_6: Serial.println(6); break;
+          case LTR390_GAIN_9: Serial.println(9); break;
+          case LTR390_GAIN_18: Serial.println(18); break;
+        }
+        Serial.print("Resolution: ");
+        switch (ltr390.getResolution()) {
+          case LTR390_RESOLUTION_13BIT: Serial.println(13); break;
+          case LTR390_RESOLUTION_16BIT: Serial.println(16); break;
+          case LTR390_RESOLUTION_17BIT: Serial.println(17); break;
+          case LTR390_RESOLUTION_18BIT: Serial.println(18); break;
+          case LTR390_RESOLUTION_19BIT: Serial.println(19); break;
+          case LTR390_RESOLUTION_20BIT: Serial.println(20); break;
+        }
+    */
+
   }
   else
     Serial.print("LTR390 not connected");
@@ -5597,7 +5597,7 @@ void Setup_ADXL()
   accel.setDataRate(DATA_RATE);
   Serial.println("Inclinómetro ADXL345 encontrado, modo: offsets grabados");
   Serial.println("Offsets precalibrados (m/s^2): ");
-  Serial.print("ox: "); Serial.print(CALIB_OX, 2); 
+  Serial.print("ox: "); Serial.print(CALIB_OX, 2);
   Serial.print("  oy: "); Serial.print(CALIB_OY, 2);
   Serial.print("  oz: "); Serial.println(CALIB_OZ, 2);
   Serial.println("X(m/s^2)   Y(m/s^2)   Z(m/s^2)   Roll(°)   Pitch(°)");
@@ -5633,7 +5633,7 @@ void Read_ADXL_1s()
     PM11_value = (int)(az * 1000.0);
 
     float roll  = atan2f(ay, az) * 180.0f / PI;
-    float pitch = atan2f(-ax, sqrtf(ay*ay + az*az)) * 180.0f / PI;
+    float pitch = atan2f(-ax, sqrtf(ay * ay + az * az)) * 180.0f / PI;
 
     Serial.print("X: "); Serial.print(ax, 2);
     Serial.print("   Y: "); Serial.print(ay, 2);
@@ -5673,29 +5673,29 @@ void Read_Nivel()
 {
   // Hacer la lectura
   LeerNivel();
-  
+
   // Validación básica de rango
   bool dentroRango = (distance >= 2 && distance <= 600);
-  
+
   // Validación avanzada: detectar outliers
   bool esOutlier = false;
   if (dentroRango && countHistorico >= 3) {
     esOutlier = detectarOutlier(distance);
   }
-  
+
   // Mostrar lectura
   Serial.print("Distancia: ");
   Serial.print(distance);
   Serial.print(" cm");
-  
+
   if (!dentroRango) {
     Serial.println(" (inválida)");
-  } 
+  }
   else if (esOutlier) {
     Serial.print(" (outlier detectado - ");
     Serial.print(calcularDesviacion(distance), 0);
     Serial.println("%)");
-  } 
+  }
   else {
     Serial.println("");
     PM25_value = distance;
@@ -5710,22 +5710,22 @@ bool detectarOutlier(int nuevaLectura) {
   // Calcular promedio del histórico
   float suma = 0;
   int validas = 0;
-  
+
   for (int i = 0; i < VENTANA_HISTORICO; i++) {
     if (historico[i] > 0) {
       suma += historico[i];
       validas++;
     }
   }
-  
+
   if (validas < 3) return false;  // Necesitamos al menos 3 lecturas
-  
+
   float promedio = suma / validas;
-  
+
   // Calcular desviación porcentual
   float diferencia = abs(nuevaLectura - promedio);
   float desviacionPorcentual = (diferencia / promedio) * 100.0;
-  
+
   // Si la desviación es mayor al 50%, es un outlier
   return (desviacionPorcentual > DESVIACION_MAXIMA);
 }
@@ -5736,16 +5736,16 @@ bool detectarOutlier(int nuevaLectura) {
 float calcularDesviacion(int nuevaLectura) {
   float suma = 0;
   int validas = 0;
-  
+
   for (int i = 0; i < VENTANA_HISTORICO; i++) {
     if (historico[i] > 0) {
       suma += historico[i];
       validas++;
     }
   }
-  
+
   if (validas == 0) return 0;
-  
+
   float promedio = suma / validas;
   float diferencia = abs(nuevaLectura - promedio);
   return (diferencia / promedio) * 100.0;
@@ -5767,38 +5767,38 @@ void LeerNivel() {
   const int MAX_INTENTOS = 5;
   const unsigned long TIMEOUT_US = 35000;  // 35ms timeout
   int intentos = 0;
-  
+
   while (intentos < MAX_INTENTOS) {
     // PASO 1: Asegurar estado LOW inicial
     digitalWrite(trigPin, LOW);
     delayMicroseconds(5);
-    
+
     // PASO 2: Pulso HIGH
     digitalWrite(trigPin, HIGH);
-    
+
     duration = pulseIn(echoPin, HIGH, TIMEOUT_US);
-    
+
     // Si obtenemos una lectura válida, calcular y salir
     if (duration > 0) {
       distance = duration * 0.0343 / 2;  // Codigo Recomendado en todo lado
 
       // Mostrar intentos si fue necesario reintentar
-//      if (intentos > 0) {
-//        Serial.print("R:");
-//        Serial.print(intentos + 1);
-//        Serial.print("_");
-//      }
+      //      if (intentos > 0) {
+      //        Serial.print("R:");
+      //        Serial.print(intentos + 1);
+      //        Serial.print("_");
+      //      }
       return;  // Salir con éxito
-    }    
+    }
     // Si fue timeout, incrementar contador y pequeña pausa
     intentos++;
     if (intentos < MAX_INTENTOS) {
       delayMicroseconds(800);  // Pausa breve entre reintentos
     }
-  }  
+  }
   // Si llegamos aquí, todos los intentos fallaron
   distance = -1;
-//  Serial.print("5Re_");
+  //  Serial.print("5Re_");
 }
 
 #endif
@@ -6676,7 +6676,7 @@ void Aireciudadano_Characteristics()
   }
 
   Serial.println("LTR390UV sensor");
-  
+
 #elif Nivel
   Serial.print(F("eepromConfig.ConfigValues: "));
   Serial.println(eepromConfig.ConfigValues);
@@ -7356,7 +7356,7 @@ void Button_Init()
 #if Wifi
     tft.drawString("ID " + aireciudadano_device_id, 8, 5);         //!!!Arreglar por nuevo tamaño String
 #elif Bluetooth
-//    tft.drawString("ID MyAm 00:" + provider.getDeviceIdString(), 8, 5);         //!!!Arreglar por nuevo tamaño String
+    //    tft.drawString("ID MyAm 00:" + provider.getDeviceIdString(), 8, 5);         //!!!Arreglar por nuevo tamaño String
     tft.drawString("ID MyAm:" + provider.getDeviceIdString(), 8, 5);         //!!!Arreglar por nuevo tamaño String
 #endif
     tft.drawString("SW ver: " + sw_version, 8, 22);
@@ -7391,27 +7391,27 @@ void Button_Init()
   button_bottom.setClickHandler([](Button2 & b)
   {
 
-///////////////
-/*
-    if (GainLTR390 == 1) {
-        GainLTR390 = 3;
-    }
-    else if (GainLTR390 == 3) {
-        GainLTR390 = 6;
-    }
-    else if (GainLTR390 == 6) {
-        GainLTR390 = 9;
-    }
-    else if (GainLTR390 == 9) {
-        GainLTR390 = 18;
-    }
-    else if (GainLTR390 == 18) {
-        GainLTR390 = 1;
-    }
-   
-    ltr.setGain(GainLTR390);
-*/
-//////////////
+    ///////////////
+    /*
+        if (GainLTR390 == 1) {
+            GainLTR390 = 3;
+        }
+        else if (GainLTR390 == 3) {
+            GainLTR390 = 6;
+        }
+        else if (GainLTR390 == 6) {
+            GainLTR390 = 9;
+        }
+        else if (GainLTR390 == 9) {
+            GainLTR390 = 18;
+        }
+        else if (GainLTR390 == 18) {
+            GainLTR390 = 1;
+        }
+
+        ltr.setGain(GainLTR390);
+    */
+    //////////////
 
     Serial.println(F("Bottom button short click"));
     tft.fillScreen(TFT_WHITE);
@@ -7434,17 +7434,17 @@ void Button_Init()
     else
       tft.drawString("Adjust Sensor", 3, 150);
     delay(2500);
-    if (digitalRead(BUTTON_TOP) == false){
+    if (digitalRead(BUTTON_TOP) == false) {
       delay(100);
-      if (digitalRead(BUTTON_TOP) == false){
+      if (digitalRead(BUTTON_TOP) == false) {
         delay(100);
-        if (digitalRead(BUTTON_TOP) == false){
-          if (FlagAdjustSensor == 0){
+        if (digitalRead(BUTTON_TOP) == false) {
+          if (FlagAdjustSensor == 0) {
             FlagAdjustSensor = 1;
             Serial.println("Adjust Sensor");
             tft.drawString("Adjust Sens        ", 3, 150);
           }
-          else{
+          else {
             FlagAdjustSensor = 0;
             Serial.println("No Adjust Sensor");
             tft.drawString("NO Adjust Sens  ", 3, 150);
@@ -7694,7 +7694,7 @@ void Suspend_Device()
 
 #if LTR390UV
     digitalWrite(EnLTR390, LOW); // LTR390 off
-#endif  
+#endif
 
 #if Tdisplaydisp
 
@@ -7873,7 +7873,7 @@ void displayAverage(int average)
   tft.drawString("PM2.5: ", 10, 165);
   tft.drawString(String(round(PM25_value), 0), 90, 165);
 #if ZH10sen
-tft.drawString("Voc: ", 34, 190);
+  tft.drawString("Voc: ", 34, 190);
   tft.drawString(String(vocIndex), 90, 190);
 #else
   tft.drawString("Voc: ", 34, 181);
@@ -8098,7 +8098,7 @@ tft.drawString("Voc: ", 34, 190);
   tft.setFreeFont(FF90);
   tft.drawString("UVindex", 25, 197);
   tft.drawString(String(getUVIval, 1), 99, 197);
-//  tft.drawString("r: " + String(ltr.uv()), 60, 220);
+  //  tft.drawString("r: " + String(ltr.uv()), 60, 220);
   tft.drawString("r: " + String(rawUVS), 58, 220);
 
 #if Wifi
