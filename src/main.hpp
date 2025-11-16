@@ -29,8 +29,6 @@ void Read_ADXL_1s();
 void Read_Nivel();
 void LeerNivel();
 bool detectarOutlier(int nuevaLectura);
-float calcularDesviacion(int nuevaLectura);
-void agregarAlHistorico(int valor);
 void Send_Message_Cloud_App_MQTT();
 void Send_Message_Cloud_App_MQTTsam();
 void MQTT_Reconnect();

@@ -42,7 +42,6 @@
 //     Rain:     inout = 3
 //     ADXL345:  inout = 4
 //     Nivel: inout = 5
-
 // Constantes de Ajuste de sensores programables: pendiente e intercepto. ANALIZAR MAS
 // Verificar nueva libreria Bluetooth que parece compatible con Sensirion UPT Core@^0.3.0, Sigue el error con lectura de nox y en algunos modelos es lento
 // La rutina Button2 falla pero con https://github.com/LennartHennigs/Button2.git#2.3.3 OK, no se porque el sensor viejo falla en eso
@@ -103,7 +102,7 @@
 #define LTR390UV false   // LTR390 version
 #define Rain false       // Lectura de pluviometro
 #define ADXL false       // Lectura ADXL345
-#define Nivel true    // Lectura Medidor Nivel, JSN-SR04M-2
+#define Nivel true       // Lectura Medidor Nivel por pines Trig - Echo, JSN-SR04M-2
 
 // Seleccion de operador de telefonia movil
 #define TigoKalleyExito false
@@ -1008,11 +1007,15 @@ long duration;
 int distance;
 
 const int VENTANA_HISTORICO = 7;           // Últimas 7 lecturas válidas
-const float DESVIACION_MAXIMA = 50.0;      // 50% de cambio máximo permitido
+const float DESVIACION_MAXIMA = 40.0;      // 40% de cambio máximo permitido
 
 int historico[VENTANA_HISTORICO];
 int indiceHistorico = 0;
 int countHistorico = 0;
+
+const int CONFIRMACIONES_NECESARIAS = 5;   // Lecturas consecutivas similares = cambio real
+int ultimaLecturaRechazada = -1;
+int vecesRechazadaSimilar = 0;
 
 #endif
 
@@ -5690,16 +5693,57 @@ void Read_Nivel()
 
   if (!dentroRango) {
     Serial.println(" (inválida)");
+    vecesRechazadaSimilar = 0;  // Resetear contador
+    ultimaLecturaRechazada = -1;
   }
   else if (esOutlier) {
-    Serial.print(" (outlier detectado - ");
-    Serial.print(calcularDesviacion(distance), 0);
-    Serial.println("%)");
+    // NUEVO: Verificar si es un cambio real (outlier repetido)
+    if (abs(distance - ultimaLecturaRechazada) <= 3) {
+      // Es similar al último outlier rechazado
+      vecesRechazadaSimilar++;
+
+      Serial.print(" (outlier #");
+      Serial.print(vecesRechazadaSimilar);
+
+      // Si se repite 3+ veces, ES UN CAMBIO REAL
+      if (vecesRechazadaSimilar >= CONFIRMACIONES_NECESARIAS) {
+
+        // Reemplazar el histórico con el nuevo valor
+        for (int i = 0; i < VENTANA_HISTORICO; i++) {
+          historico[i] = distance;
+        }
+        indiceHistorico = 0;
+        countHistorico = VENTANA_HISTORICO;
+
+        Serial.print(" SI → ");
+        Serial.print(distance);
+        Serial.print(" cm)");
+
+        PM25_value = distance;
+        vecesRechazadaSimilar = 0;
+        ultimaLecturaRechazada = -1;
+      } else {
+        Serial.print(" (tendencia?)");
+      }
+    } else {
+      // Es diferente al último rechazado, reiniciar contador
+      vecesRechazadaSimilar = 1;
+      ultimaLecturaRechazada = distance;
+      Serial.print(" (outlier detectado)");
+    }
+    Serial.println("");
   }
   else {
     Serial.println("");
     PM25_value = distance;
-    agregarAlHistorico(distance);
+
+    historico[indiceHistorico] = distance;
+    indiceHistorico = (indiceHistorico + 1) % VENTANA_HISTORICO;
+    if (countHistorico < VENTANA_HISTORICO) countHistorico++;
+
+    // Resetear contador de outliers
+    vecesRechazadaSimilar = 0;
+    ultimaLecturaRechazada = -1;
   }
 }
 
@@ -5726,38 +5770,8 @@ bool detectarOutlier(int nuevaLectura) {
   float diferencia = abs(nuevaLectura - promedio);
   float desviacionPorcentual = (diferencia / promedio) * 100.0;
 
-  // Si la desviación es mayor al 50%, es un outlier
+  // Si la desviación es mayor al 40%, es un outlier
   return (desviacionPorcentual > DESVIACION_MAXIMA);
-}
-
-// ============================================
-// CALCULAR DESVIACIÓN (para mostrar)
-// ============================================
-float calcularDesviacion(int nuevaLectura) {
-  float suma = 0;
-  int validas = 0;
-
-  for (int i = 0; i < VENTANA_HISTORICO; i++) {
-    if (historico[i] > 0) {
-      suma += historico[i];
-      validas++;
-    }
-  }
-
-  if (validas == 0) return 0;
-
-  float promedio = suma / validas;
-  float diferencia = abs(nuevaLectura - promedio);
-  return (diferencia / promedio) * 100.0;
-}
-
-// ============================================
-// GESTIÓN DEL HISTÓRICO
-// ============================================
-void agregarAlHistorico(int valor) {
-  historico[indiceHistorico] = valor;
-  indiceHistorico = (indiceHistorico + 1) % VENTANA_HISTORICO;
-  if (countHistorico < VENTANA_HISTORICO) countHistorico++;
 }
 
 // ============================================
