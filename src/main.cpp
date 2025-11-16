@@ -3013,20 +3013,10 @@ void Start_Captive_Portal()
     Serial.print(F("CustomValTotalString: "));
     Serial.println(CustomValTotalString);
 
-#if !(Rosver || MinVer || MinVerSD)
-    if (CustomValtotal == 0)
-    {
-      Serial.println(F("No configuration sensor values ​​chosen, no changes will be stored"));
-    }
-    else
-    {
-#endif
-      strncpy(eepromConfig.ConfigValues, CustomValTotalString, sizeof(eepromConfig.ConfigValues));
-      eepromConfig.ConfigValues[sizeof(eepromConfig.ConfigValues) - 1] = '\0';
-      Serial.println(F("CustomVal write_eeprom = true"));
-#if !(Rosver || MinVer || MinVerSD)
-    }
-#endif
+    strncpy(eepromConfig.ConfigValues, CustomValTotalString, sizeof(eepromConfig.ConfigValues));
+    eepromConfig.ConfigValues[sizeof(eepromConfig.ConfigValues) - 1] = '\0';
+    Serial.println(F("CustomVal write_eeprom = true"));
+
     Write_EEPROM();
     Serial.println(F("write_eeprom = true Final"));
   }
@@ -3798,23 +3788,13 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
   Serial.print(F("CustomValTotalString: "));
   Serial.println(CustomValTotalString);
 
-#if !(Rosver || MinVer || MinVerSD)
-  if (CustomValtotal2 == 0)
-  {
-    Serial.println(F("No configuration sensor values ​​chosen, no changes will be stored"));
-  }
-  else
-  {
-#endif
-    strncpy(eepromConfig.ConfigValues, CustomValTotalString, sizeof(eepromConfig.ConfigValues));
-    eepromConfig.ConfigValues[sizeof(eepromConfig.ConfigValues) - 1] = '\0';
-    write_eeprom = true;
-    Serial.println(F("CustomVal write_eeprom = true"));
-    Serial.print(F("Configuration Values: "));
-    Serial.println(eepromConfig.ConfigValues);
-#if !(Rosver || MinVer || MinVerSD)
-  }
-#endif
+  strncpy(eepromConfig.ConfigValues, CustomValTotalString, sizeof(eepromConfig.ConfigValues));
+  eepromConfig.ConfigValues[sizeof(eepromConfig.ConfigValues) - 1] = '\0';
+  write_eeprom = true;
+  Serial.println(F("CustomVal write_eeprom = true"));
+  Serial.print(F("Configuration Values: "));
+  Serial.println(eepromConfig.ConfigValues);
+
   Aireciudadano_Characteristics();
 
   // print info
