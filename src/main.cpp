@@ -1007,20 +1007,12 @@ unsigned long last_read_ms = 0;
 long duration;
 int distance;
 
-// ============================================
-// FILTRO ANTI-OUTLIERS
-// ============================================
 const int VENTANA_HISTORICO = 7;           // Últimas 7 lecturas válidas
 const float DESVIACION_MAXIMA = 50.0;      // 50% de cambio máximo permitido
 
 int historico[VENTANA_HISTORICO];
 int indiceHistorico = 0;
 int countHistorico = 0;
-
-// Estadísticas opcionales
-int outliers_detectados = 0;
-int lecturas_totales = 0;
-
 
 #endif
 
@@ -2674,9 +2666,10 @@ void Start_Captive_Portal()
 
   if (SDflag == false)
     captiveportaltime = 60;
-  //    captiveportaltime = 15;
+//    captiveportaltime = 15;
   else
-    captiveportaltime = 30; // captiveportaltime = 15;
+    captiveportaltime = 30; 
+// captiveportaltime = 15;
 
   wifiAP = aireciudadano_device_id;
   Serial.println(wifiAP);
@@ -5684,7 +5677,7 @@ void Read_ADXL_1s()
 void Setup_Nivel()
 {
   pinMode(trigPin, OUTPUT);
-  digitalWrite(trigPin, HIGH);
+  digitalWrite(trigPin, HIGH);  // CRÍTICO: Mantener en LOW entre lecturas
   pinMode(echoPin, INPUT);
 
   Serial.println("Lectura medidor de nivel - JSN-SR04M-2");
@@ -5693,6 +5686,7 @@ void Setup_Nivel()
   for (int i = 0; i < VENTANA_HISTORICO; i++) {
     historico[i] = -1;
   }
+  Serial.println("Filtro anti-outliers activado");
 }
 
 void Read_Nivel()
@@ -5700,31 +5694,131 @@ void Read_Nivel()
   // Hacer la lectura
   LeerNivel();
   
-  // Mostrar lectura individual
+  // Validación básica de rango
+  bool dentroRango = (distance >= 2 && distance <= 600);
+  
+  // Validación avanzada: detectar outliers
+  bool esOutlier = false;
+  if (dentroRango && countHistorico >= 3) {
+    esOutlier = detectarOutlier(distance);
+  }
+  
+  // Mostrar lectura
   Serial.print("Distancia: ");
-  if (distance >= 2 && distance <= 600) {
-    Serial.print(distance);
-    Serial.println(" cm");
+  Serial.print(distance);
+  Serial.print(" cm");
+  
+  if (!dentroRango) {
+    Serial.println(" (inválida)");
+  } 
+  else if (esOutlier) {
+    Serial.print(" (outlier detectado - ");
+    Serial.print(calcularDesviacion(distance), 0);
+    Serial.println("%)");
+  } 
+  else {
+    Serial.println("");
     PM25_value = distance;
-  } else {
-    Serial.print(distance);
-    Serial.println(" cm (inválida)");
+    agregarAlHistorico(distance);
   }
 }
 
 // ============================================
-// FUNCIÓN DE LECTURA (MÉTODO DEL VENDEDOR)
+// DETECTOR DE OUTLIERS
+// ============================================
+bool detectarOutlier(int nuevaLectura) {
+  // Calcular promedio del histórico
+  float suma = 0;
+  int validas = 0;
+  
+  for (int i = 0; i < VENTANA_HISTORICO; i++) {
+    if (historico[i] > 0) {
+      suma += historico[i];
+      validas++;
+    }
+  }
+  
+  if (validas < 3) return false;  // Necesitamos al menos 3 lecturas
+  
+  float promedio = suma / validas;
+  
+  // Calcular desviación porcentual
+  float diferencia = abs(nuevaLectura - promedio);
+  float desviacionPorcentual = (diferencia / promedio) * 100.0;
+  
+  // Si la desviación es mayor al 50%, es un outlier
+  return (desviacionPorcentual > DESVIACION_MAXIMA);
+}
+
+// ============================================
+// CALCULAR DESVIACIÓN (para mostrar)
+// ============================================
+float calcularDesviacion(int nuevaLectura) {
+  float suma = 0;
+  int validas = 0;
+  
+  for (int i = 0; i < VENTANA_HISTORICO; i++) {
+    if (historico[i] > 0) {
+      suma += historico[i];
+      validas++;
+    }
+  }
+  
+  if (validas == 0) return 0;
+  
+  float promedio = suma / validas;
+  float diferencia = abs(nuevaLectura - promedio);
+  return (diferencia / promedio) * 100.0;
+}
+
+// ============================================
+// GESTIÓN DEL HISTÓRICO
+// ============================================
+void agregarAlHistorico(int valor) {
+  historico[indiceHistorico] = valor;
+  indiceHistorico = (indiceHistorico + 1) % VENTANA_HISTORICO;
+  if (countHistorico < VENTANA_HISTORICO) countHistorico++;
+}
+
+// ============================================
+// FUNCIÓN DE LECTURA CON REINTENTOS
 // ============================================
 void LeerNivel() {
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(5);
+  const int MAX_INTENTOS = 5;
+  const unsigned long TIMEOUT_US = 35000;  // 35ms timeout
+  int intentos = 0;
   
-  digitalWrite(trigPin, HIGH);
-// NO ponemos LOW (requisito específico de este sensor)
-  
-  duration = pulseIn(echoPin, HIGH);
-//  distance = duration * 0.038 / 2;      // Codigo Mactronica
-  distance = duration * 0.0343 / 2;       // Codigo Recomendado en todo lado
+  while (intentos < MAX_INTENTOS) {
+    // PASO 1: Asegurar estado LOW inicial
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(5);
+    
+    // PASO 2: Pulso HIGH
+    digitalWrite(trigPin, HIGH);
+    
+    duration = pulseIn(echoPin, HIGH, TIMEOUT_US);
+    
+    // Si obtenemos una lectura válida, calcular y salir
+    if (duration > 0) {
+      distance = duration * 0.0343 / 2;  // Codigo Recomendado en todo lado
+
+      // Mostrar intentos si fue necesario reintentar
+//      if (intentos > 0) {
+//        Serial.print("R:");
+//        Serial.print(intentos + 1);
+//        Serial.print("_");
+//      }
+      return;  // Salir con éxito
+    }    
+    // Si fue timeout, incrementar contador y pequeña pausa
+    intentos++;
+    if (intentos < MAX_INTENTOS) {
+      delayMicroseconds(800);  // Pausa breve entre reintentos
+    }
+  }  
+  // Si llegamos aquí, todos los intentos fallaron
+  distance = -1;
+//  Serial.print("5Re_");
 }
 
 #endif
