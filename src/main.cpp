@@ -2,7 +2,7 @@
 // AireCiudadano medidor Fijo - Medidor de PM2.5 abierto, medición opcional de humedad y temperatura.
 // Más información en: aireciudadano.com
 // Este firmware es un fork del proyecto Anaire (https://www.anaire.org/) recomendado para la medición de CO2.
-// 21/03/2024 info@aireciudadano.com
+// 19/05/2025 info@aireciudadano.com
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Novedades:
@@ -34,34 +34,75 @@
 // 22. mqtt.loop ser realiza ahora con la duracion  de MQTT_loop_review en milisegundos
 // 23. Wifi Power max con flag MaxWifiTX SOLO programada desde web mqtt AireCiudadano: Resultado no concluyente de incremento de cobertura
 // 24. ZH10 sensor para ESP32
-// 25- SDS011 sensor para ESP8266 y ESP32
-// OK: Revisar BUG cuando una simcard no se ha usado y no ingresa rapido a la red el ESP8266 se resetea y no sigue preguntando la red para ingresar, a diferencia del codigo Arduino y que si lo logra.
-// OK: MONTiny: fail y no sigue y se reinicia y sale 0:0
-
+// 25. SDS011 sensor para ESP8266 y ESP32
+// 26. Rain Gauge
+// 27. ADXL345
+// 28. Nivel = JSN-SR04M-2
+// 28. LTR390UV: inout = 2
+//     Rain:     inout = 3
+//     ADXL345:  inout = 4
+//     Nivel: inout = 5
 // Constantes de Ajuste de sensores programables: pendiente e intercepto. ANALIZAR MAS
 // Verificar nueva libreria Bluetooth que parece compatible con Sensirion UPT Core@^0.3.0, Sigue el error con lectura de nox y en algunos modelos es lento
 // La rutina Button2 falla pero con https://github.com/LennartHennigs/Button2.git#2.3.3 OK, no se porque el sensor viejo falla en eso
 
+// Refactorizacion de codigo por bloques:
+// * INIT
+// * SETUP
+// * CONTROL LOOP
+// * ISR Rain
+// * FUNCTIONS
+// - Communications / Data save
+// 1. Wifi
+// 1.1. Status
+// 1.2. Wifi Connection
+// 1.3. HTTP / browser Connection
+// 1.4. Captive Portal
+// 2. MQTT
+// 3. Mobile data
+// 4. Bluetooth
+//- Sensor routines
+// 6. Sensors
+// - General functions
+// 7. Device Info
+// 8. Firmware Update
+// 9. EEPROM
+// 10. LedNeo
+// * Display
+// 11. TTGO TDisplay routines
+// 12. LCD Display routines
+
 #include <Arduino.h>
 #include "main.hpp"
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// * INIT
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
 ////////////////////////////////
-// Modo de comunicaciones del sensor:
-#define Wifi true       // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
+// Flags para configuracion del sensor:
+////////////////////////////////
+
+// Comunicaciones:
+#define Wifi true        // Set to true in case Wifi if desired, Bluetooth off and SDyRTCsave optional
 #define WPA2 false       // Set to true to WPA2 enterprise networks (IEEE 802.1X)
-#define Bluetooth false   // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
+#define Bluetooth false  // Set to true in case Bluetooth if desired, Wifi off and SDyRTCsave optional
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
+
+// Opciones para sensores:
 #define TwoPMS false     // Set to true if you want 2 PMS7003 sensors
 #define SoundMeter false // set to true for Sound Meter
 #define SoundAM false    // Set to true to Sound meter airplane mode
-#define Influxver false  // Set to true for InfluxDB version
-
-#define ZH10sen true     // Set to true for ZH10 instead PMSX003
+#define Influxver true   // Set to true for InfluxDB version SP - Rain - ADXL
+#define ZH10sen false    // Set to true for ZH10 instead PMSX003
 #define SDS011sen false  // Set to true for SDS011 instead PMSX003
+#define NoxVoxTd false   // Lectura de NoxVox
 #define LedNeo false     // Set to true for Led Neo multicolor
-#define LTR390UV false
-#define NoxVoxTd false
+#define LTR390UV false   // LTR390 version
+#define Rain false       // Lectura de pluviometro
+#define ADXL false       // Lectura ADXL345
+#define Nivel true       // Lectura Medidor Nivel por pines Trig - Echo, JSN-SR04M-2
 
 // Seleccion de operador de telefonia movil
 #define TigoKalleyExito false
@@ -78,48 +119,51 @@
 #define OLED66display false   // Pantalla OLED 0.66"
 #define OLED96display false   // Pantalla OLED 0.96"
 
-#define CO2sensor false          // Set to true for CO2 sensors: SCD30 and SenseAir S8
-#define SiteAltitude 0         // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
-//define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
+// CO2:
+#define CO2sensor false       // Set to true for CO2 sensors: SCD30 and SenseAir S8
+#define SiteAltitude 0        // IMPORTANT for CO2 measurement: Put the site altitude of the measurement, it affects directly the value
+//#define SiteAltitude 2600   // 2600 meters above sea level: Bogota, Colombia
 
 // Boards diferentes
 #define TTGO_TQ false
 
-// Definiciones opcionales para version Wifi
+// Definiciones adicionales:
 #define BrownoutOFF false   // Colocar en true en boards con problemas de RESET por Brownout o bajo voltaje
 #define ESP8266SH false     // Colocar para PMS en pin 0 - Hardware Serial
 #define PreProgSensor false // Variables de sensor preprogramadas:
-                            // Latitude: char sensor_lat[10] = "xx.xxxx";
-                            // Longitude: char sensor_lon[10] = "xx.xxxx";
-                            // Valores de configuración: char ConfigValues[9] = "000xxxxx";
-                            // Nombre estación: char aireciudadano_device_name[36] = "xxxxxxxxxxxxxx";
+// Latitude: char sensor_lat[10] = "xx.xxxx";
+// Longitude: char sensor_lon[10] = "xx.xxxx";
+// Valores de configuración: char ConfigValues[9] = "000xxxxx";
+// Nombre estación: char aireciudadano_device_name[36] = "xxxxxxxxxxxxxx";
+
+// Define de diferentes versiones de plataformas:
 
 #ifdef ESP32S3def
-#define ESP32S3 true      // Set to true in case you use an ESP32S3
+#define ESP32S3 true      // ESP32S3
 #else
-#define ESP32S3 false     // Set to true in case you use an ESP32S3
+#define ESP32S3 false
 #endif
 
 #ifdef ESP32C3AGdef
-#define ESP32C3AG true    // Set to true in case you use an ESP32C3 version AirGrad
+#define ESP32C3AG true    // ESP32C3 version AirGrad
 #else
-#define ESP32C3AG false   // Set to true in case you use an ESP32C3 version AirGrad
+#define ESP32C3AG false
 #endif
 
 #ifdef ESP8285def
-#define ESP8285 true      // Set to true in case you use an ESP8285 switch
+#define ESP8285 true      // ESP8285 switch
 #else
 #define ESP8285 false
 #endif
 
 #ifdef Rosverdef
-#define Rosver true       // Set to true in case you use an ESP32S3
+#define Rosver true       // Rosario version
 #else
-#define Rosver false      // Set to true in case you use an ESP32S3
+#define Rosver false
 #endif
 
 #ifdef MinVerdef
-#define MinVer true       // Set to true for a minimum version like Rosver but without SD support and any sensor
+#define MinVer true       // Version minima como Rosver pero sin soporte SD y sensores
 #else
 #define MinVer false
 #endif
@@ -137,12 +181,14 @@
 #endif
 
 #ifdef MobDataSPver
-#define MobDataSP true
+#define MobDataSP true    // Version Mobil para SP
 #else
 #define MobDataSP false
 #endif
 
-// Fin definiciones opcionales Wifi
+////////////////////////////////
+// Definiciones y variables iniciales:
+////////////////////////////////
 
 bool SPS30sen = false;  // Sensor Sensirion SPS30
 bool SEN5Xsen = false;  // Sensor Sensirion SEN5X
@@ -233,7 +279,6 @@ char aireciudadano_device_nameTemp[30] = {0};
 #endif
 
 #if BrownoutOFF
-// OFF BROWNOUT/////////////////////
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
 #endif
@@ -522,22 +567,31 @@ PMS::DATA data;
 
 #else     // esTwoPMS test AirGrad
 
+#if ESP8266
 #include <SoftwareSerial.h>
-//#include <HardwareSerial.h>
+#else
+#include <HardwareSerial.h>
+#endif
 
 #define PMS_TX1 20 // PMS TX pin
 #define PMS_RX1 21 // PMS RX pin
 #define PMS_TX2 0 // PMS TX pin      
 #define PMS_RX2 1  // PMS RX pin
 
+#if ESP8266
 SoftwareSerial pmsSerial1(PMS_TX1, PMS_RX1);    //SoftwareSerial
-//PMS pms1(Serial0);    // HardwareSerial
 PMS pms1(pmsSerial1);   //SoftwareSerial
+#else
+PMS pms1(Serial2);    // HardwareSerial
+#endif
 PMS::DATA data;
 
+#if ESP8266
 SoftwareSerial pmsSerial2(PMS_TX2, PMS_RX2);    //SoftwareSerial
-//PMS pms2(Serial1);    // HardwareSerial
 PMS pms2(pmsSerial2);   // SoftwareSerial
+#else
+PMS pms2(Serial1);    // HardwareSerial
+#endif
 PMS::DATA data2;
 
 #endif
@@ -638,7 +692,7 @@ byte failh = 0;
 Adafruit_SHT4x sht4 = Adafruit_SHT4x();
 #endif
 
-#if !(Rosver || MinVer || MobData || MinVerSD)
+#if !(Rosver || MinVer || MobData || MinVerSD || SoundMeter || Rain || ADXL || Nivel)
 
 #include "Adafruit_Sensor.h"
 #include "Adafruit_AM2320.h"
@@ -886,6 +940,85 @@ uint32_t rawUVS;
 
 #endif
 
+#if Rain
+// Definición de pines y constantes
+const int REED_SWITCH_PIN = 12;     // Pin D6 en la mayoría de placas ESP8266 (GPIO4)
+const float MM_POR_PULSO = 0.2794;  // Cantidad de lluvia por cada "tip" o pulso (ajusta este valor según tu pluviómetro)
+
+// Variables para el conteo de lluvia
+volatile int contadorPulsos = 0;    // 'volatile' es crucial para variables usadas en interrupciones
+float lluvia1min = 0.0;
+float lluviaTotal = 0.0;
+unsigned int lluvia1minInt = 0;
+unsigned int lluviaTotalInt = 0;
+unsigned int pulsosTotal = 0;
+
+// Variables para el Debouncing (anti-rebote)
+volatile unsigned long ultimoTiempoPulso = 0;
+const long tiempoDebounce = 50;     // Tiempo en milisegundos para ignorar rebotes
+
+#endif
+
+#if ADXL
+
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_ADXL345_U.h>
+
+// Instancia del sensor
+Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
+
+// ---------------- Parámetros configurables (editar manualmente antes de compilar) ----------------
+// Offsets de calibración en m/s^2 (rellénalos manualmente desde tu cálculo externo)
+constexpr float CALIB_OX = 0.00f;
+constexpr float CALIB_OY = 0.00f;
+// Nota: en el código original oz se calculaba como (sz_mean - g). Aquí debes
+// entrenar/poner el valor final en m/s^2 (por ejemplo, -9.81 si quieres quitar gravedad).
+constexpr float CALIB_OZ = 0.00f;
+
+// Frecuencia y tiempos
+const dataRate_t DATA_RATE = ADXL345_DATARATE_25_HZ; // tasa de muestreo del sensor
+const unsigned long PRINT_PERIOD_MS = 1000;         // imprimir cada 1 segundo
+const unsigned long SENSOR_READ_INTERVAL_MS = 1000 / 25; // ≈ 40 ms (25 Hz)
+
+const int SENSOR_POWER_PIN = D6; // pin para alimentar el sensor (si lo usas así)
+// ---------------------------------------------------------------------------------------------
+
+// Acumuladores para promedio
+float sum_x = 0.0f, sum_y = 0.0f, sum_z = 0.0f;
+unsigned long sample_count = 0;
+unsigned long last_print_ms = 0;
+unsigned long last_read_ms = 0;
+
+#endif
+
+#if Nivel
+
+#if ESP8266
+#define trigPin 12      // D6
+#define echoPin 13      // D7
+#else
+#define trigPin 16      // Pendiente de probar en ESP32
+#define echoPin 17      // Pendiente de probar en ESP32
+#endif
+
+// Variables de medición
+long duration;
+int distance;
+
+const int VENTANA_HISTORICO = 7;           // Últimas 7 lecturas válidas
+const float DESVIACION_MAXIMA = 40.0;      // 40% de cambio máximo permitido
+
+int historico[VENTANA_HISTORICO];
+int indiceHistorico = 0;
+int countHistorico = 0;
+
+const int CONFIRMACIONES_NECESARIAS = 5;   // Lecturas consecutivas similares = cambio real
+int ultimaLecturaRechazada = -1;
+int vecesRechazadaSimilar = 0;
+
+#endif
+
 // MOBILE DATA TRANSMISION
 
 #if MobData
@@ -942,7 +1075,7 @@ PubSubClient MQTT_client(client);
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// SETUP
+// * SETUP
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 void setup()
@@ -966,7 +1099,7 @@ void setup()
   // Configurar el pin con resistencia pulldown interna
   gpio_pulldown_en((gpio_num_t)EnLTR390);
   gpio_pullup_dis((gpio_num_t)EnLTR390);
-  
+
   // Opcionalmente, configurar el estado del pin durante deep sleep
   //gpio_hold_en((gpio_num_t)EnLTR390);
 
@@ -1240,8 +1373,10 @@ void setup()
   {
 #if !MobDataSP
 #if (Rosver || MinVer || MobData || MinVerSD)
+
     Serial.println(F("Test_Sensor"));
     Test_Sensor();
+
 #endif
 #endif
     Start_Captive_Portal();
@@ -1309,6 +1444,12 @@ connectstart:
   Setup_SoundMeter();
 #elif LTR390UV
   Setup_UV();
+#elif Rain
+  Setup_Rain();
+#elif ADXL
+  Setup_ADXL();
+#elif Nivel
+  Setup_Nivel();
 #else
   Setup_Sensor();
 #endif
@@ -1401,7 +1542,7 @@ connectstart:
 #endif
 
   // Get device id
-#if (Rosver || SoundMeter || MinVer || MinVerSD)
+#if (Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL || Nivel)
   IDn = 0;
   Aireciudadano_Characteristics();
 #endif
@@ -1449,8 +1590,9 @@ connectstart:
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// CONTROL LOOP
+// * CONTROL LOOP
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+
 void loop()
 {
   // If a firmware update is in progress do not do anything else
@@ -1465,7 +1607,11 @@ void loop()
 #endif
 #endif
 
-  // Measurement loop
+#if ADXL              // Read 40ms ADXL
+  Read_ADXL();
+#endif
+
+  // Measurement loop 1 seg
   if ((millis() - measurements_loop_start) >= measurements_loop_duration)
   {
 
@@ -1474,14 +1620,22 @@ void loop()
 
     // Read sensors
 
+    // Rain como es por interrupción no se lee aquí
+
+#if !Rain
 #if CO2sensor
     Read_CO2sensor();
 #elif SoundMeter
     Read_SoundMeter();
 #elif LTR390UV
     Read_UV();
+#elif ADXL          // Read 1 second ADXL
+    Read_ADXL_1s();
+#elif Nivel
+    Read_Nivel();   // Read 1 second Nivel
 #else
     Read_Sensor();
+#endif
 #endif
 
     if (FlagLED == true)
@@ -1523,14 +1677,16 @@ void loop()
 #endif
 
         // Accumulates samples
-#if !TwoPMS
+#if !(TwoPMS || ADXL)
         PM25_accumulated += PM25_value;
         PM1_accumulated += PM1_value;
 #else
         PM251_accumulated += PM251_value;
         PM252_accumulated += PM252_value;
         PM11_accumulated += PM11_value;
+#if TwoPMS
         PM12_accumulated += PM12_value;
+#endif
 #endif
 #if SoundAM
         PM25_accumulatedsam += PM25_valuesam;
@@ -1674,7 +1830,7 @@ void loop()
       Serial.print(F("PM2.5: "));
       Serial.print(pm25int);
       Serial.print("   ");
-#if !SoundMeter
+#if !(SoundMeter || Rain || ADXL || Nivel)
       ReadHyT();
 #endif
 #if SDyRTC
@@ -1766,11 +1922,19 @@ void loop()
       // New timestamp for the loop start time
       MQTT_loop_start = millis();
 
+#if Rain
+      Read_Rain();
+#endif
+
       // Message the MQTT broker in the cloud app to send the measured values
       if ((!err_wifi) && (PM25_samples > 0))
       {
         Send_Message_Cloud_App_MQTT();
       }
+
+#if Rain
+      contadorPulsos = 0;     // Reinicio a 0 del contador de pulsos
+#endif
 
 #if SaveSDyRTC
       Write_SD();
@@ -1897,7 +2061,7 @@ void loop()
   // Process Bluetooth events
 #if Bluetooth
   provider.handleDownload();
-  delay(3);
+  delay(20);
 #endif
 
 #if !ESP8266
@@ -1913,8 +2077,41 @@ void loop()
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// FUNCTIONS
+// * ISR - SERVICIO DE INTERRUPCIÓN PARA PLUVIOMETRO
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+#if Rain
+
+// Esta función se ejecuta CADA VEZ que el pin del reed switch cambia de ALTO a BAJO.
+void IRAM_ATTR contarPulso() {
+  // Comprueba si ha pasado suficiente tiempo desde el último pulso para evitar rebotes
+  if ((millis() - ultimoTiempoPulso) > tiempoDebounce) {
+    contadorPulsos++;
+    ultimoTiempoPulso = millis(); // Actualiza el tiempo del último pulso válido
+    Serial.print("Pulso #: ");
+    Serial.println(contadorPulsos);
+  }
+}
+
+#endif
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// * FUNCTIONS
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// - Communications / Data save
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
+//  1. Wifi
+////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
+//  1.1. Status
+////////////////////////////////////////////////////////////////////////////////
+
 
 #if (Wifi || MobData)
 
@@ -2007,6 +2204,95 @@ void WiFiEvent(WiFiEvent_t event)
   }
 }
 
+void Print_WiFi_Status()
+{ // Print wifi status on serial monitor
+
+  // Get current status
+  //  WL_CONNECTED: assigned when connected to a WiFi network;
+  //  WL_NO_SHIELD: assigned when no WiFi shield is present;
+  //  WL_IDLE_STATUS: it is a temporary status assigned when WiFi.begin() is called and remains active until the number of attempts expires (resulting in WL_CONNECT_FAILED) or a connection is established (resulting in WL_CONNECTED);
+  //  WL_NO_SSID_AVAIL: assigned when no SSID are available;
+  //  WL_SCAN_COMPLETED: assigned when the scan networks is completed;
+  //  WL_CONNECT_FAILED: assigned when the connection fails for all the attempts;
+  //  WL_CONNECTION_LOST: assigned when the connection is lost;
+  //  WL_DISCONNECTED: assigned when disconnected from a network;
+
+  Serial.print(F("wifi_status: "));
+#if (OLED66 == true || OLED96 == true)
+  pageStart();
+  u8g2.setFont(u8g2_font_5x7_tf);
+  u8g2.setCursor(10, dh / 2);
+#endif
+  switch (WiFi.status())
+  {
+    case WL_CONNECTED:
+      Serial.println(F(" WIFI CONNECTED!!!"));
+#if (OLED66 == true || OLED96 == true)
+      u8g2.print("OK WIFI :)");
+#endif
+      break;
+    case WL_NO_SHIELD:
+      Serial.println(F("No WiFi HW detected"));
+      break;
+    case WL_IDLE_STATUS:
+      Serial.println(F("Attempting..."));
+      break;
+    case WL_NO_SSID_AVAIL:
+      Serial.println(F("No SSID available"));
+#if (OLED66 == true || OLED96 == true)
+      u8g2.print("NO WIFI :(");
+#endif
+      break;
+    case WL_SCAN_COMPLETED:
+      Serial.println(F("Networks scan completed"));
+      break;
+    case WL_CONNECT_FAILED:
+      Serial.println(F("Connect failed"));
+#if (OLED66 == true || OLED96 == true)
+      u8g2.print("NO WIFI :(");
+#endif
+      break;
+    case WL_CONNECTION_LOST:
+      Serial.println(F("Connection lost"));
+#if (OLED66 == true || OLED96 == true)
+      u8g2.print("NO WIFI :(");
+#endif
+      break;
+    case WL_DISCONNECTED:
+      Serial.println(F("Disconnected"));
+#if (OLED66 == true || OLED96 == true)
+      u8g2.print("NO WIFI :(");
+#endif
+      break;
+    default:
+      Serial.println(F("Unknown status"));
+      break;
+  }
+  Serial.println(F(""));
+  delay(3000);
+#if (OLED66 == true || OLED96 == true)
+  pageEnd();
+#endif
+
+  // Print the SSID of the network you're attached to:
+  Serial.print(F("SSID: "));
+  Serial.println(WiFi.SSID());
+
+  // Print your WiFi shield's IP address:
+  Serial.print(F("IP Address: "));
+  Serial.println(WiFi.localIP());
+
+  // Print your WiFi shield's MAC address:
+  Serial.print(F("MAC Adress: "));
+  Serial.println(WiFi.macAddress());
+
+  // Print the received signal strength:
+  Serial.print(F("Signal strength (RSSI): "));
+
+  Serial.print(WiFi.RSSI());
+  Serial.println(F(" dBm"));
+}
+
 #else
 // Print wifi status on serial monitor
 // ESP8266
@@ -2049,6 +2335,11 @@ void Print_WiFi_Status_ESP8266()
 }
 
 #endif
+
+////////////////////////////////////////////////////////////////////////////////
+//  1.2. Wifi Connection
+////////////////////////////////////////////////////////////////////////////////
+
 
 void Connect_WiFi()
 { // Connect to WiFi
@@ -2211,94 +2502,9 @@ void Connect_WiFi()
 #endif
 }
 
-void Print_WiFi_Status()
-{ // Print wifi status on serial monitor
-
-  // Get current status
-  //  WL_CONNECTED: assigned when connected to a WiFi network;
-  //  WL_NO_SHIELD: assigned when no WiFi shield is present;
-  //  WL_IDLE_STATUS: it is a temporary status assigned when WiFi.begin() is called and remains active until the number of attempts expires (resulting in WL_CONNECT_FAILED) or a connection is established (resulting in WL_CONNECTED);
-  //  WL_NO_SSID_AVAIL: assigned when no SSID are available;
-  //  WL_SCAN_COMPLETED: assigned when the scan networks is completed;
-  //  WL_CONNECT_FAILED: assigned when the connection fails for all the attempts;
-  //  WL_CONNECTION_LOST: assigned when the connection is lost;
-  //  WL_DISCONNECTED: assigned when disconnected from a network;
-
-  Serial.print(F("wifi_status: "));
-#if (OLED66 == true || OLED96 == true)
-  pageStart();
-  u8g2.setFont(u8g2_font_5x7_tf);
-  u8g2.setCursor(10, dh / 2);
-#endif
-  switch (WiFi.status())
-  {
-    case WL_CONNECTED:
-      Serial.println(F(" WIFI CONNECTED!!!"));
-#if (OLED66 == true || OLED96 == true)
-      u8g2.print("OK WIFI :)");
-#endif
-      break;
-    case WL_NO_SHIELD:
-      Serial.println(F("No WiFi HW detected"));
-      break;
-    case WL_IDLE_STATUS:
-      Serial.println(F("Attempting..."));
-      break;
-    case WL_NO_SSID_AVAIL:
-      Serial.println(F("No SSID available"));
-#if (OLED66 == true || OLED96 == true)
-      u8g2.print("NO WIFI :(");
-#endif
-      break;
-    case WL_SCAN_COMPLETED:
-      Serial.println(F("Networks scan completed"));
-      break;
-    case WL_CONNECT_FAILED:
-      Serial.println(F("Connect failed"));
-#if (OLED66 == true || OLED96 == true)
-      u8g2.print("NO WIFI :(");
-#endif
-      break;
-    case WL_CONNECTION_LOST:
-      Serial.println(F("Connection lost"));
-#if (OLED66 == true || OLED96 == true)
-      u8g2.print("NO WIFI :(");
-#endif
-      break;
-    case WL_DISCONNECTED:
-      Serial.println(F("Disconnected"));
-#if (OLED66 == true || OLED96 == true)
-      u8g2.print("NO WIFI :(");
-#endif
-      break;
-    default:
-      Serial.println(F("Unknown status"));
-      break;
-  }
-  Serial.println(F(""));
-  delay(3000);
-#if (OLED66 == true || OLED96 == true)
-  pageEnd();
-#endif
-
-  // Print the SSID of the network you're attached to:
-  Serial.print(F("SSID: "));
-  Serial.println(WiFi.SSID());
-
-  // Print your WiFi shield's IP address:
-  Serial.print(F("IP Address: "));
-  Serial.println(WiFi.localIP());
-
-  // Print your WiFi shield's MAC address:
-  Serial.print(F("MAC Adress: "));
-  Serial.println(WiFi.macAddress());
-
-  // Print the received signal strength:
-  Serial.print(F("Signal strength (RSSI): "));
-
-  Serial.print(WiFi.RSSI());
-  Serial.println(F(" dBm"));
-}
+////////////////////////////////////////////////////////////////////////////////
+//  1.3. HTTP / browser Connection
+////////////////////////////////////////////////////////////////////////////////
 
 void Check_WiFi_Server()                    // Server access by http when you put the ip address in a web browser !!!!!!!!!!!!!!!!!!!!!!!!!!!
 { // Wifi server
@@ -2362,7 +2568,7 @@ void Check_WiFi_Server()                    // Server access by http when you pu
             client.print("MQTT Port: ");
 #if !Influxver
             client.print("80");
-//            client.print("30183");
+            //            client.print("30183");
 #else
             client.print("30183");
 #endif
@@ -2448,6 +2654,10 @@ void Check_WiFi_Server()                    // Server access by http when you pu
   }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//  1.4. Captive Portal
+////////////////////////////////////////////////////////////////////////////////
+
 void Start_Captive_Portal()
 { // Run a captive portal to configure WiFi and MQTT
   InCaptivePortal = true;
@@ -2461,7 +2671,8 @@ void Start_Captive_Portal()
     captiveportaltime = 60;
   //    captiveportaltime = 15;
   else
-    captiveportaltime = 30; // captiveportaltime = 15;
+    captiveportaltime = 30;
+  // captiveportaltime = 15;
 
   wifiAP = aireciudadano_device_id;
   Serial.println(wifiAP);
@@ -2518,7 +2729,7 @@ void Start_Captive_Portal()
   WiFiManagerParameter custom_wifi_html("<p>Set WPA2 Enterprise</p>"); // only custom html
   WiFiManagerParameter custom_wifi_user("User", "WPA2 Enterprise identity", eepromConfig.wifi_user, 24);
   WiFiManagerParameter custom_wpa2_pass;
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL || Nivel)
   WiFiManagerParameter custom_wifi_html2("<p></p>"); // only custom html
 #else
   WiFiManagerParameter custom_wifi_html2("<hr><br/>"); // only custom html
@@ -2541,7 +2752,7 @@ void Start_Captive_Portal()
   WiFiManagerParameter custom_id_name("CustomName", "Set Station Name (25 characters max):", eepromConfig.aireciudadano_device_name, 25);
 #endif
 
-#if !(Rosver || SoundMeter || Minver || MinVerSD)
+#if !(Rosver || SoundMeter || Minver || MinVerSD || Rain || ADXL || Nivel)
   char Ptime[5];
   itoa(eepromConfig.PublicTime, Ptime, 10);
   WiFiManagerParameter custom_public_time("Ptime", "Set Publication Time in minutes:", Ptime, 4);
@@ -2549,7 +2760,7 @@ void Start_Captive_Portal()
 #endif
   WiFiManagerParameter custom_sensor_latitude("Latitude", "Latitude (5-4 dec digits are enough)", eepromConfig.sensor_lat, 10);
   WiFiManagerParameter custom_sensor_longitude("Longitude", "Longitude (5-4 dec)", eepromConfig.sensor_lon, 10);
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL || Nivel)
   WiFiManagerParameter custom_sensorPM_type;
   WiFiManagerParameter custom_sensorHYT_type;
   WiFiManagerParameter custom_display_type;
@@ -2562,7 +2773,7 @@ void Start_Captive_Portal()
 #endif
   WiFiManagerParameter custom_endhtml("<p></p>"); // only custom html
 
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL || Nivel)
   // Sensor PM menu
 
   if (eepromConfig.ConfigValues[7] == '0')
@@ -2576,7 +2787,7 @@ void Start_Captive_Portal()
   }
   else if (eepromConfig.ConfigValues[7] == '1')
   {
-#if SDS011sen   
+#if SDS011sen
     const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1' checked> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> SDS011";
 #else
     const char *custom_senPM_str = "<br/><br/><label for='customSenPM'>Sensor PM:</label><br/><input type='radio' name='customSenPM' value='0'> None<br><input type='radio' name='customSenPM' value='1' checked> Sensirion SPS30 adjusted<br><input type='radio' name='customSenPM' value='2'> Sensirion SEN5X<br><input type='radio' name='customSenPM' value='3'> Plantower PMS adjusted";
@@ -2652,6 +2863,7 @@ void Start_Captive_Portal()
 
   // Sensor Location menu
 
+#if !(Rain || ADXL || Nivel)
   if (eepromConfig.ConfigValues[3] == '0')
   {
     const char *custom_outin_str = "<br/><br/><label for='customOutIn'>Location:</label><br/><input type='radio' name='customOutIn' value='1'> Indoors - sensor measures indoors air<br><input type='radio' name='customOutIn' value='0' checked> Outdoors - sensor measures outdoors air";
@@ -2662,6 +2874,7 @@ void Start_Captive_Portal()
     const char *custom_outin_str = "<br/><br/><label for='customOutIn'>Location:</label><br/><input type='radio' name='customOutIn' value='1' checked> Indoors - sensor measures indoors air<br><input type='radio' name='customOutIn' value='0'> Outdoors - sensor measures outdoors air";
     new (&custom_outin_type) WiFiManagerParameter(custom_outin_str);
   }
+#endif
 
 #if (Rosver || MinVerSD)
 #if !WPA2
@@ -2695,19 +2908,21 @@ void Start_Captive_Portal()
 #endif
 
   wifiManager.addParameter(&custom_id_name);
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL || Nivel)
   wifiManager.addParameter(&custom_public_time);
   wifiManager.addParameter(&custom_sensor_html);
 #endif
 
   wifiManager.addParameter(&custom_sensor_latitude);
   wifiManager.addParameter(&custom_sensor_longitude);
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL || Nivel)
   wifiManager.addParameter(&custom_sensorPM_type);
   wifiManager.addParameter(&custom_sensorHYT_type);
   wifiManager.addParameter(&custom_display_type);
 #endif
+#if !(Rain || ADXL || Nivel)
   wifiManager.addParameter(&custom_outin_type);
+#endif
 #if (Rosver || MinVerSD)
 #if !WPA2
   wifiManager.addParameter(&custom_endhtmlup);
@@ -2762,7 +2977,7 @@ void Start_Captive_Portal()
     eepromConfig.aireciudadano_device_name[sizeof(eepromConfig.aireciudadano_device_name) - 1] = '\0';
     Serial.println(F("Devname write_eeprom = true"));
 
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL || Nivel)
     eepromConfig.PublicTime = atoi(custom_public_time.getValue());
     Serial.println(F("PublicTime write_eeprom = true"));
 #endif
@@ -2801,20 +3016,10 @@ void Start_Captive_Portal()
     Serial.print(F("CustomValTotalString: "));
     Serial.println(CustomValTotalString);
 
-#if !(Rosver || MinVer || MinVerSD)
-    if (CustomValtotal == 0)
-    {
-      Serial.println(F("No configuration sensor values ​​chosen, no changes will be stored"));
-    }
-    else
-    {
-#endif
-      strncpy(eepromConfig.ConfigValues, CustomValTotalString, sizeof(eepromConfig.ConfigValues));
-      eepromConfig.ConfigValues[sizeof(eepromConfig.ConfigValues) - 1] = '\0';
-      Serial.println(F("CustomVal write_eeprom = true"));
-#if !(Rosver || MinVer || MinVerSD)
-    }
-#endif
+    strncpy(eepromConfig.ConfigValues, CustomValTotalString, sizeof(eepromConfig.ConfigValues));
+    eepromConfig.ConfigValues[sizeof(eepromConfig.ConfigValues) - 1] = '\0';
+    Serial.println(F("CustomVal write_eeprom = true"));
+
     Write_EEPROM();
     Serial.println(F("write_eeprom = true Final"));
   }
@@ -2856,8 +3061,10 @@ void saveParamCallback()
   CustomValtotal = CustomValtotal + (CustomValue * 100);
   Serial.println("Value customSD = " + getParam("customSD"));
   CustomValtotal = CustomValtotal + (CustomValue * 1000);
+#if !(Rain || ADXL || Nivel)
   Serial.println("Value customOutIn = " + getParam("customOutIn"));
   CustomValtotal = CustomValtotal + (CustomValue * 10000);
+#endif
   Serial.println("Value customMobData = " + getParam("customMD"));
   CustomValtotal = CustomValtotal + (CustomValue * 100000);
   Serial.print(F("CustomValtotal: "));
@@ -2893,64 +3100,9 @@ void saveParamCallback()
   ConfigPortalSave = true;
 }
 
-#if (Rosver || MinVerSD)
-#if !WPA2
-void RTCadjustTime()
-{
-  String Valdate_year = Valdate_time_id.substring(0, 4);
-  String Valdate_month = Valdate_time_id.substring(5, 7);
-  String Valdate_day = Valdate_time_id.substring(8, 10);
-  String Valdate_hour = Valdate_time_id.substring(11, 13);
-  String Valdate_min = Valdate_time_id.substring(14, 16);
-  String Valdate_sec = Valdate_time_id.substring(17, 19);
-
-  uint16_t year = Valdate_year.toInt();
-  uint8_t month = Valdate_month.toInt();
-  uint8_t day = Valdate_day.toInt();
-  uint8_t hour = Valdate_hour.toInt();
-  uint8_t min = Valdate_min.toInt();
-  uint8_t sec = Valdate_sec.toInt();
-
-  Serial.print("year = ");
-  Serial.print(year);
-  Serial.print(", month = ");
-  Serial.print(month);
-  Serial.print(", day = ");
-  Serial.print(day);
-  Serial.print(", hour = ");
-  Serial.print(hour);
-  Serial.print(", min = ");
-  Serial.print(min);
-  Serial.print(", sec = ");
-  Serial.println(sec);
-
-  Serial.print(F("Initializing RTC ds1307: "));
-
-  if (!rtc.begin())
-  {
-    Serial.println(F("Couldn't find RTC"));
-    Serial.flush();
-  }
-  else
-  {
-    Serial.println(F("OK, ds1307 init"));
-    Serial.print(F("RTC let's set the time!: "));
-    Serial.println(Valdate_time_id);
-
-    rtc.adjust(DateTime(year, month, day, hour, min, sec));
-
-    digitalWrite(LEDPIN, LOW);  // turn the LED on (HIGH is the voltage level)
-    delay(200);                 // wait for a 500 msecond
-    digitalWrite(LEDPIN, HIGH); // turn the LED off by making the voltage LOW
-    delay(200);                 // wait for a 500 msecond
-    digitalWrite(LEDPIN, LOW);  // turn the LED on (HIGH is the voltage level)
-    delay(200);                 // wait for a 500 msecond
-    digitalWrite(LEDPIN, HIGH); // turn the LED off by making the voltage LOW
-  }
-}
-
-#endif
-#endif
+////////////////////////////////////////////////////////////////////////////////
+//  2. MQTT
+////////////////////////////////////////////////////////////////////////////////
 
 void Init_MQTT()
 { // MQTT Init function
@@ -3044,7 +3196,7 @@ void MQTT_Reconnect()
       MQTT_client.subscribe(MQTT_receive_topic.c_str());
       Serial.print(F("Reconnect MQTT connected - Receive topic: "));
       Serial.println(MQTT_receive_topic);
-//      FlagMQTTcon = true;
+      //      FlagMQTTcon = true;
       contmqtt = 0;
 #if !ESP8266
       digitalWrite(LEDPIN, HIGH);
@@ -3083,7 +3235,7 @@ void MQTT_Reconnect()
           cont = 0;
           FlagMQTTcon = true;
           break;
-//          ESP.restart();    // CASO sin MQTT_client.loop();
+          //          ESP.restart();    // CASO sin MQTT_client.loop();
         }
         MQTT_client.setServer("sensor.aireciudadano.com", 80);
         MQTT_client.connect(aireciudadano_device_id.c_str());
@@ -3103,6 +3255,7 @@ void MQTT_Reconnect()
 void Send_Message_Cloud_App_MQTT()
 { // Send measurements to the cloud application by MQTT
   // Print info
+#if !ADXL
   float pm25f;
   float pm25fori;
   float pm1f;
@@ -3114,21 +3267,42 @@ void Send_Message_Cloud_App_MQTT()
   float pm11f;
   float pm12f;
 #endif
+#else
+  float pm251f;
+  float pm252f;
+  float pm251fori;
+  float pm252fori;
+  float pm11f;
+#endif
   int8_t RSSI = 0;
   int8_t inout;
 #if SoundMeter
   int8_t dBAmaxint;
 #endif
 
-#if !TwoPMS
   Serial.print(F("Sending MQTT message to the send topic: "));
   Serial.println(MQTT_send_topic);
+
+#if !(TwoPMS || ADXL)
   pm25f = PM25_accumulated / PM25_samples;
   pm25int = round(pm25f);
   pm25fori = PM25_accumulated_ori / PM25_samples;
   pm25intori = round(pm25fori);
   pm1f = PM1_accumulated / PM25_samples;
   pm1int = round(pm1f);
+#elif ADXL
+  pm251f = PM251_accumulated / PM25_samples;    // ax
+  pm251int = round(pm251f);
+  pm252f = PM252_accumulated / PM25_samples;    // ay
+  pm252int = round(pm252f);
+  pm11f = PM11_accumulated / PM25_samples;      // az
+  pm11int = round(pm11f);
+  //  Roll
+  pm251fori  = atan2f(pm252f / 1000, pm11f / 1000) * 180.0f / PI;
+  pm12int = round(pm251fori * 1000);
+  // Pitch
+  pm252fori = atan2f(-pm251f / 1000, sqrtf(pm252f / 1000 * pm252f / 1000 + pm11f / 1000 * pm11f / 1000)) * 180.0f / PI;
+  pm1int = round(pm252fori * 1000);
 #else
   pm251f = PM251_accumulated / PM25_samples;
   pm251int = round(pm251f);
@@ -3153,7 +3327,9 @@ void Send_Message_Cloud_App_MQTT()
 #if SoundMeter
   dBAmaxint = round(dBAmax);
 #else
+#if !(Rain || ADXL || Nivel)
   ReadHyT();
+#endif
 #endif
 
   if (FlagMobData == true)
@@ -3172,14 +3348,24 @@ void Send_Message_Cloud_App_MQTT()
     Serial.println(F(" dBm"));
   }
 
+#if !(LTR390UV || Rain || ADXL || Nivel)
   if (AmbInOutdoors)
     inout = 1;
   else
     inout = 0;
+#elif LTR390UV
+  inout = 2;
+#elif Rain
+  inout = 3;
+#elif ADXL
+  inout = 4;
+#elif Nivel
+  inout = 5;
+#endif
 
   if (SEN5Xsen == true)
   {
-#if !(Rosver || SoundMeter)
+#if !(Rosver || SoundMeter || Rain || ADXL || Nivel)
     uint8_t voc;
     uint8_t nox;
 
@@ -3234,7 +3420,6 @@ void Send_Message_Cloud_App_MQTT()
 #if !Influxver
 
     // TEST PARA CONTAR RESET MOBDATA!!!!!!!!!!!!!!!!!
-    //sprintf(MQTT_message, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
 
     if (ResetFlagMobDataTemp == true)
     {
@@ -3249,7 +3434,32 @@ void Send_Message_Cloud_App_MQTT()
     }
 
 #else
-    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId); // for Telegraf
+#if !(LTR390UV || Rain || ADXL || Nivel)
+    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn); // for Telegraf
+#elif LTR390V
+    // inout = 2;
+    // pm25int: LTR390 value
+    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn); // for Telegraf
+#elif Rain
+    // inout = 3;
+    // pm25int: contadorPulsos
+    // pm25intori: pulsosTotal
+    // datavar1: lluvia1minInt
+    // datavar2: lluviaTotalInt
+    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d, \"datavar2\": %d}", aireciudadano_device_id.c_str(), contadorPulsos, pulsosTotal, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, lluvia1minInt, lluviaTotalInt); // for Telegraf
+#elif ADXL   // ADXL345
+    // inout = 4;
+    // pm25int: ax X (pm251int)
+    // pm25intori: ay Y (pm252int)
+    // pm1int: az Z (pm11int)
+    // datavar1: roll (pm12int)
+    // datavar2: pitch (pm1int)
+    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d, \"datavar1\": %d, \"datavar2\": %d}", aireciudadano_device_id.c_str(), pm251int, pm252int, pm11int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, pm12int, pm1int); // for Telegraf
+#else        // JSN-SR04M-2
+    // inout = 5;
+    // pm25int: Nivel en cm
+    sprintf(MQTT_message, "{\"id\": \"%s\", \"PM25\": %d, \"PM25raw\": %d, \"PM1\": %d, \"humidity\": %d, \"temperature\": %d, \"RSSI\": %d, \"latitude\": %f, \"longitude\": %f, \"inout\": %d, \"configval\": %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn); // for Telegraf
+#endif
 #endif
 #else
 #if !Influxver
@@ -3303,10 +3513,11 @@ void Send_Message_Cloud_App_MQTT()
     if (responsepublish == 0)
       Serial.println("Reintento fallido, mensaje no publicado");
     else
-      Serial.println("Reintento OK, mensaje publicado");
+      Serial.println("Reintento OK, mensaje publicado");      // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! diagnostico con MQTT BROKER
   }
   else {
-    Serial.println(", OK Mensaje publicado");
+    Serial.println(", OK Mensaje publicado");   // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!! diagnostico con MQTT BROKER.
+    // ME parece que el led se enciende sin mensaje publicado o con ERROR MQTT en el Serial, hay que revisar
 #if !ESP8266
     digitalWrite(LEDPIN, HIGH);
 #else
@@ -3483,7 +3694,7 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
 
   // CustomSenPM
 
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL || Nivel)
 
   tempcustom = ((uint16_t)jsonBuffer["altitude_compensation"]);
   if (tempcustom != 0)
@@ -3499,7 +3710,7 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
 
   // CustomSenHYT OR MaxWifiTX
 
-#if !(Rosver || SoundMeter || MinVer || MinVerSD)
+#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || ADXL || Nivel)
 
   tempcustom = ((uint16_t)jsonBuffer["FRC_value"]);
 
@@ -3529,10 +3740,11 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
     //CustomValtotal2 = CustomValtotal2 + ((int)eepromConfig.ConfigValues[6] - 48) * 10;
   }
 #endif
-  //  CustomValtotal2 = CustomValtotal2 + ((int)eepromConfig.ConfigValues[6] - 48) * 10;
+  // CustomValtotal2 = CustomValtotal2 + ((int)eepromConfig.ConfigValues[6] - 48) * 10;
 
   // CustomOutIn
 
+#if !(Rain || ADXL || Nivel)
   tempcustom = ((uint16_t)jsonBuffer["MQTT_port"]);
 
   if (tempcustom != 0)
@@ -3544,6 +3756,7 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
   }
   else
     CustomValtotal2 = CustomValtotal2 + ((int)eepromConfig.ConfigValues[3] - 48) * 10000;
+#endif
 
   // CustomMobileData
 
@@ -3578,23 +3791,13 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
   Serial.print(F("CustomValTotalString: "));
   Serial.println(CustomValTotalString);
 
-#if !(Rosver || MinVer || MinVerSD)
-  if (CustomValtotal2 == 0)
-  {
-    Serial.println(F("No configuration sensor values ​​chosen, no changes will be stored"));
-  }
-  else
-  {
-#endif
-    strncpy(eepromConfig.ConfigValues, CustomValTotalString, sizeof(eepromConfig.ConfigValues));
-    eepromConfig.ConfigValues[sizeof(eepromConfig.ConfigValues) - 1] = '\0';
-    write_eeprom = true;
-    Serial.println(F("CustomVal write_eeprom = true"));
-    Serial.print(F("Configuration Values: "));
-    Serial.println(eepromConfig.ConfigValues);
-#if !(Rosver || MinVer || MinVerSD)
-  }
-#endif
+  strncpy(eepromConfig.ConfigValues, CustomValTotalString, sizeof(eepromConfig.ConfigValues));
+  eepromConfig.ConfigValues[sizeof(eepromConfig.ConfigValues) - 1] = '\0';
+  write_eeprom = true;
+  Serial.println(F("CustomVal write_eeprom = true"));
+  Serial.print(F("Configuration Values: "));
+  Serial.println(eepromConfig.ConfigValues);
+
   Aireciudadano_Characteristics();
 
   // print info
@@ -3619,249 +3822,9 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
   }
 }
 
-void Firmware_Update()
-{
-
-  // ESP32 Firmware Update
-
-#if !ESP8266
-
-  Serial.println(F("### FIRMWARE UPDATE ###"));
-
-  // For remote firmware update
-  WiFiClientSecure UpdateClient;
-  UpdateClient.setInsecure();
-
-  // Reading data over SSL may be slow, use an adequate timeout
-  UpdateClient.setTimeout(30); // timeout argument is defined in seconds for setTimeout
-  Serial.println(F("ACTUALIZACION EN CURSO"));
-
-#if Tdisplaydisp
-  // Update display
-  tft.fillScreen(TFT_ORANGE);
-  tft.setTextColor(TFT_BLACK, TFT_ORANGE);
-  tft.setTextSize(1);
-  tft.setFreeFont(FF90);
-  tft.setTextDatum(MC_DATUM);
-  tft.drawString("ACTUALIZACION EN CURSO", tft.width() / 2, tft.height() / 2);
-#elif (OLED66 == true || OLED96 == true)
-  pageStart();
-  u8g2.setFont(u8g2_font_5x8_tf);
-  u8g2.setCursor(0, (dh / 2 - 4));
-  u8g2.print("Actualizacion");
-  delay(1000);
-  pageEnd();
-#endif
-
-  httpUpdate.setLedPin(LEDPIN, HIGH);
-
-  httpUpdate.onStart(update_started);
-  httpUpdate.onEnd(update_finished);
-  httpUpdate.onProgress(update_progress);
-  httpUpdate.onError(update_error);
-
-#if !WPA2
-#if Tdisplaydisp
-  Serial.println("Firmware WITD");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WITD.bin");
-#elif OLED96display
-  Serial.println("Firmware WI96");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI96.bin");
-#elif OLED66display
-  Serial.println("Firmware WI66");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI66.bin");
-#elif SoundMeter
-#if !SoundAM
-  Serial.println("Firmware WISP SoundMeter");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISMeter.bin");
-#else
-  Serial.println("Firmware WISP SoundMeter AM");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISMeteram.bin");
-#endif
-#elif Minver
-  Serial.println("Firmware WISP MinVer");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISPMV.bin");
-#else
-  Serial.println("Firmware WISP");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISP.bin");
-#endif
-#else
-#if Tdisplaydisp
-  Serial.println("Firmware WITD WPA2");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WITDWPA2.bin");
-#elif OLED96display
-  Serial.println("Firmware WI96 WPA2");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI96WPA2.bin");
-#elif OLED66display
-  Serial.println("Firmware WI66 WPA2");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI66WPA2.bin");
-#elif SoundMeter
-  Serial.println("Firmware WISP SoundMeter");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISMeterWPA2.bin");
-#else
-  Serial.println("Firmware WISP WPA2");
-  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISPWPA2.bin");
-#endif
-#endif
-
-  switch (ret)
-  {
-
-    case HTTP_UPDATE_FAILED:
-      Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
-
-#if Tdisplaydisp
-      tft.fillScreen(TFT_ORANGE);
-      tft.drawString("ACTUALIZACION FALLIDA", tft.width() / 2, tft.height() / 2);
-#elif (OLED66 == true || OLED96 == true)
-      pageStart();
-      u8g2.setFont(u8g2_font_5x8_tf);
-      u8g2.setCursor(0, (dh / 2 - 4));
-      u8g2.print("Act Fallo");
-      pageEnd();
-#endif
-      delay(1000);
-      break;
-
-    case HTTP_UPDATE_NO_UPDATES:
-      Serial.println(F("HTTP_FIRMWARE_UPDATE_NO_UPDATES"));
-      break;
-
-    case HTTP_UPDATE_OK:
-      Serial.println(F("HTTP_FIRMWARE_UPDATE_OK"));
-
-#if Tdisplaydisp
-      tft.fillScreen(TFT_ORANGE);
-      tft.drawString("ACTUALIZACION COMPLETA", tft.width() / 2, tft.height() / 2);
-#elif (OLED66 == true || OLED96 == true)
-      pageStart();
-      u8g2.setFont(u8g2_font_5x8_tf);
-      u8g2.setCursor(0, (dh / 2 - 4));
-      u8g2.print("Act OK");
-      pageEnd();
-#endif
-      delay(1000);
-      break;
-  }
-
-  // ESP8266 Firmware Update
-
-#else
-
-  // For remote firmware update
-  BearSSL::WiFiClientSecure UpdateClient;
-  int freeheap = ESP.getFreeHeap();
-
-  Serial.println(F("### FIRMWARE UPGRADE ###"));
-
-  ESPhttpUpdate.setLedPin(LEDPIN, LOW);
-
-  // Add optional callback notifiers
-  ESPhttpUpdate.onStart(update_started);
-  ESPhttpUpdate.onEnd(update_finished);
-  ESPhttpUpdate.onProgress(update_progress);
-  ESPhttpUpdate.onError(update_error);
-  UpdateClient.setInsecure();
-
-  // Try to set a smaller buffer size for BearSSL update
-  bool mfln = UpdateClient.probeMaxFragmentLength("raw.githubusercontent.com", 443, 512);
-  Serial.printf("\nConnecting to https://raw.githubusercontent.com\n");
-  Serial.printf("MFLN supported: %s\n", mfln ? "yes" : "no");
-  if (mfln)
-  {
-    UpdateClient.setBufferSizes(512, 512);
-  }
-  UpdateClient.connect("raw.githubusercontent.com", 443);
-  if (UpdateClient.connected())
-  {
-    Serial.printf("MFLN status: %s\n", UpdateClient.getMFLNStatus() ? "true" : "false");
-    Serial.printf("Memory used: %d\n", freeheap - ESP.getFreeHeap());
-    freeheap -= ESP.getFreeHeap();
-  }
-  else
-  {
-    Serial.printf("Unable to connect\n");
-  }
-
-  // Run http update
-  // CAMBIAR A MAIN no en branch
-
-#if WPA2
-#if Rosver
-  Serial.println("Firmware ESP8266WISP_WPA2Rosver");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISP_WPA2Rosver.bin");
-#else
-  Serial.println("Firmware ESP8266WISP_WPA2");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISP_WPA2.bin");
-#endif
-#else
-#if Rosver
-  Serial.println("Firmware ESP8266WISP_Rosver");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISP_Rosver.bin");
-#elif MinVer
-  Serial.println("Firmware ESP8266WISP_MinVer");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISPMV.bin");
-#elif MinVerSD
-  Serial.println("Firmware ESP8266WISP_MinVerSD");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISPMVSD.bin");
-#elif MobData
-  Serial.println("Firmware ESP8266WISP_MobData");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISPMobData.bin");
-#elif SoundMeter
-#if !Influxver
-  Serial.println("Firmware ESP8266WISP_SoundMeter");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISMeter.bin");
-#else
-  Serial.println("Firmware ESP8266WISP_SoundMeter_InfluxDB");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISMeterInflux.bin");
-#endif
-#else
-  Serial.println("Firmware ESP8266WISP");
-  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISP.bin");
-#endif
-#endif
-
-  switch (ret)
-  {
-    case HTTP_UPDATE_FAILED:
-      Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
-      break;
-
-    case HTTP_UPDATE_NO_UPDATES:
-      Serial.println(F("HTTP_UPDATE_NO_UPDATES"));
-      break;
-
-    case HTTP_UPDATE_OK:
-      Serial.println(F("HTTP_UPDATE_OK"));
-      break;
-  }
-
-#endif
-}
-
-void update_started()
-{
-  Serial.println(F("CALLBACK:  HTTP update process started"));
-  updating = true;
-}
-
-void update_finished()
-{
-  Serial.println(F("CALLBACK:  HTTP update process finished"));
-  Serial.println(F("### FIRMWARE UPGRADE COMPLETED - REBOOT ###"));
-  updating = false;
-}
-
-void update_progress(int cur, int total)
-{
-  Serial.printf("CALLBACK:  HTTP update process at %d of %d bytes...\n", cur, total);
-}
-
-void update_error(int err)
-{
-  Serial.printf("CALLBACK:  HTTP update fatal error code %d\n", err);
-  updating = false;
-}
+////////////////////////////////////////////////////////////////////////////////
+//  3. Mobile data
+////////////////////////////////////////////////////////////////////////////////
 
 #if MobData
 
@@ -4116,6 +4079,221 @@ void ResetMobDataConn()
 
 #endif
 
+////////////////////////////////////////////////////////////////////////////////
+//  4. Bluetooth
+////////////////////////////////////////////////////////////////////////////////
+
+#if Bluetooth
+void Write_Bluetooth()
+{ // Write measurements to Bluetooth
+
+#if SoundMeter
+  provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
+  provider.commitSample(Bluetooth_loop_time);
+  Serial.print("Bluetooth frame SPL(dBA): ");
+  Serial.println(pm25int);
+#elif LTR390UV
+  provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
+  provider.commitSample(Bluetooth_loop_time);
+  Serial.print("Bluetooth frame UV Index: ");
+  Serial.println(pm25int);
+#elif CO2sensor
+  provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
+  provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
+  provider.writeValueToCurrentSample(pm25int, SignalType::CO2_PARTS_PER_MILLION);
+  provider.commitSample(Bluetooth_loop_time);
+  Serial.print("Bluetooth frame CO2(ppm): ");
+  Serial.print(pm25int);
+  Serial.print(", temp(°C): ");
+  Serial.print(temp);
+  Serial.print(", humidity(%): ");
+  Serial.println(humi);
+#elif NoxVoxTd
+#if ZH10sen
+  uint16_t vocint = vocIndex;
+#else
+  uint16_t vocint = round(vocIndex);
+#endif
+  uint16_t noxint = round(noxIndex);
+  provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
+  provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
+  provider.writeValueToCurrentSample(vocIndex, SignalType::VOC_INDEX);    //???????????????????????????
+  provider.writeValueToCurrentSample(noxint, SignalType::NOX_INDEX);
+  provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
+  provider.commitSample(Bluetooth_loop_time);
+  Serial.print("Bluetooth frame PM2.5(ug/m3): ");
+  Serial.print(pm25int);
+#if ZH10sen
+  Serial.print(", Voc(ppb): ");
+  Serial.print(vocIndex);               //???????????????????????????
+#else
+  Serial.print(", Voc Index: ");
+  Serial.print(vocint);
+  Serial.print(", Nox index: ");
+  Serial.print(noxint);
+#endif
+  Serial.print(", temp(°C): ");
+  Serial.print(temp);
+  Serial.print(", humidity(%): ");
+  Serial.println(humi);
+#else
+  if (SHT31sen == true || SHT4xsen == true || AM2320sen == true || data.HUMI != 0 || FlagSENHyT == true)
+  {
+    provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
+    provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
+    provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
+    provider.commitSample(Bluetooth_loop_time);
+    Serial.print("Bluetooth frame PM2.5(ug/m3): ");
+    Serial.print(pm25int);
+    Serial.print(", temp(°C): ");
+    Serial.print(temp);
+    Serial.print(", humidity(%): ");
+    Serial.println(humi);
+  }
+  else
+  {
+    provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
+    provider.writeValueToCurrentSample(0, SignalType::TEMPERATURE_DEGREES_CELSIUS);
+    provider.writeValueToCurrentSample(0, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
+    provider.commitSample(Bluetooth_loop_time);
+    Serial.print("Bluetooth frame PM2.5(ug/m3): ");
+    Serial.println(pm25int);
+  }
+#endif
+}
+#endif
+
+////////////////////////////////////////////////////////////////////////////////
+//  5. RTC y SD
+////////////////////////////////////////////////////////////////////////////////
+
+#if (Rosver || MinVerSD)
+
+void RTCadjustTime()
+{
+  String Valdate_year = Valdate_time_id.substring(0, 4);
+  String Valdate_month = Valdate_time_id.substring(5, 7);
+  String Valdate_day = Valdate_time_id.substring(8, 10);
+  String Valdate_hour = Valdate_time_id.substring(11, 13);
+  String Valdate_min = Valdate_time_id.substring(14, 16);
+  String Valdate_sec = Valdate_time_id.substring(17, 19);
+
+  uint16_t year = Valdate_year.toInt();
+  uint8_t month = Valdate_month.toInt();
+  uint8_t day = Valdate_day.toInt();
+  uint8_t hour = Valdate_hour.toInt();
+  uint8_t min = Valdate_min.toInt();
+  uint8_t sec = Valdate_sec.toInt();
+
+  Serial.print("year = ");
+  Serial.print(year);
+  Serial.print(", month = ");
+  Serial.print(month);
+  Serial.print(", day = ");
+  Serial.print(day);
+  Serial.print(", hour = ");
+  Serial.print(hour);
+  Serial.print(", min = ");
+  Serial.print(min);
+  Serial.print(", sec = ");
+  Serial.println(sec);
+
+  Serial.print(F("Initializing RTC ds1307: "));
+
+  if (!rtc.begin())
+  {
+    Serial.println(F("Couldn't find RTC"));
+    Serial.flush();
+  }
+  else
+  {
+    Serial.println(F("OK, ds1307 init"));
+    Serial.print(F("RTC let's set the time!: "));
+    Serial.println(Valdate_time_id);
+
+    rtc.adjust(DateTime(year, month, day, hour, min, sec));
+
+    digitalWrite(LEDPIN, LOW);  // turn the LED on (HIGH is the voltage level)
+    delay(200);                 // wait for a 500 msecond
+    digitalWrite(LEDPIN, HIGH); // turn the LED off by making the voltage LOW
+    delay(200);                 // wait for a 500 msecond
+    digitalWrite(LEDPIN, LOW);  // turn the LED on (HIGH is the voltage level)
+    delay(200);                 // wait for a 500 msecond
+    digitalWrite(LEDPIN, HIGH); // turn the LED off by making the voltage LOW
+  }
+}
+
+#endif
+
+#if (SDyRTC || SaveSDyRTC || Rosver || MinVerSD)
+
+void Write_SD()
+{ // Write date - time and measurements to SD card
+
+  DateTime now = rtc.now();
+
+  char buf1[] = "YYYY/MM/DD_hh:mm:ss";
+  String dataString = "";
+
+  // make a string for assembling the data to log:
+
+  dataString = now.toString(buf1);
+  dataString += "_";
+  dataString += pm25int;
+  if (SHT31sen == true || SHT4xsen == true || AM2320sen == true || data.HUMI != 0 || FlagSENHyT == true)
+  {
+    dataString += "_";
+    dataString += humi;
+    dataString += "_";
+    dataString += temp;
+  }
+
+  Serial.print(F("SDreset: "));
+  Serial.println(SDreset);
+  SDreset = SDreset - 1;
+
+  if (SDreset == 0)
+    dataString += "_RESET";
+
+  // dataFile = SD.open("datalog.txt", FILE_WRITE);
+  dataFile = SD.open(aireciudadano_device_id + ".txt", FILE_WRITE);
+
+  // if the file is available, write to it:
+  if (dataFile)
+  {
+    dataFile.println(dataString);
+    dataFile.close();
+    // print to the serial port too:
+    Serial.print(F("SD write: "));
+    Serial.println(dataString);
+    // LED Routine
+    digitalWrite(LEDPIN, LOW);
+    FlagLED = true;
+  }
+  // if the file isn't open, pop up an error:
+  else
+  {
+    Serial.println("SD write: error opening file");
+  }
+
+  if (SDreset == 0)
+  {
+    Serial.print(F("SD reset cycles: "));
+    Serial.println(ValSDreset);
+    ESP.restart();
+  }
+}
+
+#endif
+
+////////////////////////////////////////////////////////////////////////////////
+//  - Sensor routines
+////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
+//  6. Sensors
+////////////////////////////////////////////////////////////////////////////////
+
 #if !MobDataSP
 
 #if (Rosver || MinVer || MobData || MinVerSD)
@@ -4143,7 +4321,7 @@ void Test_Sensor()
   else
   {
     Serial.println(F("Detected I2C Sensirion Sensor"));
-    GetDeviceInfo();
+    GetDeviceInfo_SPS30();
     ErrorFlag ++;
   }
   Serial.println(F("Test Sensirion SEN5X sensor"));
@@ -4167,11 +4345,19 @@ void Test_Sensor()
 #if !ESP8266
   Serial1.begin(PMS::BAUD_RATE, SERIAL_8N1, PMS_TX, PMS_RX);
 #else
+#if !TwoPMS
   pmsSerial.begin(9600); // Software serial begin for PMS sensor
+#else
+  pmsSerial1.begin(9600); // Software serial begin for PMS sensor
+#endif
 #endif
   delay(100);
 
+#if !TwoPMS
   if (pms.readUntil(data))
+#else
+  if (pms1.readUntil(data))
+#endif
   {
     Serial.println(F("Test Plantower sensor found!"));
     PMSsen = true;
@@ -4277,6 +4463,7 @@ void Test_Sensor()
 }
 #endif
 
+#if !(SoundMeter || Rain || ADXL || Nivel)
 void Setup_Sensor()
 { // Identify and initialize PM25, temperature and humidity sensor
 
@@ -4312,7 +4499,7 @@ void Setup_Sensor()
     else
     {
       Serial.println(F("Detected I2C Sensirion Sensor"));
-      GetDeviceInfo();
+      GetDeviceInfo_SPS30();
     }
     if (SPS30sen == true)
     {
@@ -4326,7 +4513,6 @@ void Setup_Sensor()
 #if Wifi
   }
 
-  //////////////////////////////////////////////////////////////////////////////////////////////
   // Test PM2.5 SEN5X
 
   if (SEN5Xsen == true)
@@ -4384,8 +4570,6 @@ void Setup_Sensor()
 #else
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////
-
     // PMS7003 PMSA003
     if (PMSsen == true)
     {
@@ -4407,7 +4591,7 @@ void Setup_Sensor()
 #if !TTGO_TQ
 
 #if SDS011sen
-	  my_sds.begin(&port);
+    my_sds.begin(&port);
 #elif ZH10sen
     mySerial.begin(9600, SERIAL_8N1, RX_PIN_ZH10, TX_PIN_ZH10); // Comunicación con el sensor
 #else
@@ -4419,8 +4603,14 @@ void Setup_Sensor()
 #endif
 
 #else
+#if ESP8266
     pmsSerial1.begin(PMS::BAUD_RATE); // SoftwareSerial PMS1
     pmsSerial2.begin(PMS::BAUD_RATE); // SoftwareSerial PMS2
+#else
+    // Probar en hardware
+    Serial1.begin(PMS::BAUD_RATE, SERIAL_8N1);
+    Serial2.begin(PMS::BAUD_RATE, SERIAL_8N1);
+#endif
     delay(100);
     pms1.activeMode();
     pms2.activeMode();
@@ -4432,9 +4622,9 @@ void Setup_Sensor()
 #if !SoundMeter
 #if !ESP8266SH
 #if !TwoPMS
-//ESP8266
+    //ESP8266
 #if SDS011sen
-    my_sds.begin(SDS_TX, SDS_RX); // SoftwareSerial SDS011 9600 baudrate  
+    my_sds.begin(SDS_TX, SDS_RX); // SoftwareSerial SDS011 9600 baudrate
 #else
     pmsSerial.begin(9600); // Software serial begin for PMS sensor
 #endif
@@ -4452,13 +4642,13 @@ void Setup_Sensor()
 #endif
 #endif
 
-#if !(TwoPMS || SoundMeter)
+#if !(TwoPMS || SoundMeter || Rain || ADXL || Nivel)
     delay(1000);
 
 #if SDS011sen
-	  errSDS011 = my_sds.read(&p25, &p10);
-	  if (!errSDS011) {
-		  Serial.println(F("SDS011 sensor found!"));
+    errSDS011 = my_sds.read(&p25, &p10);
+    if (!errSDS011) {
+      Serial.println(F("SDS011 sensor found!"));
 
 #elif ZH10sen
 
@@ -4530,7 +4720,7 @@ void Setup_Sensor()
 #if SDS011sen
       Serial.println(F("Could not find SDS011 sensor!"));
 #elif ZH10sen
-      Serial.println(F("Could not find ZH10 sensor!")); 
+      Serial.println(F("Could not find ZH10 sensor!"));
 #else
       Serial.println(F("Could not find Plantower sensor!"));
 #endif
@@ -4643,7 +4833,9 @@ void Setup_Sensor()
 
 #endif
 
-#if !SoundMeter
+#endif
+
+#if !(SoundMeter || Rain || ADXL || Nivel)
 
 void Read_Sensor()
 { // Read PM25, temperature and humidity values
@@ -4711,12 +4903,12 @@ void Read_Sensor()
       PM25_value_ori = PM25_value;
 
 #if Bluetooth
-      if (FlagAdjustSensor == 0){
+      if (FlagAdjustSensor == 0) {
         Serial.print("No ");
       }
-      else{
+      else {
         //Serial.println("Adjust PM2.5 SPS30");
-        PM25_value = ((1207 * PM25_value_ori) / 1000) - 1.01; // Ajuste propuesto por paper USA, falta calibracion propia  
+        PM25_value = ((1207 * PM25_value_ori) / 1000) - 1.01; // Ajuste propuesto por paper USA, falta calibracion propia
       }
 #else
       // PM25_value = ((1280 * PM25_value_ori) / 1000) + 1.78; // Ajuste propuesto por paper USA, falta calibracion propia
@@ -4817,7 +5009,7 @@ void Read_Sensor()
 
 #if SDS011sen
     errSDS011 = my_sds.read(&p25, &p10);
-	  if (!errSDS011) 
+    if (!errSDS011)
     {
       failpm = 0;
       PM25_value = p25;
@@ -4833,46 +5025,46 @@ void Read_Sensor()
     if (mySerial.available() >= 22) { // Se esperan 22 bytes en total
       // Leer y mostrar la trama recibida
       for (int i = 0; i < 22; i++) {
-      response[i] = mySerial.read();
-    }
-
-    // Validar cabecera
-    if (response[0] == 0xFF && response[1] == 0x01 && response[2] == 0x35) {
-      // Extraer datos
-      vocsint = (response[3] << 8) | response[4];
-      pm1_0 = (response[7] << 8) | response[8];
-      pm2_5 = (response[9] << 8) | response[10];
-      pm10ZH10 = (response[11] << 8) | response[12];
-      rawTemp = (response[13] << 8) | response[14];
-      humiZH10 = (response[15] << 8) | response[16];
-
-      // Convertir datos
-      temperatureZH10 = (rawTemp - 500) / 10.0;
-      vocZH10 = vocsint / 10.0;
-
-      // Calcular checksum
-      uint8_t checksum = 0;
-      for (int i = 1; i < 21; i++) { // Sumar bytes del 1 al 20
-        checksum += response[i];
+        response[i] = mySerial.read();
       }
-      checksum = ~checksum + 1; // Complemento a uno
 
-      // Comparar con el byte de checksum recibido
-      if (checksum == response[21]) {
-        // Mostrar datos en el monitor serie
-        PM25_value = pm2_5;
-        PM1_value = pm1_0;
-        humi = humiZH10;
-        temp = round(temperatureZH10);
-        vocIndex = vocZH10;
+      // Validar cabecera
+      if (response[0] == 0xFF && response[1] == 0x01 && response[2] == 0x35) {
+        // Extraer datos
+        vocsint = (response[3] << 8) | response[4];
+        pm1_0 = (response[7] << 8) | response[8];
+        pm2_5 = (response[9] << 8) | response[10];
+        pm10ZH10 = (response[11] << 8) | response[12];
+        rawTemp = (response[13] << 8) | response[14];
+        humiZH10 = (response[15] << 8) | response[16];
+
+        // Convertir datos
+        temperatureZH10 = (rawTemp - 500) / 10.0;
+        vocZH10 = vocsint / 10.0;
+
+        // Calcular checksum
+        uint8_t checksum = 0;
+        for (int i = 1; i < 21; i++) { // Sumar bytes del 1 al 20
+          checksum += response[i];
+        }
+        checksum = ~checksum + 1; // Complemento a uno
+
+        // Comparar con el byte de checksum recibido
+        if (checksum == response[21]) {
+          // Mostrar datos en el monitor serie
+          PM25_value = pm2_5;
+          PM1_value = pm1_0;
+          humi = humiZH10;
+          temp = round(temperatureZH10);
+          vocIndex = vocZH10;
+        }
+        else {
+          Serial.printf("Error: Checksum inválido. Calculado: %02X, Recibido: %02X\n", checksum, response[21]);
+        }
       }
       else {
-      Serial.printf("Error: Checksum inválido. Calculado: %02X, Recibido: %02X\n", checksum, response[21]);
+        Serial.println("Error: Respuesta inválida (cabecera incorrecta)");
       }
-    } 
-    else {
-      Serial.println("Error: Respuesta inválida (cabecera incorrecta)");
-    }
 
 #else
     if (pms.readUntil(data))
@@ -4888,10 +5080,10 @@ void Read_Sensor()
       PM25_value_ori = PM25_value;
 
 #if Bluetooth
-      if (FlagAdjustSensor == 0){
+      if (FlagAdjustSensor == 0) {
         Serial.print("No ");
       }
-      else{
+      else {
         //Serial.println("Adjust PM2.5 PMSx003");
         // PM25_value = ((562 * PM25_value_ori) / 1000) - 1; // Ecuación de ajuste resultado de 13 intercomparaciones entre PMS7003 y SPS30 por meses
         // PM25_value = ((553 * PM25_value_ori) / 1000) + 1.3; // Segundo ajuste
@@ -5258,7 +5450,7 @@ void Read_SoundMeter()
 void Setup_UV()
 {
   Wire.begin();
-  if(!ltr390.init())
+  if (!ltr390.init())
   {
     Serial.println("Couldn't find LTR sensor!");
   }
@@ -5266,55 +5458,14 @@ void Setup_UV()
   {
     Serial.println("Found LTR sensor!");
 
-  ltr390.setMode(LTR390_MODE_UVS);
-  if (ltr390.getMode() == LTR390_MODE_ALS) {
-    Serial.println("In ALS mode");
-  } else {
-    Serial.println("In UVS mode");
-  }
+    ltr390.setMode(LTR390_MODE_UVS);
+    if (ltr390.getMode() == LTR390_MODE_ALS) {
+      Serial.println("In ALS mode");
+    } else {
+      Serial.println("In UVS mode");
+    }
 
-  ltr390.setGain(LTR390_GAIN_18);
-  Serial.print("Gain: ");
-  switch (ltr390.getGain()) {
-    case LTR390_GAIN_1: Serial.println(1); break;
-    case LTR390_GAIN_3: Serial.println(3); break;
-    case LTR390_GAIN_6: Serial.println(6); break;
-    case LTR390_GAIN_9: Serial.println(9); break;
-    case LTR390_GAIN_18: Serial.println(18); break;
-  }
-
-  ltr390.setResolution(LTR390_RESOLUTION_20BIT);
-  Serial.print("Resolution: ");
-  switch (ltr390.getResolution()) {
-    case LTR390_RESOLUTION_13BIT: Serial.println(13); break;
-    case LTR390_RESOLUTION_16BIT: Serial.println(16); break;
-    case LTR390_RESOLUTION_17BIT: Serial.println(17); break;
-    case LTR390_RESOLUTION_18BIT: Serial.println(18); break;
-    case LTR390_RESOLUTION_19BIT: Serial.println(19); break;
-    case LTR390_RESOLUTION_20BIT: Serial.println(20); break;
-  }
-  //ltr390.setThresholds(100, 1000);
-  //ltr390.configInterrupt(true, LTR390_MODE_UVS);
-  }
-}
-
-void Read_UV()
-{
-  if (ltr390.newDataAvailable()) 
-  { 
-//    getUVIval = ltr390.getUVI();
-    getUVIval = ltr390.getUVI();
-    PM25_value = round(getUVIval);
-//    PM25_value = int(getUVIval / 2.7f);
-    Serial.print("UV index: ");
-    Serial.print(getUVIval);
-    Serial.print("   intori: ");
-    Serial.println(PM25_value, 0);
-    rawUVS = ltr390.readUVS();
-    Serial.print("UVraw: ");
-    Serial.println(rawUVS);
-
-/*
+    ltr390.setGain(LTR390_GAIN_18);
     Serial.print("Gain: ");
     switch (ltr390.getGain()) {
       case LTR390_GAIN_1: Serial.println(1); break;
@@ -5323,6 +5474,8 @@ void Read_UV()
       case LTR390_GAIN_9: Serial.println(9); break;
       case LTR390_GAIN_18: Serial.println(18); break;
     }
+
+    ltr390.setResolution(LTR390_RESOLUTION_20BIT);
     Serial.print("Resolution: ");
     switch (ltr390.getResolution()) {
       case LTR390_RESOLUTION_13BIT: Serial.println(13); break;
@@ -5332,21 +5485,342 @@ void Read_UV()
       case LTR390_RESOLUTION_19BIT: Serial.println(19); break;
       case LTR390_RESOLUTION_20BIT: Serial.println(20); break;
     }
-*/
-  
+    //ltr390.setThresholds(100, 1000);
+    //ltr390.configInterrupt(true, LTR390_MODE_UVS);
+  }
+}
+
+void Read_UV()
+{
+  if (ltr390.newDataAvailable())
+  {
+    //    getUVIval = ltr390.getUVI();
+    getUVIval = ltr390.getUVI();
+    PM25_value = round(getUVIval);
+    //    PM25_value = int(getUVIval / 2.7f);
+    Serial.print("UV index: ");
+    Serial.print(getUVIval);
+    Serial.print("   intori: ");
+    Serial.println(PM25_value, 0);
+    rawUVS = ltr390.readUVS();
+    Serial.print("UVraw: ");
+    Serial.println(rawUVS);
+
+    /*
+        Serial.print("Gain: ");
+        switch (ltr390.getGain()) {
+          case LTR390_GAIN_1: Serial.println(1); break;
+          case LTR390_GAIN_3: Serial.println(3); break;
+          case LTR390_GAIN_6: Serial.println(6); break;
+          case LTR390_GAIN_9: Serial.println(9); break;
+          case LTR390_GAIN_18: Serial.println(18); break;
+        }
+        Serial.print("Resolution: ");
+        switch (ltr390.getResolution()) {
+          case LTR390_RESOLUTION_13BIT: Serial.println(13); break;
+          case LTR390_RESOLUTION_16BIT: Serial.println(16); break;
+          case LTR390_RESOLUTION_17BIT: Serial.println(17); break;
+          case LTR390_RESOLUTION_18BIT: Serial.println(18); break;
+          case LTR390_RESOLUTION_19BIT: Serial.println(19); break;
+          case LTR390_RESOLUTION_20BIT: Serial.println(20); break;
+        }
+    */
+
   }
   else
     Serial.print("LTR390 not connected");
 }
 #endif
 
-/**
-   @brief : read and display device info
-*/
+#if Rain
+
+void Setup_Rain()
+{
+  // Configura el pin del reed switch como entrada con resistencia de pull-up interna
+  // Esto mantiene el pin en HIGH y lo lleva a LOW cuando el switch se cierra
+  pinMode(REED_SWITCH_PIN, INPUT_PULLUP);
+
+  // Configura la interrupción
+  // Se activará la función 'contarPulso' cada vez que el pin cambie de HIGH a LOW (FALLING edge)
+  attachInterrupt(digitalPinToInterrupt(REED_SWITCH_PIN), contarPulso, FALLING);
+}
+
+void Read_Rain()
+{
+  // Deshabilita las interrupciones temporalmente para leer la variable de forma segura
+  noInterrupts();
+  pulsosTotal = pulsosTotal + contadorPulsos;
+  interrupts();           // Vuelve a habilitar las interrupciones
+
+  if (contadorPulsos > 0) {
+    // Calcula la lluvia basada en los pulsos copiados
+    lluvia1min = contadorPulsos * MM_POR_PULSO;
+    lluviaTotal = pulsosTotal * MM_POR_PULSO;
+    lluvia1minInt = (int)(lluvia1min * 10000.0);
+    lluviaTotalInt = (int)(lluviaTotal * 10000.0);
+
+    Serial.print("Pulsos 1 minuto: ");
+    Serial.println(contadorPulsos);
+    Serial.print("Lluvia 1 minuto: ");
+    Serial.print(lluvia1min);
+    Serial.println(" mm");
+  } else {
+    lluvia1minInt = 0;
+    Serial.println("No se ha detectado lluvia en el último minuto.");
+  }
+  Serial.print("Pulsos totales: ");
+  Serial.println(pulsosTotal);
+  Serial.print("Lluvia acumulada total: ");
+  Serial.print(lluviaTotal);
+  Serial.println(" mm");
+}
+
+#endif
+
+#if ADXL
+
+void Setup_ADXL()
+{
+  Wire.begin();
+  delay(100);
+
+  // Power reset opcional del sensor si lo tienes cableado así
+  pinMode(SENSOR_POWER_PIN, OUTPUT);
+  digitalWrite(SENSOR_POWER_PIN, LOW);
+  delay(500);
+  digitalWrite(SENSOR_POWER_PIN, HIGH);
+  delay(500);
+
+  if (!accel.begin()) {
+    Serial.println("ERROR: Sensor ADXL345 no detectado.");
+    while (1);
+  }
+
+  accel.setRange(ADXL345_RANGE_2_G);
+  accel.setDataRate(DATA_RATE);
+  Serial.println("Inclinómetro ADXL345 encontrado, modo: offsets grabados");
+  Serial.println("Offsets precalibrados (m/s^2): ");
+  Serial.print("ox: "); Serial.print(CALIB_OX, 2);
+  Serial.print("  oy: "); Serial.print(CALIB_OY, 2);
+  Serial.print("  oz: "); Serial.println(CALIB_OZ, 2);
+  Serial.println("X(m/s^2)   Y(m/s^2)   Z(m/s^2)   Roll(°)   Pitch(°)");
+  Serial.println("X:         Y:         Z:         R:        P:");
+  last_print_ms = millis();
+}
+
+void Read_ADXL()
+{
+  if (millis() - last_read_ms >= SENSOR_READ_INTERVAL_MS) {
+    last_read_ms = millis();
+
+    sensors_event_t event;
+    accel.getEvent(&event);
+
+    // Aplicar offsets (constantes) y acumular para promedio
+    sum_x += event.acceleration.x - CALIB_OX;
+    sum_y += event.acceleration.y - CALIB_OY;
+    sum_z += event.acceleration.z - CALIB_OZ;
+    sample_count++;
+  }
+}
+
+void Read_ADXL_1s()
+{
+  if (sample_count > 0) {
+    float ax = sum_x / sample_count;
+    float ay = sum_y / sample_count;
+    float az = sum_z / sample_count;
+
+    PM251_value = (int)(ax * 1000.0);
+    PM252_value = (int)(ay * 1000.0);
+    PM11_value = (int)(az * 1000.0);
+
+    float roll  = atan2f(ay, az) * 180.0f / PI;
+    float pitch = atan2f(-ax, sqrtf(ay * ay + az * az)) * 180.0f / PI;
+
+    Serial.print("X: "); Serial.print(ax, 2);
+    Serial.print("   Y: "); Serial.print(ay, 2);
+    Serial.print("   Z: "); Serial.print(az, 2);
+    Serial.print("   R: "); Serial.print(roll, 2);
+    Serial.print("   P: "); Serial.println(pitch, 2);
+  } else {
+    Serial.println("No hay muestras (sample_count == 0)");
+  }
+
+  // Reset acumuladores
+  sum_x = sum_y = sum_z = 0.0f;
+  sample_count = 0;
+  last_print_ms = millis();
+}
+
+#endif
+
+#if Nivel
+
+void Setup_Nivel()
+{
+  pinMode(trigPin, OUTPUT);
+  digitalWrite(trigPin, HIGH);  // CRÍTICO: Mantener en LOW entre lecturas
+  pinMode(echoPin, INPUT);
+
+  Serial.println("Lectura medidor de nivel - JSN-SR04M-2");
+
+  // Inicializar histórico
+  for (int i = 0; i < VENTANA_HISTORICO; i++) {
+    historico[i] = -1;
+  }
+  Serial.println("Filtro anti-outliers activado");
+}
+
+void Read_Nivel()
+{
+  // Hacer la lectura
+  LeerNivel();
+
+  // Validación básica de rango
+  bool dentroRango = (distance >= 2 && distance <= 600);
+
+  // Validación avanzada: detectar outliers
+  bool esOutlier = false;
+  if (dentroRango && countHistorico >= 3) {
+    esOutlier = detectarOutlier(distance);
+  }
+
+  // Mostrar lectura
+  Serial.print("Distancia: ");
+  Serial.print(distance);
+  Serial.print(" cm");
+
+  if (!dentroRango) {
+    Serial.println(" (inválida)");
+    vecesRechazadaSimilar = 0;  // Resetear contador
+    ultimaLecturaRechazada = -1;
+  }
+  else if (esOutlier) {
+    // NUEVO: Verificar si es un cambio real (outlier repetido)
+    if (abs(distance - ultimaLecturaRechazada) <= 3) {
+      // Es similar al último outlier rechazado
+      vecesRechazadaSimilar++;
+
+      Serial.print(" (outlier #");
+      Serial.print(vecesRechazadaSimilar);
+
+      // Si se repite 3+ veces, ES UN CAMBIO REAL
+      if (vecesRechazadaSimilar >= CONFIRMACIONES_NECESARIAS) {
+
+        // Reemplazar el histórico con el nuevo valor
+        for (int i = 0; i < VENTANA_HISTORICO; i++) {
+          historico[i] = distance;
+        }
+        indiceHistorico = 0;
+        countHistorico = VENTANA_HISTORICO;
+
+        Serial.print(" SI → ");
+        Serial.print(distance);
+        Serial.print(" cm)");
+
+        PM25_value = distance;
+        vecesRechazadaSimilar = 0;
+        ultimaLecturaRechazada = -1;
+      } else {
+        Serial.print(" (tendencia?)");
+      }
+    } else {
+      // Es diferente al último rechazado, reiniciar contador
+      vecesRechazadaSimilar = 1;
+      ultimaLecturaRechazada = distance;
+      Serial.print(" (outlier detectado)");
+    }
+    Serial.println("");
+  }
+  else {
+    Serial.println("");
+    PM25_value = distance;
+
+    historico[indiceHistorico] = distance;
+    indiceHistorico = (indiceHistorico + 1) % VENTANA_HISTORICO;
+    if (countHistorico < VENTANA_HISTORICO) countHistorico++;
+
+    // Resetear contador de outliers
+    vecesRechazadaSimilar = 0;
+    ultimaLecturaRechazada = -1;
+  }
+}
+
+// ============================================
+// DETECTOR DE OUTLIERS
+// ============================================
+bool detectarOutlier(int nuevaLectura) {
+  // Calcular promedio del histórico
+  float suma = 0;
+  int validas = 0;
+
+  for (int i = 0; i < VENTANA_HISTORICO; i++) {
+    if (historico[i] > 0) {
+      suma += historico[i];
+      validas++;
+    }
+  }
+
+  if (validas < 3) return false;  // Necesitamos al menos 3 lecturas
+
+  float promedio = suma / validas;
+
+  // Calcular desviación porcentual
+  float diferencia = abs(nuevaLectura - promedio);
+  float desviacionPorcentual = (diferencia / promedio) * 100.0;
+
+  // Si la desviación es mayor al 40%, es un outlier
+  return (desviacionPorcentual > DESVIACION_MAXIMA);
+}
+
+// ============================================
+// FUNCIÓN DE LECTURA CON REINTENTOS
+// ============================================
+void LeerNivel() {
+  const int MAX_INTENTOS = 5;
+  const unsigned long TIMEOUT_US = 35000;  // 35ms timeout
+  int intentos = 0;
+
+  while (intentos < MAX_INTENTOS) {
+    // PASO 1: Asegurar estado LOW inicial
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(5);
+
+    // PASO 2: Pulso HIGH
+    digitalWrite(trigPin, HIGH);
+
+    duration = pulseIn(echoPin, HIGH, TIMEOUT_US);
+
+    // Si obtenemos una lectura válida, calcular y salir
+    if (duration > 0) {
+      distance = duration * 0.0343 / 2;  // Codigo Recomendado en todo lado
+
+      // Mostrar intentos si fue necesario reintentar
+      //      if (intentos > 0) {
+      //        Serial.print("R:");
+      //        Serial.print(intentos + 1);
+      //        Serial.print("_");
+      //      }
+      return;  // Salir con éxito
+    }
+    // Si fue timeout, incrementar contador y pequeña pausa
+    intentos++;
+    if (intentos < MAX_INTENTOS) {
+      delayMicroseconds(800);  // Pausa breve entre reintentos
+    }
+  }
+  // Si llegamos aquí, todos los intentos fallaron
+  distance = -1;
+  //  Serial.print("5Re_");
+}
+
+#endif
+
 
 #if !MobDataSP
 #if !Rosver
-void GetDeviceInfo()
+void GetDeviceInfo_SPS30()
 {
   char buf[32];
   uint8_t ret;
@@ -5429,12 +5903,6 @@ void Errorloop(char *mess, uint8_t r)
   Serial.println(F("No SPS30 connected"));
 }
 
-/**
-    @brief : display error message
-    @param mess : message to display
-    @param r : error code
-
-*/
 void ErrtoMess(char *mess, uint8_t r)
 {
   char buf[80];
@@ -5535,9 +6003,7 @@ void printSerialNumber()
 
 #endif
 
-///////////////////////////////////////////////////////////////////////////////
-
-#if !SoundMeter
+#if !(SoundMeter || Rain || ADXL || Nivel)
 
 void ReadHyT()
 {
@@ -5696,7 +6162,13 @@ void ReadHyT()
 }
 #endif
 
-///////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+//  - General functions
+////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
+//  7. Device Info
+////////////////////////////////////////////////////////////////////////////////
 
 void Print_Config()
 { // print AireCiudadano device settings
@@ -5764,8 +6236,1111 @@ void espDelay(int ms)
 }
 #endif
 
-#if (Tdisplaydisp || OLED96display || OLED66display)
+void Get_AireCiudadano_DeviceId()
+{ // Get TTGO T-Display info and fill up aireciudadano_device_id with last 6 digits (in HEX) of WiFi mac address or Custom_Name + 6 digits
+  char aireciudadano_device_id_endframe[10];
 
+#if !ESP8266
+
+  for (int i = 0; i < 17; i = i + 8)
+  {
+    chipId |= ((ESP.getEfuseMac() >> (40 - i)) & 0xff) << i;
+  }
+  chipIdHEX = String(chipId, HEX);
+  strncpy(aireciudadano_device_id_endframe, chipIdHEX.c_str(), sizeof(aireciudadano_device_id_endframe));
+#if Wifi
+  Aireciudadano_Characteristics();
+#endif
+  Serial.printf("ESP32 Chip model = %s Rev %d.\t", ESP.getChipModel(), ESP.getChipRevision());
+  Serial.printf("This chip has %d cores and %dMB Flash.\n", ESP.getChipCores(), ESP.getFlashChipSize() / (1024 * 1024));
+
+#else
+
+#if Rosver
+  String macAddress = WiFi.macAddress(); // Get the MAC address as a string
+  uint64_t decimalNumber = 0;
+  int shiftBits = 40; // Start from the leftmost byte
+
+  for (int i = 0; i < 6; i++)
+  {
+    String hexComponent = macAddress.substring(i * 3, i * 3 + 2);
+    uint64_t decimalComponent = strtol(hexComponent.c_str(), NULL, 16);
+    decimalNumber |= (decimalComponent << shiftBits);
+    shiftBits -= 8;
+  }
+  chipId = decimalNumber;
+#else
+  chipId = ESP.getChipId();
+#endif
+
+  chipIdHEX = String(ESP.getChipId(), HEX);
+  strncpy(aireciudadano_device_id_endframe, chipIdHEX.c_str(), sizeof(aireciudadano_device_id_endframe));
+#if Wifi
+#if !(Rosver || MinVer || MobData || MinVerSD)
+  Aireciudadano_Characteristics();
+#else
+  if (eepromConfig.ConfigValues[4] == '0')
+  {
+    SDflag = false;
+    Serial.println(F("Mode: Wifi or Mobile Data"));
+  }
+  else
+  {
+    SDflag = true;
+    Serial.println(F("Mode: SD & RTC"));
+  }
+
+#if MobData
+  FlagMobData = true;
+  Serial.println(F("Mobile Data mode"));
+#else
+  FlagMobData = false;
+  Serial.println(F("NO Mobile Data mode"));
+#endif
+
+#endif
+#endif
+  Serial.print(F("ESP8266 Chip ID = "));
+  Serial.print(chipIdHEX);
+  Serial.print(F(", ESP CoreVersion: "));
+  Serial.println(ESP.getCoreVersion());
+
+#endif
+
+  Serial.print(F("AireCiudadano Device ID: "));
+  if (String(aireciudadano_device_id).isEmpty())
+    aireciudadano_device_id = String("AireCiudadano_") + aireciudadano_device_id_endframe;
+  else
+    aireciudadano_device_id = String(eepromConfig.aireciudadano_device_name) + "_" + aireciudadano_device_id_endframe;
+  Serial.println(aireciudadano_device_id);
+}
+
+void Aireciudadano_Characteristics()
+{
+#if !Bluetooth
+#if !(Rosver || SoundMeter || MinVer || MobData || MinVerSD || LTR390UV || Rain || ADXL || Nivel)
+  Serial.print(F("eepromConfig.ConfigValues: "));
+  Serial.println(eepromConfig.ConfigValues);
+
+  Serial.print(F("eepromConfig.ConfigValues[3]: "));
+  Serial.println(eepromConfig.ConfigValues[3]);
+  if (eepromConfig.ConfigValues[3] == '0')
+  {
+    AmbInOutdoors = false;
+    Serial.println(F("Outdoors"));
+  }
+  else
+  {
+    AmbInOutdoors = true;
+    Serial.println(F("Indoors"));
+  }
+
+  Serial.print(F("eepromConfig.ConfigValues[5]: "));
+  Serial.println(eepromConfig.ConfigValues[5]);
+
+  TDisplay = false;
+  OLED66 = false;
+  OLED96 = false;
+  if (eepromConfig.ConfigValues[5] == '0')
+    Serial.println(F("None Display"));
+  else if (eepromConfig.ConfigValues[5] == '1')
+  {
+    TDisplay = true;
+    Serial.println(F("TTGO TDisplay board"));
+  }
+  else if (eepromConfig.ConfigValues[5] == '2')
+  {
+    OLED96 = true;
+    Serial.println(F("OLED 0.96 inch display 128x64"));
+  }
+  else if (eepromConfig.ConfigValues[5] == '3')
+  {
+    OLED66 = true;
+    Serial.println(F("OLED 0.66 inch display 64x48"));
+  }
+
+  Serial.print(F("eepromConfig.ConfigValues[6]: "));
+  Serial.println(eepromConfig.ConfigValues[6]);
+  SHTsen = false;
+  AM2320sen = false;
+  if (eepromConfig.ConfigValues[6] == '0')
+    Serial.println(F("None sensor HYT"));
+  else if (eepromConfig.ConfigValues[6] == '1')
+  {
+    SHTsen = true;
+    Serial.println(F("SHT31/SEN4x sensor"));
+  }
+  else if (eepromConfig.ConfigValues[6] == '2')
+  {
+    AM2320sen = true;
+    Serial.println(F("AM2320 sensor"));
+  }
+
+  Serial.print(F("eepromConfig.ConfigValues[7]: "));
+  Serial.println(eepromConfig.ConfigValues[7]);
+  SPS30sen = false;
+  SEN5Xsen = false;
+  PMSsen = false;
+  if (eepromConfig.ConfigValues[7] == '0')
+    Serial.println(F("None PM sensor"));
+  else if (eepromConfig.ConfigValues[7] == '1')
+  {
+    SPS30sen = true;
+    Serial.println(F("SPS30 sensor"));
+  }
+  else if (eepromConfig.ConfigValues[7] == '2')
+  {
+    SEN5Xsen = true;
+    Serial.println(F("SEN5X sensor"));
+  }
+  else if (eepromConfig.ConfigValues[7] == '3')
+  {
+    PMSsen = true;
+    Serial.println(F("PMS sensor"));
+  }
+
+  Serial.print(F("eepromConfig.ConfigValues[4]: "));
+  Serial.println(eepromConfig.ConfigValues[4]);
+  if (eepromConfig.ConfigValues[4] == '0')
+  {
+    SDflag = false;
+    Serial.println(F("No SD & RTC"));
+  }
+  else
+  {
+    SDflag = true;
+    Serial.println(F("SD & RTC mode"));
+  }
+
+#if !WPA2
+  Serial.println(F("No WPA2"));
+#else
+  Serial.println(F("WPA2 security"));
+#endif
+
+#elif Rosver
+  Serial.print(F("eepromConfig.ConfigValues: "));
+  Serial.println(eepromConfig.ConfigValues);
+  Serial.print(F("eepromConfig.ConfigValues[3]: "));
+  Serial.println(eepromConfig.ConfigValues[3]);
+  if (eepromConfig.ConfigValues[3] == '0')
+  {
+    AmbInOutdoors = false;
+    Serial.println(F("Outdoors"));
+  }
+  else
+  {
+    AmbInOutdoors = true;
+    Serial.println(F("Indoors"));
+  }
+
+  if (PMSsen == true)
+    Serial.println(F("PMS sensor"));
+  else
+    Serial.println(F("No PMS sensor"));
+
+  if (SHTsen == true)
+    Serial.println(F("SHT31/SHT4x sensor"));
+  else
+    Serial.println("No SHT31/SHT4x sensor");
+
+  Serial.print(F("eepromConfig.ConfigValues[4]: "));
+  Serial.println(eepromConfig.ConfigValues[4]);
+  if (eepromConfig.ConfigValues[4] == '0')
+  {
+    SDflag = false;
+    Serial.println(F("No SD & RTC"));
+  }
+  else
+  {
+    SDflag = true;
+    Serial.println(F("SD & RTC mode"));
+  }
+
+  Serial.print(F("eepromConfig.ConfigValues[6]: "));
+  Serial.println(eepromConfig.ConfigValues[6]);
+  if (eepromConfig.ConfigValues[6] == '0')
+  {
+    MaxWifiTX = false;
+    Serial.println(F("Normal Wifi power TX"));
+  }
+
+  if (eepromConfig.ConfigValues[6] == '1')
+  {
+    MaxWifiTX = true;
+    Serial.println(F("MaxWifiTX activated"));
+  }
+#if !WPA2
+  Serial.println(F("No WPA2"));
+#else
+  Serial.println(F("WPA2 security"));
+#endif
+
+#elif MinVer
+  Serial.print(F("eepromConfig.ConfigValues: "));
+  Serial.println(eepromConfig.ConfigValues);
+
+  Serial.print(F("eepromConfig.ConfigValues[3]: "));
+  Serial.println(eepromConfig.ConfigValues[3]);
+  if (eepromConfig.ConfigValues[3] == '0')
+  {
+    AmbInOutdoors = false;
+    Serial.println(F("Outdoors"));
+  }
+  else
+  {
+    AmbInOutdoors = true;
+    Serial.println(F("Indoors"));
+  }
+
+  Serial.print(F("eepromConfig.ConfigValues[6]: "));
+  Serial.println(eepromConfig.ConfigValues[6]);
+  if (eepromConfig.ConfigValues[6] == '0')
+  {
+    MaxWifiTX = false;
+    Serial.println(F("Normal Wifi power TX"));
+  }
+
+  if (eepromConfig.ConfigValues[6] == '1')
+  {
+    MaxWifiTX = true;
+    Serial.println(F("MaxWifiTX activated"));
+  }
+
+  if (SPS30sen == true)
+    Serial.println(F("SPS30 sensor"));
+  else
+    Serial.println(F("No SPS30 sensor"));
+
+  if (SEN5Xsen == true)
+    Serial.println(F("SEN5X sensor"));
+  else
+    Serial.println(F("No SEN5X sensor"));
+
+  if (PMSsen == true)
+    Serial.println(F("PMS sensor"));
+  else
+    Serial.println(F("No PMS sensor"));
+
+  if (SHTsen == true)
+    Serial.println(F("SHT31/SHT4x sensor"));
+  else
+    Serial.println("No SHT31/SHT4x sensor");
+
+#elif MinVerSD
+
+  Serial.print(F("eepromConfig.ConfigValues: "));
+  Serial.println(eepromConfig.ConfigValues);
+
+  Serial.print(F("eepromConfig.ConfigValues[3]: "));
+  Serial.println(eepromConfig.ConfigValues[3]);
+  if (eepromConfig.ConfigValues[3] == '0')
+  {
+    AmbInOutdoors = false;
+    Serial.println(F("Outdoors"));
+  }
+  else
+  {
+    AmbInOutdoors = true;
+    Serial.println(F("Indoors"));
+  }
+
+  Serial.print(F("eepromConfig.ConfigValues[6]: "));
+  Serial.println(eepromConfig.ConfigValues[6]);
+  if (eepromConfig.ConfigValues[6] == '0')
+  {
+    MaxWifiTX = false;
+    Serial.println(F("Normal Wifi power TX"));
+  }
+
+  if (eepromConfig.ConfigValues[6] == '1')
+  {
+    MaxWifiTX = true;
+    Serial.println(F("MaxWifiTX activated"));
+  }
+
+  if (SPS30sen == true)
+    Serial.println(F("SPS30 sensor"));
+  else
+    Serial.println(F("No SPS30 sensor"));
+
+  if (SEN5Xsen == true)
+    Serial.println(F("SEN5X sensor"));
+  else
+    Serial.println(F("No SEN5X sensor"));
+
+  if (PMSsen == true)
+    Serial.println(F("PMS sensor"));
+  else
+    Serial.println(F("No PMS sensor"));
+
+  if (SHTsen == true)
+    Serial.println(F("SHT31/SHT4x sensor"));
+  else
+    Serial.println("No SHT31/SHT4x sensor");
+
+  Serial.print(F("eepromConfig.ConfigValues[4]: "));
+  Serial.println(eepromConfig.ConfigValues[4]);
+  if (eepromConfig.ConfigValues[4] == '0')
+  {
+    SDflag = false;
+    Serial.println(F("No SD & RTC"));
+  }
+  else
+  {
+    SDflag = true;
+    Serial.println(F("SD & RTC mode"));
+  }
+
+#elif MobData
+
+  Serial.print(F("eepromConfig.ConfigValues: "));
+  Serial.println(eepromConfig.ConfigValues);
+
+  Serial.print(F("eepromConfig.ConfigValues[3]: "));
+  Serial.println(eepromConfig.ConfigValues[3]);
+  if (eepromConfig.ConfigValues[3] == '0')
+  {
+    AmbInOutdoors = false;
+    Serial.println(F("Outdoors"));
+  }
+  else
+  {
+    AmbInOutdoors = true;
+    Serial.println(F("Indoors"));
+  }
+
+  if (SPS30sen == true)
+    Serial.println(F("SPS30 sensor"));
+  else
+    Serial.println(F("No SPS30 sensor"));
+
+  if (SEN5Xsen == true)
+    Serial.println(F("SEN5X sensor"));
+  else
+    Serial.println(F("No SEN5X sensor"));
+
+  if (PMSsen == true)
+    Serial.println(F("PMS sensor"));
+  else
+    Serial.println(F("No PMS sensor"));
+
+  if (SHTsen == true)
+    Serial.println(F("SHT31/SHT4x sensor"));
+  else
+    Serial.println("No SHT31/SHT4x sensor");
+
+#if MobData
+  FlagMobData = true;
+  Serial.println(F("Mobile Data mode"));
+#else
+  FlagMobData = false;
+  Serial.println(F("NO Mobile Data mode"));
+#endif
+
+#else // SoundMeter & LTR390UV & Rain & ADXL & Nivel
+#if !(LTR390UV || Rain || ADXL || Nivel)
+  Serial.print(F("eepromConfig.ConfigValues: "));
+  Serial.println(eepromConfig.ConfigValues);
+  Serial.print(F("eepromConfig.ConfigValues[3]: "));
+  Serial.println(eepromConfig.ConfigValues[3]);
+  if (eepromConfig.ConfigValues[3] == '0')
+  {
+    AmbInOutdoors = false;
+    Serial.println(F("Outdoors"));
+  }
+  else
+  {
+    AmbInOutdoors = true;
+    Serial.println(F("Indoors"));
+  }
+
+  Serial.print(F("eepromConfig.ConfigValues[6]: "));
+  Serial.println(eepromConfig.ConfigValues[6]);
+  if (eepromConfig.ConfigValues[6] == '0')
+  {
+    MaxWifiTX = false;
+    Serial.println(F("Normal Wifi power TX"));
+  }
+
+  if (eepromConfig.ConfigValues[6] == '1')
+  {
+    MaxWifiTX = true;
+    Serial.println(F("MaxWifiTX activated"));
+  }
+
+  Serial.println(F("Sound Meter MEMS sensor"));
+
+#elif LTR390UV
+  Serial.print(F("eepromConfig.ConfigValues: "));
+  Serial.println(eepromConfig.ConfigValues);
+
+  Serial.print(F("eepromConfig.ConfigValues[6]: "));
+  Serial.println(eepromConfig.ConfigValues[6]);
+  if (eepromConfig.ConfigValues[6] == '0')
+  {
+    MaxWifiTX = false;
+    Serial.println(F("Normal Wifi power TX"));
+  }
+
+  if (eepromConfig.ConfigValues[6] == '1')
+  {
+    MaxWifiTX = true;
+    Serial.println(F("MaxWifiTX activated"));
+  }
+
+  Serial.println("LTR390UV sensor");
+
+#elif Nivel
+  Serial.print(F("eepromConfig.ConfigValues: "));
+  Serial.println(eepromConfig.ConfigValues);
+
+  Serial.print(F("eepromConfig.ConfigValues[6]: "));
+  Serial.println(eepromConfig.ConfigValues[6]);
+  if (eepromConfig.ConfigValues[6] == '0')
+  {
+    MaxWifiTX = false;
+    Serial.println(F("Normal Wifi power TX"));
+  }
+
+  if (eepromConfig.ConfigValues[6] == '1')
+  {
+    MaxWifiTX = true;
+    Serial.println(F("MaxWifiTX activated"));
+  }
+
+  Serial.println("Level sensor - JSN-SR04M-2");
+
+#elif ADXL
+  Serial.print(F("eepromConfig.ConfigValues: "));
+  Serial.println(eepromConfig.ConfigValues);
+
+  Serial.print(F("eepromConfig.ConfigValues[6]: "));
+  Serial.println(eepromConfig.ConfigValues[6]);
+  if (eepromConfig.ConfigValues[6] == '0')
+  {
+    MaxWifiTX = false;
+    Serial.println(F("Normal Wifi power TX"));
+  }
+
+  if (eepromConfig.ConfigValues[6] == '1')
+  {
+    MaxWifiTX = true;
+    Serial.println(F("MaxWifiTX activated"));
+  }
+
+  Serial.println("ADXL345 sensor");
+
+#else
+  Serial.print(F("eepromConfig.ConfigValues: "));
+  Serial.println(eepromConfig.ConfigValues);
+
+  Serial.print(F("eepromConfig.ConfigValues[6]: "));
+  Serial.println(eepromConfig.ConfigValues[6]);
+  if (eepromConfig.ConfigValues[6] == '0')
+  {
+    MaxWifiTX = false;
+    Serial.println(F("Normal Wifi power TX"));
+  }
+
+  if (eepromConfig.ConfigValues[6] == '1')
+  {
+    MaxWifiTX = true;
+    Serial.println(F("MaxWifiTX activated"));
+  }
+
+  Serial.println("Rain sensor");
+#endif
+
+#if !WPA2
+  Serial.println(F("No WPA2"));
+#else
+  Serial.println(F("WPA2 security"));
+#endif
+
+#endif
+
+  // SPS30sen = 1
+  // SEN5Xsen = 2
+  // PMSsen = 4
+  // AdjPMS = 8
+  // SHTsen = 16
+  // AM2320sen =32
+  // SDflag = 64
+  // MobData = 128
+  // TDisplay = 256
+  // OLED66 || OLED96 = 512
+  // MaxWifiTX = 1024
+  // TwoSensor = 2048
+  // AmbInOutdoors (Indoors) = 4096
+  // WPA2 = 8192
+  // ESP8266 = 16384
+  // Rosver = 32768
+  // Swver * 65536
+
+  if (SPS30sen)
+    IDn = IDn + 1;
+  if (SEN5Xsen)
+    IDn = IDn + 2;
+  if (PMSsen)
+    IDn = IDn + 4;
+  //  if (AdjPMS)
+  //    IDn = IDn + 8;
+  if (SHTsen)
+    IDn = IDn + 16;
+  if (AM2320sen)
+    IDn = IDn + 32;
+  if (SDflag)
+    IDn = IDn + 64;
+#if SaveSDyRTC
+  IDn = IDn + 64;
+#endif
+#if SoundMeter
+  IDn = IDn + 128;
+#endif
+  if (TDisplay)
+    IDn = IDn + 256;
+  if (OLED66 || OLED96)
+    IDn = IDn + 512;
+  if (MaxWifiTX)
+    IDn = IDn + 1024;
+  if (FlagMobData)
+    IDn = IDn + 1024;
+#if TwoPMS
+  IDn = IDn + 2048; // Solo para PMS, si se quiere para SEN5X pasarla a var y setearla en codigo
+#endif
+  if (AmbInOutdoors)
+    IDn = IDn + 4096;
+#if WPA2
+  IDn = IDn + 8192;
+#endif
+#if ESP8266
+  IDn = IDn + 16384;
+#endif
+#if Rosver
+  IDn = IDn + 32768;
+#endif
+  IDn = IDn + (Swver * 65536);
+  Serial.print(F("IDn: "));
+  Serial.println(IDn);
+#endif
+}
+
+#if !ESP8266
+
+void print_reset_reason(RESET_REASON reason)
+{
+  switch (reason)
+  {
+    case 1:
+      Serial.println(F("POWERON_RESET"));
+      ResetFlag = true;
+      DeepSleepFlag = false;
+      break; /**<1,  Vbat power on reset*/
+    case 3:
+      Serial.println(F("SW_RESET"));
+      break; /**<3,  Software reset digital core*/
+    case 4:
+      Serial.println(F("OWDT_RESET"));
+      break; /**<4,  Legacy watch dog reset digital core*/
+    case 5:
+      Serial.println(F("DEEPSLEEP_RESET"));
+      DeepSleepFlag = true;
+      ResetFlag = false;
+      break; /**<5,  Deep Sleep reset digital core*/
+    case 6:
+      Serial.println(F("SDIO_RESET"));
+      break; /**<6,  Reset by SLC module, reset digital core*/
+    case 7:
+      Serial.println(F("TG0WDT_SYS_RESET"));
+      break; /**<7,  Timer Group0 Watch dog reset digital core*/
+    case 8:
+      Serial.println(F("TG1WDT_SYS_RESET"));
+      break; /**<8,  Timer Group1 Watch dog reset digital core*/
+    case 9:
+      Serial.println(F("RTCWDT_SYS_RESET"));
+      break; /**<9,  RTC Watch dog Reset digital core*/
+    case 10:
+      Serial.println(F("INTRUSION_RESET"));
+      break; /**<10, Instrusion tested to reset CPU*/
+    case 11:
+      Serial.println(F("TGWDT_CPU_RESET"));
+      break; /**<11, Time Group reset CPU*/
+    case 12:
+      Serial.println(F("SW_CPU_RESET"));
+      ResetFlag = false;
+      DeepSleepFlag = false;
+      break; /**<12, Software reset CPU*/
+    case 13:
+      Serial.println(F("RTCWDT_CPU_RESET"));
+      break; /**<13, RTC Watch dog Reset CPU*/
+    case 14:
+      Serial.println(F("EXT_CPU_RESET"));
+      break; /**<14, for APP CPU, reseted by PRO CPU*/
+    case 15:
+      Serial.println(F("RTCWDT_BROWN_OUT_RESET"));
+      break; /**<15, Reset when the vdd voltage is not stable*/
+    case 16:
+      Serial.println(F("RTCWDT_RTC_RESET"));
+      break; /**<16, RTC Watch dog reset digital core and rtc module*/
+    default:
+      Serial.println(F("NO_MEAN"));
+  }
+}
+
+#endif
+
+////////////////////////////////////////////////////////////////////////////////
+//  8. Firmware Update
+////////////////////////////////////////////////////////////////////////////////
+
+#if Wifi
+
+void Firmware_Update()
+{
+
+  // ESP32 Firmware Update
+
+#if !ESP8266
+
+  Serial.println(F("### FIRMWARE UPDATE ###"));
+
+  // For remote firmware update
+  WiFiClientSecure UpdateClient;
+  UpdateClient.setInsecure();
+
+  // Reading data over SSL may be slow, use an adequate timeout
+  UpdateClient.setTimeout(30); // timeout argument is defined in seconds for setTimeout
+  Serial.println(F("ACTUALIZACION EN CURSO"));
+
+#if Tdisplaydisp
+  // Update display
+  tft.fillScreen(TFT_ORANGE);
+  tft.setTextColor(TFT_BLACK, TFT_ORANGE);
+  tft.setTextSize(1);
+  tft.setFreeFont(FF90);
+  tft.setTextDatum(MC_DATUM);
+  tft.drawString("ACTUALIZACION EN CURSO", tft.width() / 2, tft.height() / 2);
+#elif (OLED66 == true || OLED96 == true)
+  pageStart();
+  u8g2.setFont(u8g2_font_5x8_tf);
+  u8g2.setCursor(0, (dh / 2 - 4));
+  u8g2.print("Actualizacion");
+  delay(1000);
+  pageEnd();
+#endif
+
+  httpUpdate.setLedPin(LEDPIN, HIGH);
+
+  httpUpdate.onStart(update_started);
+  httpUpdate.onEnd(update_finished);
+  httpUpdate.onProgress(update_progress);
+  httpUpdate.onError(update_error);
+
+#if !WPA2
+#if Tdisplaydisp
+  Serial.println("Firmware WITD");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WITD.bin");
+#elif OLED96display
+  Serial.println("Firmware WI96");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI96.bin");
+#elif OLED66display
+  Serial.println("Firmware WI66");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI66.bin");
+#elif SoundMeter
+#if !SoundAM
+  Serial.println("Firmware SP SoundMeter");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISPMeter.bin");
+#else
+  Serial.println("Firmware SP SoundMeter AM");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISPMeteram.bin");
+#endif
+#elif Rain
+  Serial.println("Firmware Rain");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WIRain.bin");
+#elif ADXL
+  Serial.println("Firmware ADXL345");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WIADXL.bin");
+#elif Nivel
+  Serial.println("Firmware Nivel - JSN-SR04M-2");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WINivelJSN.bin");
+#elif Minver
+  Serial.println("Firmware MinVer");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WIMV.bin");
+#else
+  Serial.println("Firmware WIFI");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI.bin");
+#endif
+#else
+#if Tdisplaydisp
+  Serial.println("Firmware WITD WPA2");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WITDWPA2.bin");
+#elif OLED96display
+  Serial.println("Firmware WI96 WPA2");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI96WPA2.bin");
+#elif OLED66display
+  Serial.println("Firmware WI66 WPA2");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WI66WPA2.bin");
+#elif SoundMeter
+  Serial.println("Firmware SP SoundMeter");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WISPMeterWPA2.bin");
+#else
+  Serial.println("Firmware WPA2");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WIWPA2.bin");
+#endif
+#endif
+
+  switch (ret)
+  {
+
+    case HTTP_UPDATE_FAILED:
+      Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
+
+#if Tdisplaydisp
+      tft.fillScreen(TFT_ORANGE);
+      tft.drawString("ACTUALIZACION FALLIDA", tft.width() / 2, tft.height() / 2);
+#elif (OLED66 == true || OLED96 == true)
+      pageStart();
+      u8g2.setFont(u8g2_font_5x8_tf);
+      u8g2.setCursor(0, (dh / 2 - 4));
+      u8g2.print("Act Fallo");
+      pageEnd();
+#endif
+      delay(1000);
+      break;
+
+    case HTTP_UPDATE_NO_UPDATES:
+      Serial.println(F("HTTP_FIRMWARE_UPDATE_NO_UPDATES"));
+      break;
+
+    case HTTP_UPDATE_OK:
+      Serial.println(F("HTTP_FIRMWARE_UPDATE_OK"));
+
+#if Tdisplaydisp
+      tft.fillScreen(TFT_ORANGE);
+      tft.drawString("ACTUALIZACION COMPLETA", tft.width() / 2, tft.height() / 2);
+#elif (OLED66 == true || OLED96 == true)
+      pageStart();
+      u8g2.setFont(u8g2_font_5x8_tf);
+      u8g2.setCursor(0, (dh / 2 - 4));
+      u8g2.print("Act OK");
+      pageEnd();
+#endif
+      delay(1000);
+      break;
+  }
+
+  // ESP8266 Firmware Update
+
+#else
+
+  // For remote firmware update
+  BearSSL::WiFiClientSecure UpdateClient;
+  int freeheap = ESP.getFreeHeap();
+
+  Serial.println(F("### FIRMWARE UPGRADE ###"));
+
+  ESPhttpUpdate.setLedPin(LEDPIN, LOW);
+
+  // Add optional callback notifiers
+  ESPhttpUpdate.onStart(update_started);
+  ESPhttpUpdate.onEnd(update_finished);
+  ESPhttpUpdate.onProgress(update_progress);
+  ESPhttpUpdate.onError(update_error);
+  UpdateClient.setInsecure();
+
+  // Try to set a smaller buffer size for BearSSL update
+  bool mfln = UpdateClient.probeMaxFragmentLength("raw.githubusercontent.com", 443, 512);
+  Serial.printf("\nConnecting to https://raw.githubusercontent.com\n");
+  Serial.printf("MFLN supported: %s\n", mfln ? "yes" : "no");
+  if (mfln)
+  {
+    UpdateClient.setBufferSizes(512, 512);
+  }
+  UpdateClient.connect("raw.githubusercontent.com", 443);
+  if (UpdateClient.connected())
+  {
+    Serial.printf("MFLN status: %s\n", UpdateClient.getMFLNStatus() ? "true" : "false");
+    Serial.printf("Memory used: %d\n", freeheap - ESP.getFreeHeap());
+    freeheap -= ESP.getFreeHeap();
+  }
+  else
+  {
+    Serial.printf("Unable to connect\n");
+  }
+
+  // Run http update
+  // CAMBIAR A MAIN no en branch
+
+#if WPA2
+#if Rosver
+  Serial.println("Firmware ESP8266WI_WPA2Rosver");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WI_WPA2Rosver.bin");
+#else
+  Serial.println("Firmware ESP8266WI_WPA2");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WI_WPA2.bin");
+#endif
+#else
+#if Rosver
+  Serial.println("Firmware ESP8266WI_Rosver");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WI_Rosver.bin");
+#elif MinVer
+  Serial.println("Firmware ESP8266WI_MinVer");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WIMV.bin");
+#elif MinVerSD
+  Serial.println("Firmware ESP8266WI_MinVerSD");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WIMVSD.bin");
+#elif MobData
+  Serial.println("Firmware ESP8266WI_MobData");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WIMobData.bin");
+#elif SoundMeter
+#if !Influxver
+  Serial.println("Firmware ESP8266WI_SoundMeter");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISPMeter.bin");
+#else
+  Serial.println("Firmware ESP8266WI_SoundMeter_InfluxDB");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WISPMeterInflux.bin");
+#endif
+#elif Rain
+  Serial.println("Firmware ESP8266WI_Rain_InfluxDB");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WIRainInfluxDB.bin");
+#elif ADXL
+  Serial.println("Firmware ESP8266WI_ADXL_InfluxDB");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WIADXLInfluxDB.bin");
+#elif Nivel
+  Serial.println("Firmware ESP8266WI_Nivel_JSN_InfluxDB");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WINivelJSNInfluxDB.bin");
+#else
+  Serial.println("Firmware ESP8266WIFI");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WI.bin");
+#endif
+#endif
+
+  switch (ret)
+  {
+    case HTTP_UPDATE_FAILED:
+      Serial.printf("HTTP_UPDATE_FAILED Error (%d): %s\n", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
+      break;
+
+    case HTTP_UPDATE_NO_UPDATES:
+      Serial.println(F("HTTP_UPDATE_NO_UPDATES"));
+      break;
+
+    case HTTP_UPDATE_OK:
+      Serial.println(F("HTTP_UPDATE_OK"));
+      break;
+  }
+
+#endif
+}
+
+void update_started()
+{
+  Serial.println(F("CALLBACK:  HTTP update process started"));
+  updating = true;
+}
+
+void update_finished()
+{
+  Serial.println(F("CALLBACK:  HTTP update process finished"));
+  Serial.println(F("### FIRMWARE UPGRADE COMPLETED - REBOOT ###"));
+  updating = false;
+}
+
+void update_progress(int cur, int total)
+{
+  Serial.printf("CALLBACK:  HTTP update process at %d of %d bytes...\n", cur, total);
+}
+
+void update_error(int err)
+{
+  Serial.printf("CALLBACK:  HTTP update fatal error code %d\n", err);
+  updating = false;
+}
+
+#endif
+
+////////////////////////////////////////////////////////////////////////////////
+//  9. EEPROM
+////////////////////////////////////////////////////////////////////////////////
+
+void Read_EEPROM()
+{
+#if ESP8266
+
+  // The begin() call will find the data previously saved in EEPROM if the same size
+  // as was previously committed. If the size is different then the EEEPROM data is cleared.
+  // Note that this is not made permanent until you call commit();
+  EEPROM.begin(sizeof(MyConfigStruct));
+  // Check if the EEPROM contains valid data from another run
+  // If so, overwrite the 'default' values set up in our struct
+  if (EEPROM.percentUsed() >= 0)
+  {
+    Serial.println(F("EEPROM has data from a previous run."));
+    Serial.print(EEPROM.percentUsed());
+    Serial.println(F("% of ESP flash space currently used"));
+
+    // Read saved data
+    EEPROM.get(0, eepromConfig);
+    //    Print_Config();
+  }
+  else
+  {
+    aireciudadano_device_id.toCharArray(eepromConfig.aireciudadano_device_name, sizeof(eepromConfig.aireciudadano_device_name)); // Initialize aireciudadano_device_name with aireciudadano_device_id
+    Serial.println(F("No EEPROM data - using default config values"));
+  }
+
+#else
+  // Read AireCiudadano device persistent info
+  if (preferences.getBytesLength("config") > 0)
+  {
+    boolean result = preferences.getBytes("config", &eepromConfig, sizeof(eepromConfig));
+    if (result)
+    {
+      Serial.println(F("Config data read from flash"));
+    }
+    else
+    {
+      Serial.println(F("Config data could not be read from flash"));
+    }
+  }
+  else
+  {
+    aireciudadano_device_id.toCharArray(eepromConfig.aireciudadano_device_name, sizeof(eepromConfig.aireciudadano_device_name)); // Initialize aireciudadano_device_name with aireciudadano_device_id
+    Serial.println(F("No EEPROM data - using default config values"));
+  }
+
+#endif
+}
+
+void Write_EEPROM()
+{
+
+#if ESP8266
+  // The begin() call will find the data previously saved in EEPROM if the same size
+  // as was previously committed. If the size is different then the EEEPROM data is cleared.
+  // Note that this is not made permanent until you call commit();
+  EEPROM.begin(sizeof(MyConfigStruct));
+
+  // set the EEPROM data ready for writing
+  EEPROM.put(0, eepromConfig);
+
+  // write the data to EEPROM
+  boolean ok = EEPROM.commit();
+  Serial.println((ok) ? "EEPROM Commit OK" : "EEPROM Commit failed");
+
+#else
+  // Write AireCiudadano device persistent info
+  boolean result = preferences.putBytes("config", &eepromConfig, sizeof(eepromConfig));
+  if (result)
+  {
+    Serial.println(F("Config data written to flash"));
+  }
+  else
+  {
+    Serial.println(F("Config data could not be written to flash"));
+  }
+
+#endif
+}
+
+void Wipe_EEPROM()
+{ // Wipe AireCiudadano device persistent info to reset config data
+
+#if ESP8266
+  boolean result = EEPROM.wipe();
+  if (result)
+  {
+    Serial.println(F("All EEPROM data wiped"));
+  }
+  else
+  {
+    Serial.println(F("EEPROM data could not be wiped from flash store"));
+  }
+
+#else
+
+  boolean result = preferences.clear();
+  if (result)
+  {
+    Serial.println(F("All EEPROM data wiped"));
+  }
+  else
+  {
+    Serial.println(F("EEPROM data could not be wiped from flash store"));
+  }
+
+#endif
+}
+
+#if Bluetooth
+
+void FlashBluetoothTime()
+{
+  //  gadgetBle.setSampleIntervalMs(Bluetooth_loop_time * 1000); // Rutina para configurar el tiempo de muestreo del sensor y la app
+
+  if (eepromConfig.BluetoothTime != Bluetooth_loop_time)
+  {
+    eepromConfig.BluetoothTime = Bluetooth_loop_time;
+    Serial.print(F("Bluetooth time: "));
+    Serial.println(eepromConfig.BluetoothTime);
+    Write_EEPROM();
+  }
+}
+
+#endif
+
+////////////////////////////////////////////////////////////////////////////////
+//  10. LedNeo
+////////////////////////////////////////////////////////////////////////////////
+
+#if LedNeo
+
+void LedNeoAverage(int average)
+{
+  if (average < 13)
+  {
+    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(0, 255, 0))); // Encendemos el led verde
+    Serial.println("Led RGB Verde");
+  }
+  else if (average < 36)
+  {
+    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(180, 180, 0))); // Encendemos el led amarillo
+    Serial.println("Led RGB Amarillo");
+  }
+  else if (average < 56)
+  {
+    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(255, 125, 0))); // Encendemos el led naranja
+    Serial.println("Led RGB Naranja");
+  }
+  else if (average < 151)
+  {
+    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(255, 0, 0))); // Encendemos el led rojo
+    Serial.println("Led RGB Rojo");
+  }
+  else if (average < 251)
+  {
+    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(128, 0, 255))); // Encendemos el led morado
+    Serial.println("Led RGB Morado");
+  }
+  else
+  {
+    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(128, 128, 128))); // Encendemos el led blanco bajo brillo
+    Serial.println("Led RGB Cafe = Blanco");
+  }
+  LED_RGB.show(); // Enciende el color
+}
+#endif
+
+////////////////////////////////////////////////////////////////////////////////
+//  - Display
+////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
+//  11. TTGO TDisplay routines
+////////////////////////////////////////////////////////////////////////////////
+
+#if (Tdisplaydisp || OLED96display || OLED66display)
 #if !ESP8266
 #if Tdisplaydisp
 
@@ -5795,7 +7370,7 @@ void Button_Init()
 #if Wifi
     tft.drawString("ID " + aireciudadano_device_id, 8, 5);         //!!!Arreglar por nuevo tamaño String
 #elif Bluetooth
-//    tft.drawString("ID MyAm 00:" + provider.getDeviceIdString(), 8, 5);         //!!!Arreglar por nuevo tamaño String
+    //    tft.drawString("ID MyAm 00:" + provider.getDeviceIdString(), 8, 5);         //!!!Arreglar por nuevo tamaño String
     tft.drawString("ID MyAm:" + provider.getDeviceIdString(), 8, 5);         //!!!Arreglar por nuevo tamaño String
 #endif
     tft.drawString("SW ver: " + sw_version, 8, 22);
@@ -5830,27 +7405,27 @@ void Button_Init()
   button_bottom.setClickHandler([](Button2 & b)
   {
 
-///////////////
-/*
-    if (GainLTR390 == 1) {
-        GainLTR390 = 3;
-    }
-    else if (GainLTR390 == 3) {
-        GainLTR390 = 6;
-    }
-    else if (GainLTR390 == 6) {
-        GainLTR390 = 9;
-    }
-    else if (GainLTR390 == 9) {
-        GainLTR390 = 18;
-    }
-    else if (GainLTR390 == 18) {
-        GainLTR390 = 1;
-    }
-   
-    ltr.setGain(GainLTR390);
-*/
-//////////////
+    ///////////////
+    /*
+        if (GainLTR390 == 1) {
+            GainLTR390 = 3;
+        }
+        else if (GainLTR390 == 3) {
+            GainLTR390 = 6;
+        }
+        else if (GainLTR390 == 6) {
+            GainLTR390 = 9;
+        }
+        else if (GainLTR390 == 9) {
+            GainLTR390 = 18;
+        }
+        else if (GainLTR390 == 18) {
+            GainLTR390 = 1;
+        }
+
+        ltr.setGain(GainLTR390);
+    */
+    //////////////
 
     Serial.println(F("Bottom button short click"));
     tft.fillScreen(TFT_WHITE);
@@ -5873,17 +7448,17 @@ void Button_Init()
     else
       tft.drawString("Adjust Sensor", 3, 150);
     delay(2500);
-    if (digitalRead(BUTTON_TOP) == false){
+    if (digitalRead(BUTTON_TOP) == false) {
       delay(100);
-      if (digitalRead(BUTTON_TOP) == false){
+      if (digitalRead(BUTTON_TOP) == false) {
         delay(100);
-        if (digitalRead(BUTTON_TOP) == false){
-          if (FlagAdjustSensor == 0){
+        if (digitalRead(BUTTON_TOP) == false) {
+          if (FlagAdjustSensor == 0) {
             FlagAdjustSensor = 1;
             Serial.println("Adjust Sensor");
             tft.drawString("Adjust Sens        ", 3, 150);
           }
-          else{
+          else {
             FlagAdjustSensor = 0;
             Serial.println("No Adjust Sensor");
             tft.drawString("NO Adjust Sens  ", 3, 150);
@@ -6047,791 +7622,6 @@ void Update_Display()
 #endif
 #endif
 
-#if (OLED96display || OLED66display)
-
-void UpdateOLED()
-{
-  //  Serial.println(F("Sensor Read Update OLED");
-  pageStart();
-  displaySensorAverage(pm25int);
-#if Wifi
-
-  displaySensorData(round(PM25_value), humi, temp, WiFi.RSSI());
-
-  if (FlagDATAicon == true)
-  {
-    u8g2.drawBitmap(dw - 25, dh - 7, 1, 8, Icono_data_on);
-    FlagDATAicon = false;
-  }
-#else
-  displaySensorData(round(PM25_value), humi, temp, 0);
-  TimeConfig();
-#endif
-  if (toggleLive)
-#if Bluetooth
-    u8g2.drawBitmap(dw - 19, dh - 8, 1, 8, Icono_bt_on);
-#else
-    u8g2.drawBitmap(dw - 15, dh - 7, 1, 8, Icono_sensor_live);
-#endif
-  toggleLive = !toggleLive;
-  pageEnd();
-}
-#endif
-#endif
-
-#if Bluetooth
-void TimeConfig()
-{
-  if (digitalRead(BUTTON_BOTTOM) == false)
-  {
-    delay(500);
-    if (digitalRead(BUTTON_BOTTOM) == false)
-    {
-#if !CO2sensor
-#if (OLED96display || OLED66display)
-
-      pageStart();
-      u8g2.setFont(u8g2_font_6x10_tf);
-      u8g2.setCursor(0, dh / 2 - 7);
-      u8g2.print("Eval time:");
-      u8g2.setCursor(10, dh / 2 + 7);
-      u8g2.print(String(eepromConfig.BluetoothTime) + " seg");
-      pageEnd();
-
-#endif
-
-      delay(1000);
-
-      Bluetooth_loop_time = eepromConfig.BluetoothTime;
-
-      while (digitalRead(BUTTON_BOTTOM) == false)
-      {
-        if (Bluetooth_loop_time == 2)
-          Bluetooth_loop_time = 10;
-        else if (Bluetooth_loop_time == 10)
-          Bluetooth_loop_time = 60;
-        else if (Bluetooth_loop_time == 60)
-          Bluetooth_loop_time = 120;
-        else if (Bluetooth_loop_time == 120)
-          Bluetooth_loop_time = 300;
-        else if (Bluetooth_loop_time == 300)
-          Bluetooth_loop_time = 600;
-        else if (Bluetooth_loop_time == 600)
-          Bluetooth_loop_time = 3600;
-        else if (Bluetooth_loop_time == 3600)
-          Bluetooth_loop_time = 10800;
-        else
-          Bluetooth_loop_time = 2;
-
-#if (OLED96display || OLED66display)
-
-        pageStart();
-        u8g2.setCursor(0, dh / 2 - 7);
-        u8g2.print("Eval time");
-        u8g2.setCursor(8, dh / 2 + 7);
-        u8g2.print(String(Bluetooth_loop_time) + " seg");
-        pageEnd();
-
-#endif
-        Serial.print(F("Evaluation time: "));
-        Serial.print(Bluetooth_loop_time);
-        Serial.println(F(" seg"));
-        delay(1000);
-      }
-      FlashBluetoothTime();
-#else
-#if (OLED96display || OLED66display)
-      u8g2.setFont(u8g2_font_6x10_tf);
-#endif
-      Serial.print("CALIBRATION:");
-      for (int i = 180; i > -1; i--)
-      { // loop from 0 to 180
-#if (OLED96display || OLED66display)
-        pageStart();
-        u8g2.setCursor(0, dh / 2 - 7);
-        u8g2.print("Calib time:");
-        u8g2.setCursor(8, dh / 2 + 7);
-        u8g2.print(String(i) + " seg");
-        pageEnd();
-#endif
-        delay(1000); // wait 1000 ms
-
-        if (toggleLive == false)
-        {
-          if (SCD30sen == true)
-          {
-            pm25int = airSensor.getCO2();
-            Serial.print(i);
-            Serial.print(" CO2(ppm):");
-            Serial.println(pm25int);
-            toggleLive = true;
-          }
-          else if (S8sen == true)
-          {
-            // Get CO2 measure
-            pm25int = sensor_S8->get_co2();
-            Serial.print(i);
-            Serial.print(" CO2(ppm):");
-            Serial.println(pm25int);
-            toggleLive = true;
-          }
-        }
-        else
-          toggleLive = false;
-      }
-      if (SCD30sen == true)
-        airSensor.setForcedRecalibrationFactor(400);
-      else if (S8sen == true)
-        sensor_S8->manual_calibration();
-      Serial.println("Resetting forced calibration factor to 400: done");
-#if (OLED96display || OLED66display)
-      pageStart();
-      u8g2.setCursor(0, dh / 2 - 2);
-      u8g2.print("Reset calib:");
-      u8g2.setCursor(8, dh / 2 + 7);
-      u8g2.print("400 ppm");
-      pageEnd();
-#endif
-      delay(5000);
-#endif
-    }
-  }
-}
-
-void FlashBluetoothTime()
-{
-  //  gadgetBle.setSampleIntervalMs(Bluetooth_loop_time * 1000); // Rutina para configurar el tiempo de muestreo del sensor y la app
-
-  if (eepromConfig.BluetoothTime != Bluetooth_loop_time)
-  {
-    eepromConfig.BluetoothTime = Bluetooth_loop_time;
-    Serial.print(F("Bluetooth time: "));
-    Serial.println(eepromConfig.BluetoothTime);
-    Write_EEPROM();
-  }
-}
-
-#endif
-
-void Get_AireCiudadano_DeviceId()
-{ // Get TTGO T-Display info and fill up aireciudadano_device_id with last 6 digits (in HEX) of WiFi mac address or Custom_Name + 6 digits
-  char aireciudadano_device_id_endframe[10];
-
-#if !ESP8266
-
-  for (int i = 0; i < 17; i = i + 8)
-  {
-    chipId |= ((ESP.getEfuseMac() >> (40 - i)) & 0xff) << i;
-  }
-  chipIdHEX = String(chipId, HEX);
-  strncpy(aireciudadano_device_id_endframe, chipIdHEX.c_str(), sizeof(aireciudadano_device_id_endframe));
-#if Wifi
-  Aireciudadano_Characteristics();
-#endif
-  Serial.printf("ESP32 Chip model = %s Rev %d.\t", ESP.getChipModel(), ESP.getChipRevision());
-  Serial.printf("This chip has %d cores and %dMB Flash.\n", ESP.getChipCores(), ESP.getFlashChipSize() / (1024 * 1024));
-
-#else
-
-#if Rosver
-  String macAddress = WiFi.macAddress(); // Get the MAC address as a string
-  uint64_t decimalNumber = 0;
-  int shiftBits = 40; // Start from the leftmost byte
-
-  for (int i = 0; i < 6; i++)
-  {
-    String hexComponent = macAddress.substring(i * 3, i * 3 + 2);
-    uint64_t decimalComponent = strtol(hexComponent.c_str(), NULL, 16);
-    decimalNumber |= (decimalComponent << shiftBits);
-    shiftBits -= 8;
-  }
-  chipId = decimalNumber;
-#else
-  chipId = ESP.getChipId();
-#endif
-
-  chipIdHEX = String(ESP.getChipId(), HEX);
-  strncpy(aireciudadano_device_id_endframe, chipIdHEX.c_str(), sizeof(aireciudadano_device_id_endframe));
-#if Wifi
-#if !(Rosver || MinVer || MobData || MinVerSD)
-  Aireciudadano_Characteristics();
-#else
-  if (eepromConfig.ConfigValues[4] == '0')
-  {
-    SDflag = false;
-    Serial.println(F("Mode: Wifi or Mobile Data"));
-  }
-  else
-  {
-    SDflag = true;
-    Serial.println(F("Mode: SD & RTC"));
-  }
-
-#if MobData
-  FlagMobData = true;
-  Serial.println(F("Mobile Data mode"));
-#else
-  FlagMobData = false;
-  Serial.println(F("NO Mobile Data mode"));
-#endif
-
-#endif
-#endif
-  Serial.print(F("ESP8266 Chip ID = "));
-  Serial.print(chipIdHEX);
-  Serial.print(F(", ESP CoreVersion: "));
-  Serial.println(ESP.getCoreVersion());
-
-#endif
-
-  Serial.print(F("AireCiudadano Device ID: "));
-  if (String(aireciudadano_device_id).isEmpty())
-    aireciudadano_device_id = String("AireCiudadano_") + aireciudadano_device_id_endframe;
-  else
-    aireciudadano_device_id = String(eepromConfig.aireciudadano_device_name) + "_" + aireciudadano_device_id_endframe;
-  Serial.println(aireciudadano_device_id);
-}
-
-void Aireciudadano_Characteristics()
-{
-#if !Bluetooth
-#if !(Rosver || SoundMeter || MinVer || MobData || MinVerSD)
-  Serial.print(F("eepromConfig.ConfigValues: "));
-  Serial.println(eepromConfig.ConfigValues);
-
-  Serial.print(F("eepromConfig.ConfigValues[3]: "));
-  Serial.println(eepromConfig.ConfigValues[3]);
-  if (eepromConfig.ConfigValues[3] == '0')
-  {
-    AmbInOutdoors = false;
-    Serial.println(F("Outdoors"));
-  }
-  else
-  {
-    AmbInOutdoors = true;
-    Serial.println(F("Indoors"));
-  }
-
-  Serial.print(F("eepromConfig.ConfigValues[5]: "));
-  Serial.println(eepromConfig.ConfigValues[5]);
-
-  TDisplay = false;
-  OLED66 = false;
-  OLED96 = false;
-  if (eepromConfig.ConfigValues[5] == '0')
-    Serial.println(F("None Display"));
-  else if (eepromConfig.ConfigValues[5] == '1')
-  {
-    TDisplay = true;
-    Serial.println(F("TTGO TDisplay board"));
-  }
-  else if (eepromConfig.ConfigValues[5] == '2')
-  {
-    OLED96 = true;
-    Serial.println(F("OLED 0.96 inch display 128x64"));
-  }
-  else if (eepromConfig.ConfigValues[5] == '3')
-  {
-    OLED66 = true;
-    Serial.println(F("OLED 0.66 inch display 64x48"));
-  }
-
-  Serial.print(F("eepromConfig.ConfigValues[6]: "));
-  Serial.println(eepromConfig.ConfigValues[6]);
-  SHTsen = false;
-  AM2320sen = false;
-  if (eepromConfig.ConfigValues[6] == '0')
-    Serial.println(F("None sensor HYT"));
-  else if (eepromConfig.ConfigValues[6] == '1')
-  {
-    SHTsen = true;
-    Serial.println(F("SHT31/SEN4x sensor"));
-  }
-  else if (eepromConfig.ConfigValues[6] == '2')
-  {
-    AM2320sen = true;
-    Serial.println(F("AM2320 sensor"));
-  }
-
-  Serial.print(F("eepromConfig.ConfigValues[7]: "));
-  Serial.println(eepromConfig.ConfigValues[7]);
-  SPS30sen = false;
-  SEN5Xsen = false;
-  PMSsen = false;
-  if (eepromConfig.ConfigValues[7] == '0')
-    Serial.println(F("None PM sensor"));
-  else if (eepromConfig.ConfigValues[7] == '1')
-  {
-    SPS30sen = true;
-    Serial.println(F("SPS30 sensor"));
-  }
-  else if (eepromConfig.ConfigValues[7] == '2')
-  {
-    SEN5Xsen = true;
-    Serial.println(F("SEN5X sensor"));
-  }
-  else if (eepromConfig.ConfigValues[7] == '3')
-  {
-    PMSsen = true;
-    Serial.println(F("PMS sensor"));
-  }
-
-  Serial.print(F("eepromConfig.ConfigValues[4]: "));
-  Serial.println(eepromConfig.ConfigValues[4]);
-  if (eepromConfig.ConfigValues[4] == '0')
-  {
-    SDflag = false;
-    Serial.println(F("No SD & RTC"));
-  }
-  else
-  {
-    SDflag = true;
-    Serial.println(F("SD & RTC mode"));
-  }
-
-#if !WPA2
-  Serial.println(F("No WPA2"));
-#else
-  Serial.println(F("WPA2 security"));
-#endif
-
-#elif Rosver
-  Serial.print(F("eepromConfig.ConfigValues: "));
-  Serial.println(eepromConfig.ConfigValues);
-  Serial.print(F("eepromConfig.ConfigValues[3]: "));
-  Serial.println(eepromConfig.ConfigValues[3]);
-  if (eepromConfig.ConfigValues[3] == '0')
-  {
-    AmbInOutdoors = false;
-    Serial.println(F("Outdoors"));
-  }
-  else
-  {
-    AmbInOutdoors = true;
-    Serial.println(F("Indoors"));
-  }
-
-  if (PMSsen == true)
-    Serial.println(F("PMS sensor"));
-  else
-    Serial.println(F("No PMS sensor"));
-
-  if (SHTsen == true)
-    Serial.println(F("SHT31/SHT4x sensor"));
-  else
-    Serial.println("No SHT31/SHT4x sensor");
-
-  Serial.print(F("eepromConfig.ConfigValues[4]: "));
-  Serial.println(eepromConfig.ConfigValues[4]);
-  if (eepromConfig.ConfigValues[4] == '0')
-  {
-    SDflag = false;
-    Serial.println(F("No SD & RTC"));
-  }
-  else
-  {
-    SDflag = true;
-    Serial.println(F("SD & RTC mode"));
-  }
-
-  Serial.print(F("eepromConfig.ConfigValues[6]: "));
-  Serial.println(eepromConfig.ConfigValues[6]);
-  if (eepromConfig.ConfigValues[6] == '0')
-  {
-    MaxWifiTX = false;
-    Serial.println(F("Normal Wifi power TX"));
-  }
-
-  if (eepromConfig.ConfigValues[6] == '1')
-  {
-    MaxWifiTX = true;
-    Serial.println(F("MaxWifiTX activated"));
-  }
-#if !WPA2
-  Serial.println(F("No WPA2"));
-#else
-  Serial.println(F("WPA2 security"));
-#endif
-
-#elif MinVer
-
-  Serial.print(F("eepromConfig.ConfigValues: "));
-  Serial.println(eepromConfig.ConfigValues);
-
-  Serial.print(F("eepromConfig.ConfigValues[3]: "));
-  Serial.println(eepromConfig.ConfigValues[3]);
-  if (eepromConfig.ConfigValues[3] == '0')
-  {
-    AmbInOutdoors = false;
-    Serial.println(F("Outdoors"));
-  }
-  else
-  {
-    AmbInOutdoors = true;
-    Serial.println(F("Indoors"));
-  }
-
-  Serial.print(F("eepromConfig.ConfigValues[6]: "));
-  Serial.println(eepromConfig.ConfigValues[6]);
-  if (eepromConfig.ConfigValues[6] == '0')
-  {
-    MaxWifiTX = false;
-    Serial.println(F("Normal Wifi power TX"));
-  }
-
-  if (eepromConfig.ConfigValues[6] == '1')
-  {
-    MaxWifiTX = true;
-    Serial.println(F("MaxWifiTX activated"));
-  }
-
-  if (SPS30sen == true)
-    Serial.println(F("SPS30 sensor"));
-  else
-    Serial.println(F("No SPS30 sensor"));
-
-  if (SEN5Xsen == true)
-    Serial.println(F("SEN5X sensor"));
-  else
-    Serial.println(F("No SEN5X sensor"));
-
-  if (PMSsen == true)
-    Serial.println(F("PMS sensor"));
-  else
-    Serial.println(F("No PMS sensor"));
-
-  if (SHTsen == true)
-    Serial.println(F("SHT31/SHT4x sensor"));
-  else
-    Serial.println("No SHT31/SHT4x sensor");
-
-#elif MinVerSD
-
-  Serial.print(F("eepromConfig.ConfigValues: "));
-  Serial.println(eepromConfig.ConfigValues);
-
-  Serial.print(F("eepromConfig.ConfigValues[3]: "));
-  Serial.println(eepromConfig.ConfigValues[3]);
-  if (eepromConfig.ConfigValues[3] == '0')
-  {
-    AmbInOutdoors = false;
-    Serial.println(F("Outdoors"));
-  }
-  else
-  {
-    AmbInOutdoors = true;
-    Serial.println(F("Indoors"));
-  }
-
-  Serial.print(F("eepromConfig.ConfigValues[6]: "));
-  Serial.println(eepromConfig.ConfigValues[6]);
-  if (eepromConfig.ConfigValues[6] == '0')
-  {
-    MaxWifiTX = false;
-    Serial.println(F("Normal Wifi power TX"));
-  }
-
-  if (eepromConfig.ConfigValues[6] == '1')
-  {
-    MaxWifiTX = true;
-    Serial.println(F("MaxWifiTX activated"));
-  }
-
-  if (SPS30sen == true)
-    Serial.println(F("SPS30 sensor"));
-  else
-    Serial.println(F("No SPS30 sensor"));
-
-  if (SEN5Xsen == true)
-    Serial.println(F("SEN5X sensor"));
-  else
-    Serial.println(F("No SEN5X sensor"));
-
-  if (PMSsen == true)
-    Serial.println(F("PMS sensor"));
-  else
-    Serial.println(F("No PMS sensor"));
-
-  if (SHTsen == true)
-    Serial.println(F("SHT31/SHT4x sensor"));
-  else
-    Serial.println("No SHT31/SHT4x sensor");
-
-  Serial.print(F("eepromConfig.ConfigValues[4]: "));
-  Serial.println(eepromConfig.ConfigValues[4]);
-  if (eepromConfig.ConfigValues[4] == '0')
-  {
-    SDflag = false;
-    Serial.println(F("No SD & RTC"));
-  }
-  else
-  {
-    SDflag = true;
-    Serial.println(F("SD & RTC mode"));
-  }
-
-#elif MobData
-
-  Serial.print(F("eepromConfig.ConfigValues: "));
-  Serial.println(eepromConfig.ConfigValues);
-
-  Serial.print(F("eepromConfig.ConfigValues[3]: "));
-  Serial.println(eepromConfig.ConfigValues[3]);
-  if (eepromConfig.ConfigValues[3] == '0')
-  {
-    AmbInOutdoors = false;
-    Serial.println(F("Outdoors"));
-  }
-  else
-  {
-    AmbInOutdoors = true;
-    Serial.println(F("Indoors"));
-  }
-
-  if (SPS30sen == true)
-    Serial.println(F("SPS30 sensor"));
-  else
-    Serial.println(F("No SPS30 sensor"));
-
-  if (SEN5Xsen == true)
-    Serial.println(F("SEN5X sensor"));
-  else
-    Serial.println(F("No SEN5X sensor"));
-
-  if (PMSsen == true)
-    Serial.println(F("PMS sensor"));
-  else
-    Serial.println(F("No PMS sensor"));
-
-  if (SHTsen == true)
-    Serial.println(F("SHT31/SHT4x sensor"));
-  else
-    Serial.println("No SHT31/SHT4x sensor");
-
-#if MobData
-  FlagMobData = true;
-  Serial.println(F("Mobile Data mode"));
-#else
-  FlagMobData = false;
-  Serial.println(F("NO Mobile Data mode"));
-#endif
-
-#else // SoundMeter
-
-  Serial.print(F("eepromConfig.ConfigValues: "));
-  Serial.println(eepromConfig.ConfigValues);
-  Serial.print(F("eepromConfig.ConfigValues[3]: "));
-  Serial.println(eepromConfig.ConfigValues[3]);
-  if (eepromConfig.ConfigValues[3] == '0')
-  {
-    AmbInOutdoors = false;
-    Serial.println(F("Outdoors"));
-  }
-  else
-  {
-    AmbInOutdoors = true;
-    Serial.println(F("Indoors"));
-  }
-
-  Serial.print(F("eepromConfig.ConfigValues[6]: "));
-  Serial.println(eepromConfig.ConfigValues[6]);
-  if (eepromConfig.ConfigValues[6] == '0')
-  {
-    MaxWifiTX = false;
-    Serial.println(F("Normal Wifi power TX"));
-  }
-
-  if (eepromConfig.ConfigValues[6] == '1')
-  {
-    MaxWifiTX = true;
-    Serial.println(F("MaxWifiTX activated"));
-  }
-
-  Serial.println(F("Sound Meter MEMS sensor"));
-
-#if !WPA2
-  Serial.println(F("No WPA2"));
-#else
-  Serial.println(F("WPA2 security"));
-#endif
-
-#endif
-
-  // SPS30sen = 1
-  // SEN5Xsen = 2
-  // PMSsen = 4
-  // AdjPMS = 8
-  // SHTsen = 16
-  // AM2320sen =32
-  // SDflag = 64
-  // MobData = 128
-  // TDisplay = 256
-  // OLED66 = 512
-  // OLED96 = 1024
-  // TwoSensor = 2048
-  // AmbInOutdoors (Indoors) = 4096
-  // WPA2 = 8192
-  // ESP8266 = 16384
-  // Rosver = 32768
-  // Swver * 65536
-
-  if (SPS30sen)
-    IDn = IDn + 1;
-  if (SEN5Xsen)
-    IDn = IDn + 2;
-  if (PMSsen)
-    IDn = IDn + 4;
-  //  if (AdjPMS)
-  //    IDn = IDn + 8;
-  if (SHTsen)
-    IDn = IDn + 16;
-  if (AM2320sen)
-    IDn = IDn + 32;
-  //  if (SDflag)
-  //    IDn = IDn + 64;
-#if SaveSDyRTC
-  IDn = IDn + 64;
-#endif
-#if SoundMeter
-  IDn = IDn + 128;
-#endif
-  if (TDisplay)
-    IDn = IDn + 256;
-  if (OLED66 || OLED96)
-    IDn = IDn + 512;
-  //  if (OLED96)
-  //    IDn = IDn + 1024;
-  if (FlagMobData)
-    IDn = IDn + 1024;
-#if TwoPMS
-  IDn = IDn + 2048; // Solo para PMS, si se quiere para SEN5X pasarla a var y setearla en codigo
-#endif
-  if (AmbInOutdoors)
-    IDn = IDn + 4096;
-#if WPA2
-  IDn = IDn + 8192;
-#endif
-#if ESP8266
-  IDn = IDn + 16384;
-#endif
-#if Rosver
-  IDn = IDn + 32768;
-#endif
-  IDn = IDn + (Swver * 65536);
-  Serial.print(F("IDn: "));
-  Serial.println(IDn);
-#endif
-}
-
-void Read_EEPROM()
-{
-#if ESP8266
-
-  // The begin() call will find the data previously saved in EEPROM if the same size
-  // as was previously committed. If the size is different then the EEEPROM data is cleared.
-  // Note that this is not made permanent until you call commit();
-  EEPROM.begin(sizeof(MyConfigStruct));
-  // Check if the EEPROM contains valid data from another run
-  // If so, overwrite the 'default' values set up in our struct
-  if (EEPROM.percentUsed() >= 0)
-  {
-    Serial.println(F("EEPROM has data from a previous run."));
-    Serial.print(EEPROM.percentUsed());
-    Serial.println(F("% of ESP flash space currently used"));
-
-    // Read saved data
-    EEPROM.get(0, eepromConfig);
-    //    Print_Config();
-  }
-  else
-  {
-    aireciudadano_device_id.toCharArray(eepromConfig.aireciudadano_device_name, sizeof(eepromConfig.aireciudadano_device_name)); // Initialize aireciudadano_device_name with aireciudadano_device_id
-    Serial.println(F("No EEPROM data - using default config values"));
-  }
-
-#else
-  // Read AireCiudadano device persistent info
-  if (preferences.getBytesLength("config") > 0)
-  {
-    boolean result = preferences.getBytes("config", &eepromConfig, sizeof(eepromConfig));
-    if (result)
-    {
-      Serial.println(F("Config data read from flash"));
-    }
-    else
-    {
-      Serial.println(F("Config data could not be read from flash"));
-    }
-  }
-  else
-  {
-    aireciudadano_device_id.toCharArray(eepromConfig.aireciudadano_device_name, sizeof(eepromConfig.aireciudadano_device_name)); // Initialize aireciudadano_device_name with aireciudadano_device_id
-    Serial.println(F("No EEPROM data - using default config values"));
-  }
-
-#endif
-}
-
-void Write_EEPROM()
-{
-
-#if ESP8266
-  // The begin() call will find the data previously saved in EEPROM if the same size
-  // as was previously committed. If the size is different then the EEEPROM data is cleared.
-  // Note that this is not made permanent until you call commit();
-  EEPROM.begin(sizeof(MyConfigStruct));
-
-  // set the EEPROM data ready for writing
-  EEPROM.put(0, eepromConfig);
-
-  // write the data to EEPROM
-  boolean ok = EEPROM.commit();
-  Serial.println((ok) ? "EEPROM Commit OK" : "EEPROM Commit failed");
-
-#else
-  // Write AireCiudadano device persistent info
-  boolean result = preferences.putBytes("config", &eepromConfig, sizeof(eepromConfig));
-  if (result)
-  {
-    Serial.println(F("Config data written to flash"));
-  }
-  else
-  {
-    Serial.println(F("Config data could not be written to flash"));
-  }
-
-#endif
-}
-
-void Wipe_EEPROM()
-{ // Wipe AireCiudadano device persistent info to reset config data
-
-#if ESP8266
-  boolean result = EEPROM.wipe();
-  if (result)
-  {
-    Serial.println(F("All EEPROM data wiped"));
-  }
-  else
-  {
-    Serial.println(F("EEPROM data could not be wiped from flash store"));
-  }
-
-#else
-
-  boolean result = preferences.clear();
-  if (result)
-  {
-    Serial.println(F("All EEPROM data wiped"));
-  }
-  else
-  {
-    Serial.println(F("EEPROM data could not be wiped from flash store"));
-  }
-
-#endif
-}
-
 #if Tdisplaydisp
 
 #if Bluetooth
@@ -6918,7 +7708,7 @@ void Suspend_Device()
 
 #if LTR390UV
     digitalWrite(EnLTR390, LOW); // LTR390 off
-#endif  
+#endif
 
 #if Tdisplaydisp
 
@@ -6970,182 +7760,7 @@ void Suspend_Device()
 #endif
 }
 
-void print_reset_reason(RESET_REASON reason)
-{
-  switch (reason)
-  {
-    case 1:
-      Serial.println(F("POWERON_RESET"));
-      ResetFlag = true;
-      DeepSleepFlag = false;
-      break; /**<1,  Vbat power on reset*/
-    case 3:
-      Serial.println(F("SW_RESET"));
-      break; /**<3,  Software reset digital core*/
-    case 4:
-      Serial.println(F("OWDT_RESET"));
-      break; /**<4,  Legacy watch dog reset digital core*/
-    case 5:
-      Serial.println(F("DEEPSLEEP_RESET"));
-      DeepSleepFlag = true;
-      ResetFlag = false;
-      break; /**<5,  Deep Sleep reset digital core*/
-    case 6:
-      Serial.println(F("SDIO_RESET"));
-      break; /**<6,  Reset by SLC module, reset digital core*/
-    case 7:
-      Serial.println(F("TG0WDT_SYS_RESET"));
-      break; /**<7,  Timer Group0 Watch dog reset digital core*/
-    case 8:
-      Serial.println(F("TG1WDT_SYS_RESET"));
-      break; /**<8,  Timer Group1 Watch dog reset digital core*/
-    case 9:
-      Serial.println(F("RTCWDT_SYS_RESET"));
-      break; /**<9,  RTC Watch dog Reset digital core*/
-    case 10:
-      Serial.println(F("INTRUSION_RESET"));
-      break; /**<10, Instrusion tested to reset CPU*/
-    case 11:
-      Serial.println(F("TGWDT_CPU_RESET"));
-      break; /**<11, Time Group reset CPU*/
-    case 12:
-      Serial.println(F("SW_CPU_RESET"));
-      ResetFlag = false;
-      DeepSleepFlag = false;
-      break; /**<12, Software reset CPU*/
-    case 13:
-      Serial.println(F("RTCWDT_CPU_RESET"));
-      break; /**<13, RTC Watch dog Reset CPU*/
-    case 14:
-      Serial.println(F("EXT_CPU_RESET"));
-      break; /**<14, for APP CPU, reseted by PRO CPU*/
-    case 15:
-      Serial.println(F("RTCWDT_BROWN_OUT_RESET"));
-      break; /**<15, Reset when the vdd voltage is not stable*/
-    case 16:
-      Serial.println(F("RTCWDT_RTC_RESET"));
-      break; /**<16, RTC Watch dog reset digital core and rtc module*/
-    default:
-      Serial.println(F("NO_MEAN"));
-  }
-}
-
 #endif
-
-#if (OLED96display || OLED66display)
-
-void displayInit()
-{
-  u8g2.setBusClock(100000);
-  u8g2.begin();
-  u8g2.setFont(u8g2_font_6x10_tf);
-  u8g2.setContrast(255);
-  u8g2.setFontRefHeightExtendedText();
-  u8g2.setDrawColor(1);
-  u8g2.setFontPosTop();
-  u8g2.setFontDirection(0);
-  u8g2.setFontMode(0);
-  dw = u8g2.getDisplayWidth();
-  dh = u8g2.getDisplayHeight();
-  //  Serial.println(F("OLED display ready"));
-}
-
-void showWelcome()
-{
-  u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_5x8_tf);
-  u8g2.drawStr(0, 0, "AireCiudadano");
-  u8g2.sendBuffer();
-  u8g2.drawStr(0, 8, "ver: ");
-  u8g2.sendBuffer();
-  u8g2.drawStr(22, 8, sw_version.c_str());
-  u8g2.sendBuffer();
-  lastDrawedLine = 10;
-  Serial.println(F("OLED display ready"));
-  u8g2.sendBuffer();
-}
-
-void welcomeAddMessage(String msg)
-{
-  u8g2.setFont(u8g2_font_4x6_tf);
-  u8g2.drawStr(0, lastDrawedLine, msg.c_str());
-  lastDrawedLine = lastDrawedLine + 7;
-  u8g2.sendBuffer();
-}
-
-void AddMessage(String msg)
-{
-  u8g2.setFont(u8g2_font_4x6_tf);
-  u8g2.drawStr(7, lastDrawedLine, msg.c_str());
-  u8g2.sendBuffer();
-}
-
-void displayCenterBig(String msg)
-{
-#if !CO2sensor
-  if (dw > 64)
-  {
-    u8g2.setCursor(dw - 64, 6);
-    u8g2.setFont(u8g2_font_inb24_mn);
-  }
-  else
-  {
-    u8g2.setCursor(dw - 28, 9);
-    u8g2.setFont(u8g2_font_9x18B_tf);
-  }
-  u8g2.print(msg.c_str());
-
-  u8g2.setCursor(100, 37);
-  u8g2.setFont(u8g2_font_5x7_tf);
-  u8g2.print("ug/m3");
-#else
-  if (dw > 64)
-  {
-    u8g2.setCursor(dw - 62, 10);
-    u8g2.setFont(u8g2_font_inb19_mn);
-  }
-  else
-  {
-    u8g2.setCursor(dw - 27, 9);
-    u8g2.setFont(u8g2_font_7x13B_tf);
-  }
-  u8g2.print(msg.c_str());
-
-  u8g2.setCursor(100, 37);
-  u8g2.setFont(u8g2_font_5x7_tf);
-  u8g2.print("ppm");
-#endif
-}
-
-void displayBottomLine(String msg)
-{
-  u8g2.setFont(u8g2_font_4x6_tf);
-  u8g2.print(msg);
-}
-
-void displayEmoticonLabel(int cursor, String msg)
-{
-  u8g2.setFont(u8g2_font_unifont_t_emoticons);
-  u8g2.drawGlyph(76, 12, cursor);
-  u8g2.setFont(u8g2_font_4x6_tf);
-  u8g2.setCursor(77, 17);
-  u8g2.print(msg);
-}
-
-void displayTextLevel(String msg)
-{
-  u8g2.setFont(u8g2_font_5x7_tf);
-  u8g2.setCursor(29, 31); //(35, 26);; (25, 29); (30, 29); (29, 28); (25, 30)(30, 29)
-  u8g2.print(msg);        // 4 8 7 6 7 6
-}
-
-void displayColorLevel(int cursor, String msg)
-{
-  u8g2.setFont(u8g2_font_4x6_tf);
-  u8g2.setCursor(35, 22);
-  u8g2.print(msg);
-}
-
 #endif
 
 #if !ESP8266
@@ -7272,7 +7887,7 @@ void displayAverage(int average)
   tft.drawString("PM2.5: ", 10, 165);
   tft.drawString(String(round(PM25_value), 0), 90, 165);
 #if ZH10sen
-tft.drawString("Voc: ", 34, 190);
+  tft.drawString("Voc: ", 34, 190);
   tft.drawString(String(vocIndex), 90, 190);
 #else
   tft.drawString("Voc: ", 34, 181);
@@ -7497,7 +8112,7 @@ tft.drawString("Voc: ", 34, 190);
   tft.setFreeFont(FF90);
   tft.drawString("UVindex", 25, 197);
   tft.drawString(String(getUVIval, 1), 99, 197);
-//  tft.drawString("r: " + String(ltr.uv()), 60, 220);
+  //  tft.drawString("r: " + String(ltr.uv()), 60, 220);
   tft.drawString("r: " + String(rawUVS), 58, 220);
 
 #if Wifi
@@ -7631,6 +8246,279 @@ tft.drawString("Voc: ", 34, 190);
 #endif
 #endif
 
+////////////////////////////////////////////////////////////////////////////////
+//  12. LCD Display routines
+////////////////////////////////////////////////////////////////////////////////
+
+#if (OLED96display || OLED66display)
+
+void UpdateOLED()
+{
+  //  Serial.println(F("Sensor Read Update OLED");
+  pageStart();
+  displaySensorAverage(pm25int);
+#if Wifi
+
+  displaySensorData(round(PM25_value), humi, temp, WiFi.RSSI());
+
+  if (FlagDATAicon == true)
+  {
+    u8g2.drawBitmap(dw - 25, dh - 7, 1, 8, Icono_data_on);
+    FlagDATAicon = false;
+  }
+#else
+  displaySensorData(round(PM25_value), humi, temp, 0);
+  TimeConfig();
+#endif
+  if (toggleLive)
+#if Bluetooth
+    u8g2.drawBitmap(dw - 19, dh - 8, 1, 8, Icono_bt_on);
+#else
+    u8g2.drawBitmap(dw - 15, dh - 7, 1, 8, Icono_sensor_live);
+#endif
+  toggleLive = !toggleLive;
+  pageEnd();
+}
+#endif
+// #endif ?????????????????????????????????????????
+
+#if Bluetooth
+void TimeConfig()
+{
+  if (digitalRead(BUTTON_BOTTOM) == false)
+  {
+    delay(500);
+    if (digitalRead(BUTTON_BOTTOM) == false)
+    {
+#if !CO2sensor
+#if (OLED96display || OLED66display)
+
+      pageStart();
+      u8g2.setFont(u8g2_font_6x10_tf);
+      u8g2.setCursor(0, dh / 2 - 7);
+      u8g2.print("Eval time:");
+      u8g2.setCursor(10, dh / 2 + 7);
+      u8g2.print(String(eepromConfig.BluetoothTime) + " seg");
+      pageEnd();
+
+#endif
+
+      delay(1000);
+
+      Bluetooth_loop_time = eepromConfig.BluetoothTime;
+
+      while (digitalRead(BUTTON_BOTTOM) == false)
+      {
+        if (Bluetooth_loop_time == 2)
+          Bluetooth_loop_time = 10;
+        else if (Bluetooth_loop_time == 10)
+          Bluetooth_loop_time = 60;
+        else if (Bluetooth_loop_time == 60)
+          Bluetooth_loop_time = 120;
+        else if (Bluetooth_loop_time == 120)
+          Bluetooth_loop_time = 300;
+        else if (Bluetooth_loop_time == 300)
+          Bluetooth_loop_time = 600;
+        else if (Bluetooth_loop_time == 600)
+          Bluetooth_loop_time = 3600;
+        else if (Bluetooth_loop_time == 3600)
+          Bluetooth_loop_time = 10800;
+        else
+          Bluetooth_loop_time = 2;
+
+#if (OLED96display || OLED66display)
+
+        pageStart();
+        u8g2.setCursor(0, dh / 2 - 7);
+        u8g2.print("Eval time");
+        u8g2.setCursor(8, dh / 2 + 7);
+        u8g2.print(String(Bluetooth_loop_time) + " seg");
+        pageEnd();
+
+#endif
+        Serial.print(F("Evaluation time: "));
+        Serial.print(Bluetooth_loop_time);
+        Serial.println(F(" seg"));
+        delay(1000);
+      }
+      FlashBluetoothTime();
+#else
+#if (OLED96display || OLED66display)
+      u8g2.setFont(u8g2_font_6x10_tf);
+#endif
+      Serial.print("CALIBRATION:");
+      for (int i = 180; i > -1; i--)
+      { // loop from 0 to 180
+#if (OLED96display || OLED66display)
+        pageStart();
+        u8g2.setCursor(0, dh / 2 - 7);
+        u8g2.print("Calib time:");
+        u8g2.setCursor(8, dh / 2 + 7);
+        u8g2.print(String(i) + " seg");
+        pageEnd();
+#endif
+        delay(1000); // wait 1000 ms
+
+        if (toggleLive == false)
+        {
+          if (SCD30sen == true)
+          {
+            pm25int = airSensor.getCO2();
+            Serial.print(i);
+            Serial.print(" CO2(ppm):");
+            Serial.println(pm25int);
+            toggleLive = true;
+          }
+          else if (S8sen == true)
+          {
+            // Get CO2 measure
+            pm25int = sensor_S8->get_co2();
+            Serial.print(i);
+            Serial.print(" CO2(ppm):");
+            Serial.println(pm25int);
+            toggleLive = true;
+          }
+        }
+        else
+          toggleLive = false;
+      }
+      if (SCD30sen == true)
+        airSensor.setForcedRecalibrationFactor(400);
+      else if (S8sen == true)
+        sensor_S8->manual_calibration();
+      Serial.println("Resetting forced calibration factor to 400: done");
+#if (OLED96display || OLED66display)
+      pageStart();
+      u8g2.setCursor(0, dh / 2 - 2);
+      u8g2.print("Reset calib:");
+      u8g2.setCursor(8, dh / 2 + 7);
+      u8g2.print("400 ppm");
+      pageEnd();
+#endif
+      delay(5000);
+#endif
+    }
+  }
+}
+
+#endif
+
+#if (OLED96display || OLED66display)
+
+void displayInit()
+{
+  u8g2.setBusClock(100000);
+  u8g2.begin();
+  u8g2.setFont(u8g2_font_6x10_tf);
+  u8g2.setContrast(255);
+  u8g2.setFontRefHeightExtendedText();
+  u8g2.setDrawColor(1);
+  u8g2.setFontPosTop();
+  u8g2.setFontDirection(0);
+  u8g2.setFontMode(0);
+  dw = u8g2.getDisplayWidth();
+  dh = u8g2.getDisplayHeight();
+  //  Serial.println(F("OLED display ready"));
+}
+
+void showWelcome()
+{
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_5x8_tf);
+  u8g2.drawStr(0, 0, "AireCiudadano");
+  u8g2.sendBuffer();
+  u8g2.drawStr(0, 8, "ver: ");
+  u8g2.sendBuffer();
+  u8g2.drawStr(22, 8, sw_version.c_str());
+  u8g2.sendBuffer();
+  lastDrawedLine = 10;
+  Serial.println(F("OLED display ready"));
+  u8g2.sendBuffer();
+}
+
+void welcomeAddMessage(String msg)
+{
+  u8g2.setFont(u8g2_font_4x6_tf);
+  u8g2.drawStr(0, lastDrawedLine, msg.c_str());
+  lastDrawedLine = lastDrawedLine + 7;
+  u8g2.sendBuffer();
+}
+
+void AddMessage(String msg)
+{
+  u8g2.setFont(u8g2_font_4x6_tf);
+  u8g2.drawStr(7, lastDrawedLine, msg.c_str());
+  u8g2.sendBuffer();
+}
+
+void displayCenterBig(String msg)
+{
+#if !CO2sensor
+  if (dw > 64)
+  {
+    u8g2.setCursor(dw - 64, 6);
+    u8g2.setFont(u8g2_font_inb24_mn);
+  }
+  else
+  {
+    u8g2.setCursor(dw - 28, 9);
+    u8g2.setFont(u8g2_font_9x18B_tf);
+  }
+  u8g2.print(msg.c_str());
+
+  u8g2.setCursor(100, 37);
+  u8g2.setFont(u8g2_font_5x7_tf);
+  u8g2.print("ug/m3");
+#else
+  if (dw > 64)
+  {
+    u8g2.setCursor(dw - 62, 10);
+    u8g2.setFont(u8g2_font_inb19_mn);
+  }
+  else
+  {
+    u8g2.setCursor(dw - 27, 9);
+    u8g2.setFont(u8g2_font_7x13B_tf);
+  }
+  u8g2.print(msg.c_str());
+
+  u8g2.setCursor(100, 37);
+  u8g2.setFont(u8g2_font_5x7_tf);
+  u8g2.print("ppm");
+#endif
+}
+
+void displayBottomLine(String msg)
+{
+  u8g2.setFont(u8g2_font_4x6_tf);
+  u8g2.print(msg);
+}
+
+void displayEmoticonLabel(int cursor, String msg)
+{
+  u8g2.setFont(u8g2_font_unifont_t_emoticons);
+  u8g2.drawGlyph(76, 12, cursor);
+  u8g2.setFont(u8g2_font_4x6_tf);
+  u8g2.setCursor(77, 17);
+  u8g2.print(msg);
+}
+
+void displayTextLevel(String msg)
+{
+  u8g2.setFont(u8g2_font_5x7_tf);
+  u8g2.setCursor(29, 31); //(35, 26);; (25, 29); (30, 29); (29, 28); (25, 30)(30, 29)
+  u8g2.print(msg);        // 4 8 7 6 7 6
+}
+
+void displayColorLevel(int cursor, String msg)
+{
+  u8g2.setFont(u8g2_font_4x6_tf);
+  u8g2.setCursor(35, 22);
+  u8g2.print(msg);
+}
+
+#endif
+
 #if (OLED96display || OLED66display)
 
 void displaySensorAverage(int average)
@@ -7759,183 +8647,4 @@ void pageEnd()
   u8g2.nextPage();
 }
 
-#endif
-
-#if LedNeo
-
-void LedNeoAverage(int average)
-{
-  if (average < 13)
-  {
-    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(0, 255, 0))); // Encendemos el led verde
-    Serial.println("Led RGB Verde");
-  }
-  else if (average < 36)
-  {
-    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(180, 180, 0))); // Encendemos el led amarillo
-    Serial.println("Led RGB Amarillo");
-  }
-  else if (average < 56)
-  {
-    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(255, 125, 0))); // Encendemos el led naranja
-    Serial.println("Led RGB Naranja");
-  }
-  else if (average < 151)
-  {
-    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(255, 0, 0))); // Encendemos el led rojo
-    Serial.println("Led RGB Rojo");
-  }
-  else if (average < 251)
-  {
-    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(128, 0, 255))); // Encendemos el led morado
-    Serial.println("Led RGB Morado");
-  }
-  else
-  {
-    LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(128, 128, 128))); // Encendemos el led blanco bajo brillo
-    Serial.println("Led RGB Cafe = Blanco");
-  }
-  LED_RGB.show(); // Enciende el color
-}
-#endif
-
-#if Bluetooth
-void Write_Bluetooth()
-{ // Write measurements to Bluetooth
-
-#if SoundMeter
-  provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
-  provider.commitSample(Bluetooth_loop_time);
-  Serial.print("Bluetooth frame SPL(dBA): ");
-  Serial.println(pm25int);
-#elif LTR390UV
-  provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
-  provider.commitSample(Bluetooth_loop_time);
-  Serial.print("Bluetooth frame UV Index: ");
-  Serial.println(pm25int);
-#elif CO2sensor
-  provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
-  provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
-  provider.writeValueToCurrentSample(pm25int, SignalType::CO2_PARTS_PER_MILLION);
-  provider.commitSample(Bluetooth_loop_time);
-  Serial.print("Bluetooth frame CO2(ppm): ");
-  Serial.print(pm25int);
-  Serial.print(", temp(°C): ");
-  Serial.print(temp);
-  Serial.print(", humidity(%): ");
-  Serial.println(humi);
-#elif NoxVoxTd
-#if ZH10sen
-  uint16_t vocint = vocIndex;
-#else
-  uint16_t vocint = round(vocIndex);
-#endif
-  uint16_t noxint = round(noxIndex);
-  provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
-  provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
-  provider.writeValueToCurrentSample(vocZH10, SignalType::VOC_INDEX);
-  provider.writeValueToCurrentSample(noxint, SignalType::NOX_INDEX);
-  provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
-  provider.commitSample(Bluetooth_loop_time);
-  Serial.print("Bluetooth frame PM2.5(ug/m3): ");
-  Serial.print(pm25int);
-#if ZH10sen
-  Serial.print(", Voc(ppb): ");
-  Serial.print(vocZH10);
-#else
-  Serial.print(", Voc Index: ");
-  Serial.print(vocint);
-  Serial.print(", Nox index: ");
-  Serial.print(noxint);
-#endif
-  Serial.print(", temp(°C): ");
-  Serial.print(temp);
-  Serial.print(", humidity(%): ");
-  Serial.println(humi);
-#else
-  if (SHT31sen == true || SHT4xsen == true || AM2320sen == true || data.HUMI != 0 || FlagSENHyT == true)
-  {
-    provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
-    provider.writeValueToCurrentSample(temp, SignalType::TEMPERATURE_DEGREES_CELSIUS);
-    provider.writeValueToCurrentSample(humi, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
-    provider.commitSample(Bluetooth_loop_time);
-    Serial.print("Bluetooth frame PM2.5(ug/m3): ");
-    Serial.print(pm25int);
-    Serial.print(", temp(°C): ");
-    Serial.print(temp);
-    Serial.print(", humidity(%): ");
-    Serial.println(humi);
-  }
-  else
-  {
-    provider.writeValueToCurrentSample(pm25int, SignalType::PM2P5_MICRO_GRAMM_PER_CUBIC_METER);
-    provider.writeValueToCurrentSample(0, SignalType::TEMPERATURE_DEGREES_CELSIUS);
-    provider.writeValueToCurrentSample(0, SignalType::RELATIVE_HUMIDITY_PERCENTAGE);
-    provider.commitSample(Bluetooth_loop_time);
-    Serial.print("Bluetooth frame PM2.5(ug/m3): ");
-    Serial.println(pm25int);
-  }
-#endif
-}
-#endif
-
-#if (SDyRTC || SaveSDyRTC || Rosver || MinVerSD)
-#if !WPA2
-void Write_SD()
-{ // Write date - time and measurements to SD card
-
-  DateTime now = rtc.now();
-
-  char buf1[] = "YYYY/MM/DD_hh:mm:ss";
-  String dataString = "";
-
-  // make a string for assembling the data to log:
-
-  dataString = now.toString(buf1);
-  dataString += "_";
-  dataString += pm25int;
-  if (SHT31sen == true || SHT4xsen == true || AM2320sen == true || data.HUMI != 0 || FlagSENHyT == true)
-  {
-    dataString += "_";
-    dataString += humi;
-    dataString += "_";
-    dataString += temp;
-  }
-
-  Serial.print(F("SDreset: "));
-  Serial.println(SDreset);
-  SDreset = SDreset - 1;
-
-  if (SDreset == 0)
-    dataString += "_RESET";
-
-  // dataFile = SD.open("datalog.txt", FILE_WRITE);
-  dataFile = SD.open(aireciudadano_device_id + ".txt", FILE_WRITE);
-
-  // if the file is available, write to it:
-  if (dataFile)
-  {
-    dataFile.println(dataString);
-    dataFile.close();
-    // print to the serial port too:
-    Serial.print(F("SD write: "));
-    Serial.println(dataString);
-    // LED Routine
-    digitalWrite(LEDPIN, LOW);
-    FlagLED = true;
-  }
-  // if the file isn't open, pop up an error:
-  else
-  {
-    Serial.println("SD write: error opening file");
-  }
-
-  if (SDreset == 0)
-  {
-    Serial.print(F("SD reset cycles: "));
-    Serial.println(ValSDreset);
-    ESP.restart();
-  }
-}
-#endif
 #endif
