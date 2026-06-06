@@ -101,9 +101,9 @@
 #define NoxVoxTd false   // Lectura de NoxVox
 // Influxver:
 #define Influxver true   // Set to true for InfluxDB version SP - Rain - Incli - Nivel
-#define SoundMeter true  // set to true for Sound Meter
+#define SoundMeter false // set to true for Sound Meter
 #define SoundAM false    // Set to true to Sound meter airplane mode
-#define Rain false       // Lectura de pluviometro
+#define Rain true        // Lectura de pluviometro
 #define Incli false      // Lectura de inclinometros
 #define ADXL false       // Lectura ADXL345
 #define LSM9 false       // Lectura LSM9DS1
@@ -971,6 +971,7 @@ float lluviaTotal = 0.0;
 unsigned int lluvia1minInt = 0;
 unsigned int lluviaTotalInt = 0;
 unsigned int pulsosTotal = 0;
+bool flagPulsos = false;
 
 // Variables para el Debouncing (anti-rebote)
 volatile unsigned long ultimoTiempoPulso = 0;
@@ -1178,15 +1179,15 @@ void setup()
   pinMode(PinRelayA, OUTPUT);
   pinMode(PinRelayB, OUTPUT);
   delay(100);
-  
+
   // Estado inicial: Ambos en LOW (0V) -> Relé en reposo (sin consumo)
   digitalWrite(PinRelayA, LOW);  // 0V
   digitalWrite(PinRelayB, HIGH); // 3.3V
   Serial.println("OFF RELAY");
-  
+
   // Pulso corto
   delay(50);
-  
+
   // APAGAR TODO
   digitalWrite(PinRelayA, LOW);
   digitalWrite(PinRelayB, LOW);
@@ -1437,14 +1438,14 @@ void setup()
   digitalWrite(OUT_EN, HIGH); // step-up on
 #else
 
-// Flujo de corriente: A -> B
+  // Flujo de corriente: A -> B
   Serial.println("ON RELAY!");
   digitalWrite(PinRelayA, HIGH); // 3.3V
   digitalWrite(PinRelayB, LOW);  // 0V
-  
+
   // Esperar solo lo necesario (el datasheet dice 5-10ms, usamos 50ms por seguridad)
   delay(50);
- 
+
   // APAGAR TODO (El relé se queda pegado mecánicamente)
   digitalWrite(PinRelayA, LOW);
   digitalWrite(PinRelayB, LOW);
@@ -1513,9 +1514,9 @@ void setup()
       Connect_WiFi();
       Serial.println("Connect_Wifi");
 
-      #if Influxver
+#if Influxver
       Serial.println("Data to InfluxDB platform");
-      #endif
+#endif
 
       // Attempt to connect to MQTT broker
       if (!err_wifi)
@@ -1746,6 +1747,10 @@ void loop()
   Read_Nivel_485();
 #endif
 
+#if Rain
+  Read_Rain();
+#endif
+
   // Measurement loop 1 seg
   if ((millis() - measurements_loop_start) >= measurements_loop_duration)
   {
@@ -1834,7 +1839,7 @@ void loop()
         PM25_accumulatedsam += PM25_valuesam;
 #endif
         PM25_samples++;
-    #if SoundAM
+#if SoundAM
         SP_samples++;
 #endif
         Con_loop_times++;
@@ -1844,12 +1849,12 @@ void loop()
     {
       // Rutina Test para enviar datos sin sensor conectado PM25 fake ESP8266
       // /*
-        PM25_value = random(10, 30);
-        PM25_accumulated += PM25_value;
-        PM25_samples++;
-        Con_loop_times++;
-        Serial.print(F("Valor random: "));
-        Serial.println(PM25_value);
+      PM25_value = random(10, 30);
+      PM25_accumulated += PM25_value;
+      PM25_samples++;
+      Con_loop_times++;
+      Serial.print(F("Valor random: "));
+      Serial.println(PM25_value);
       // */
       Serial.println(F("Medidor No configurado"));
 
@@ -2059,7 +2064,7 @@ void loop()
       MQTT_loop_start = millis();
 
 #if Rain
-      Read_Rain();
+      Read_Rain_1s();
 #endif
 
       // Message the MQTT broker in the cloud app to send the measured values
@@ -2224,8 +2229,7 @@ void IRAM_ATTR contarPulso() {
   if ((millis() - ultimoTiempoPulso) > tiempoDebounce) {
     contadorPulsos++;
     ultimoTiempoPulso = millis(); // Actualiza el tiempo del último pulso válido
-    Serial.print("Pulso #: ");
-    Serial.println(contadorPulsos);
+    flagPulsos = true;
   }
 }
 
@@ -3428,12 +3432,12 @@ void Send_Message_Cloud_App_MQTT()
   pm1int = round(pm1f);
 #elif Incli
 #if ADXL
-// PM251_value = ax
-// PM252_value = ay
-// PM11_value = az
-// PM251_value_ori = roll
-// PM252_value_ori = pitch
-// Las variables se * 1000.0 para que se puedan enviar en formato int
+  // PM251_value = ax
+  // PM252_value = ay
+  // PM11_value = az
+  // PM251_value_ori = roll
+  // PM252_value_ori = pitch
+  // Las variables se * 1000.0 para que se puedan enviar en formato int
   pm251f = PM251_accumulated / PM25_samples;    // ax
   pm251int = round(pm251f * 1000.0);
   pm252f = PM252_accumulated / PM25_samples;    // ay
@@ -3446,13 +3450,13 @@ void Send_Message_Cloud_App_MQTT()
   pm252intori = round(pm252fori * 1000.0);
   pm12int = 0;                                  // yaw = 0 = NA
 #elif LSM9
-// PM251_value = ax
-// PM252_value = ay
-// PM11_value = az
-// PM251_value_ori = roll
-// PM252_value_ori = pitch
-// PM12_value = yaw
-// Las variables se * 1000.0 para que se puedan enviar en formato int
+  // PM251_value = ax
+  // PM252_value = ay
+  // PM11_value = az
+  // PM251_value_ori = roll
+  // PM252_value_ori = pitch
+  // PM12_value = yaw
+  // Las variables se * 1000.0 para que se puedan enviar en formato int
   pm251f = PM251_accumulated / PM25_samples;    // ax
   pm251int = round(pm251f * 1000.0);
   pm252f = PM252_accumulated / PM25_samples;    // ay
@@ -5139,7 +5143,7 @@ void Read_Sensor()
       {
         Serial.print(F(" n/a"));
         humi = 0;
-      }        
+      }
       else
       {
         Serial.print(ambientHumidity);
@@ -5151,7 +5155,7 @@ void Read_Sensor()
         Serial.print(F(" n/a"));
         temp = 0;
       }
-        else
+      else
       {
         Serial.print(ambientTemperature);
         temp = round(ambientTemperature);
@@ -5247,17 +5251,17 @@ void Read_Sensor()
     {
       failpm = 0;
       PM25_value = data.PM_AE_UG_2_5;
-      
-////////////////////// TEMPORAL MODELO PMS en BLUETOOTH      
-//      Serial.print(F("PMS PM2.5 raw: "));
-//      Serial.print(PM25_value);
-//      Serial.print("   ");
-//      PM25_value = ((720 * PM25_value) / 1000);
-//      if (PM25_value < 0) {
-//        PM25_value = 0;
-//      }
-//      Serial.print(F("ADJ "));
-////////////////////////////////
+
+      ////////////////////// TEMPORAL MODELO PMS en BLUETOOTH
+      //      Serial.print(F("PMS PM2.5 raw: "));
+      //      Serial.print(PM25_value);
+      //      Serial.print("   ");
+      //      PM25_value = ((720 * PM25_value) / 1000);
+      //      if (PM25_value < 0) {
+      //        PM25_value = 0;
+      //      }
+      //      Serial.print(F("ADJ "));
+      ////////////////////////////////
 
       Serial.print(F("PMS PM2.5: "));
       Serial.print(PM25_value);
@@ -5303,12 +5307,12 @@ void Read_Sensor()
       Serial.println(F("No data by Plantower sensor!"));
       // Rutina Test para enviar datos sin sensor conectado PM25 fake ESP32
       // /*
-        PM25_value = random(10, 30);
-//        PM25_accumulated += PM25_value;
-//        PM25_samples++;
-//        Con_loop_times++;
-        Serial.print(F("Valor random: "));
-        Serial.println(PM25_value);
+      PM25_value = random(10, 30);
+      //        PM25_accumulated += PM25_value;
+      //        PM25_samples++;
+      //        Con_loop_times++;
+      Serial.print(F("Valor random: "));
+      Serial.println(PM25_value);
       // */
 #endif
 
@@ -5558,26 +5562,26 @@ void Read_SoundMeter()
 
 #if !ESP8266
 
-// Solo para el ESP32 porque acumula buffer, Lee TODOS los datos acumulados en el búfer hasta que esté vacío
-    while (Serial2.available() != 0) {
-      frame = Serial2.readStringUntil('\n');
-      PM25_value = frame.toFloat();
-    }
-// Al terminar el 'while', PM25_value tendrá el dato MÁS FRESCO
-    if (PM25_value > 255) 
-      PM25_value = 255;
-    if (PM25_value > dBAmax) 
-      dBAmax = PM25_value;
-    
-    Serial.print("SPL: ");
-    Serial.print(PM25_value);
-    Serial.print(" dBA    ");
-    Serial.print("Max: ");
-    Serial.print(dBAmax);
+  // Solo para el ESP32 porque acumula buffer, Lee TODOS los datos acumulados en el búfer hasta que esté vacío
+  while (Serial2.available() != 0) {
+    frame = Serial2.readStringUntil('\n');
+    PM25_value = frame.toFloat();
+  }
+  // Al terminar el 'while', PM25_value tendrá el dato MÁS FRESCO
+  if (PM25_value > 255)
+    PM25_value = 255;
+  if (PM25_value > dBAmax)
+    dBAmax = PM25_value;
+
+  Serial.print("SPL: ");
+  Serial.print(PM25_value);
+  Serial.print(" dBA    ");
+  Serial.print("Max: ");
+  Serial.print(dBAmax);
 #if !SoundAM
-    Serial.println(" dBA");
+  Serial.println(" dBA");
 #else
-    Serial.print(" dBA    ");
+  Serial.print(" dBA    ");
 #endif
 
 #else
@@ -5723,6 +5727,15 @@ void Setup_Rain()
 
 void Read_Rain()
 {
+  if (flagPulsos) {
+    flagPulsos = false;
+    Serial.print("Pulso #: ");
+    Serial.println(contadorPulsos);
+  }
+}
+
+void Read_Rain_1s()
+{
   // Deshabilita las interrupciones temporalmente para leer la variable de forma segura
   noInterrupts();
   pulsosTotal = pulsosTotal + contadorPulsos;
@@ -5766,15 +5779,15 @@ void Setup_Incli()
   }
   else
   {
-  accel.setRange(ADXL345_RANGE_2_G);
-  accel.setDataRate(DATA_RATE_ADXL);
-  Serial.println("Inclinómetro ADXL345 encontrado, modo: offsets grabados");
-  Serial.println("Offsets precalibrados (m/s^2): ");
-  Serial.print("ox: "); Serial.print(CALIB_OX, 2);
-  Serial.print("  oy: "); Serial.print(CALIB_OY, 2);
-  Serial.print("  oz: "); Serial.println(CALIB_OZ, 2);
-  Serial.println("X(m/s^2)   Y(m/s^2)   Z(m/s^2)   Roll(°)   Pitch(°)");
-  Serial.println("X:         Y:         Z:         R:        P:");
+    accel.setRange(ADXL345_RANGE_2_G);
+    accel.setDataRate(DATA_RATE_ADXL);
+    Serial.println("Inclinómetro ADXL345 encontrado, modo: offsets grabados");
+    Serial.println("Offsets precalibrados (m/s^2): ");
+    Serial.print("ox: "); Serial.print(CALIB_OX, 2);
+    Serial.print("  oy: "); Serial.print(CALIB_OY, 2);
+    Serial.print("  oz: "); Serial.println(CALIB_OZ, 2);
+    Serial.println("X(m/s^2)   Y(m/s^2)   Z(m/s^2)   Roll(°)   Pitch(°)");
+    Serial.println("X:         Y:         Z:         R:        P:");
   }
 
 #elif LSM9
@@ -5785,23 +5798,23 @@ void Setup_Incli()
     Serial.println("Error al conectar LSM9DS1");
   }
   else {
-  // --- CONFIGURACIÓN DE ULTRA PRECISIÓN (Bajo ODR) ---
-  // 1 = 14.9 Hz (La más baja disponible para este sensor)
-  imu.settings.accel.sampleRate = 1; 
-  imu.settings.gyro.sampleRate = 1;  
-  // 4 = 10 Hz para el Magnetómetro (Suficiente para algo estático)
-  imu.settings.mag.sampleRate = 4;
+    // --- CONFIGURACIÓN DE ULTRA PRECISIÓN (Bajo ODR) ---
+    // 1 = 14.9 Hz (La más baja disponible para este sensor)
+    imu.settings.accel.sampleRate = 1;
+    imu.settings.gyro.sampleRate = 1;
+    // 4 = 10 Hz para el Magnetómetro (Suficiente para algo estático)
+    imu.settings.mag.sampleRate = 4;
 
-  Serial.println("Inclinómetro LSM9DS1 encontrado, modo: offsets grabados");
-  Serial.println("Offsets precalibrados (m/s^2): ");
-  Serial.print("ox: "); Serial.print(CALIB_OX, 2);
-  Serial.print("  oy: "); Serial.print(CALIB_OY, 2);
-  Serial.println("  oz: "); Serial.println(CALIB_OZ, 2);
-  Serial.print("mx: "); Serial.print(CALIB_MX, 2);
-  Serial.print("  my: "); Serial.print(CALIB_MY, 2);
-  Serial.println("  mz: "); Serial.println(CALIB_MZ, 2);
-  Serial.println("X(m/s^2)   Y(m/s^2)   Z(m/s^2)   Roll(°)   Pitch(°)   Yaw(°)");
-  Serial.println("X:         Y:         Z:         R:        P:        Y:");  
+    Serial.println("Inclinómetro LSM9DS1 encontrado, modo: offsets grabados");
+    Serial.println("Offsets precalibrados (m/s^2): ");
+    Serial.print("ox: "); Serial.print(CALIB_OX, 2);
+    Serial.print("  oy: "); Serial.print(CALIB_OY, 2);
+    Serial.println("  oz: "); Serial.println(CALIB_OZ, 2);
+    Serial.print("mx: "); Serial.print(CALIB_MX, 2);
+    Serial.print("  my: "); Serial.print(CALIB_MY, 2);
+    Serial.println("  mz: "); Serial.println(CALIB_MZ, 2);
+    Serial.println("X(m/s^2)   Y(m/s^2)   Z(m/s^2)   Roll(°)   Pitch(°)   Yaw(°)");
+    Serial.println("X:         Y:         Z:         R:        P:        Y:");
   }
 
 #endif
@@ -5822,13 +5835,13 @@ void Read_Incli()
     sum_z += event.acceleration.z - CALIB_OZ;
     sample_count++;
 
-//// TEST lecturas internas
-//    Serial.print(event.acceleration.x, 2);
-//    Serial.print(" ");
-//    Serial.print(event.acceleration.y, 2);
-//    Serial.print(" ");
-//    Serial.println(event.acceleration.z, 2);
-////
+    //// TEST lecturas internas
+    //    Serial.print(event.acceleration.x, 2);
+    //    Serial.print(" ");
+    //    Serial.print(event.acceleration.y, 2);
+    //    Serial.print(" ");
+    //    Serial.println(event.acceleration.z, 2);
+    ////
   }
 
 #elif LSM9
@@ -5847,13 +5860,13 @@ void Read_Incli()
     sum_mz += imu.calcMag(imu.mz) - CALIB_MZ;
     sample_count++;
 
-//// TEST Lecturas internas
-//    Serial.print(imu.calcAccel(imu.ax) * 9.80665, 2);
-//    Serial.print(" ");
-//    Serial.print(imu.calcAccel(imu.ay) * 9.80665, 2);
-//    Serial.print(" ");
-//    Serial.println(imu.calcAccel(imu.az) * 9.80665, 2);
-////
+    //// TEST Lecturas internas
+    //    Serial.print(imu.calcAccel(imu.ax) * 9.80665, 2);
+    //    Serial.print(" ");
+    //    Serial.print(imu.calcAccel(imu.ay) * 9.80665, 2);
+    //    Serial.print(" ");
+    //    Serial.println(imu.calcAccel(imu.az) * 9.80665, 2);
+    ////
   }
 
 #endif
@@ -5863,20 +5876,20 @@ void Read_Incli_1s()
 {
 #if ADXL
 
-// PM251_value = ax
-// PM252_value = ay
-// PM11_value = az
-// PM251_value_ori = roll
-// PM252_value_ori = pitch
-// PM12_value
+  // PM251_value = ax
+  // PM252_value = ay
+  // PM11_value = az
+  // PM251_value_ori = roll
+  // PM252_value_ori = pitch
+  // PM12_value
   if (sample_count > 0) {
     PM251_value = sum_x / sample_count;
     PM252_value = sum_y / sample_count;
     PM11_value = sum_z / sample_count;
 
-//    float roll  = atan2f(ay, az) * 180.0f / PI;
+    //    float roll  = atan2f(ay, az) * 180.0f / PI;
     PM251_value_ori  = atan2f(PM252_value, PM11_value) * 180.0f / PI;
-//    float pitch = atan2f(-ax, sqrtf(ay * ay + az * az)) * 180.0f / PI;
+    //    float pitch = atan2f(-ax, sqrtf(ay * ay + az * az)) * 180.0f / PI;
     PM252_value_ori = atan2f(-PM251_value, sqrtf(PM252_value * PM252_value + PM11_value * PM11_value)) * 180.0f / PI;
 
     Serial.print("X: "); Serial.print(PM251_value, 2);
@@ -5895,12 +5908,12 @@ void Read_Incli_1s()
 
 #elif LSM9
 
-// PM251_value = ax
-// PM252_value = ay
-// PM11_value = az
-// PM251_value_ori = roll
-// PM252_value_ori = pitch
-// PM12_value = yaw
+  // PM251_value = ax
+  // PM252_value = ay
+  // PM11_value = az
+  // PM251_value_ori = roll
+  // PM252_value_ori = pitch
+  // PM12_value = yaw
 
   if (sample_count > 0) {
     PM251_value = sum_ax / sample_count;
@@ -5910,21 +5923,21 @@ void Read_Incli_1s()
     float my_avg = -sum_mx / sample_count;
     float mz_avg = sum_mz / sample_count;
 
-// Cálculo de inclinación de alta precisión
-//    float rollRad = atan2(ay, az);
+    // Cálculo de inclinación de alta precisión
+    //    float rollRad = atan2(ay, az);
     float rollRad = atan2(PM252_value, PM11_value);
-//    float pitchRad = atan2(-ax, sqrt(ay * ay + az * az));
+    //    float pitchRad = atan2(-ax, sqrt(ay * ay + az * az));
     float pitchRad = atan2(-PM251_value, sqrt(PM252_value * PM252_value + PM11_value * PM11_value));
 
-// Yaw con compensación de inclinación
+    // Yaw con compensación de inclinación
     float Xh = mx_avg * cos(pitchRad) + my_avg * sin(rollRad) * sin(pitchRad) + mz_avg * cos(rollRad) * sin(pitchRad);
     float Yh = my_avg * cos(rollRad) - mz_avg * sin(rollRad);
     float heading = atan2(Yh, Xh) - (DECLINATION * PI / 180.0);
 
-// Normalización y conversión
+    // Normalización y conversión
     if (heading > PI) heading -= (2 * PI);
     else if (heading < -PI) heading += (2 * PI);
-      
+
     PM251_value_ori = rollRad * 180.0 / PI;
     PM252_value_ori = pitchRad * 180.0 / PI;
     PM12_value = heading * 180.0 / PI;
@@ -5952,7 +5965,7 @@ void Read_Incli_1s()
 
 #if Nivel
 
-void Setup_Nivel(){
+void Setup_Nivel() {
 #if NivPin
   pinMode(trigPin, OUTPUT);
   digitalWrite(trigPin, HIGH);  // CRÍTICO: Mantener en LOW entre lecturas
@@ -5969,7 +5982,7 @@ void Setup_Nivel(){
   SensorSerial.begin(9600);
   Serial.println("Iniciando sensor JSN-SR04T Serial");
 #elif Niv485
-  rs485.begin(9600); // Baud rate por defecto del sensor [cite: 64]   
+  rs485.begin(9600); // Baud rate por defecto del sensor [cite: 64]
   pinMode(RE_DE_PIN, OUTPUT);
   digitalWrite(RE_DE_PIN, LOW); // Iniciar en modo "Escuchar"
   Serial.println("Iniciando sensor Seed Studio RS485");
@@ -6001,7 +6014,7 @@ void Read_Nivel_Ser() {
       int distancia = (bufferRX[1] << 8) | bufferRX[2];
       // FILTRO: Solo aceptamos distancias válidas (> 0 y < rango máximo lógico)
       // El sensor envía 0 cuando falla o está fuera de rango. No queremos promediar ceros.
-      if (distancia > 200) { 
+      if (distancia > 200) {
         sumaDistancias += distancia;
         conteoLecturas++;
         // Opcional: Descomenta para ver cada lectura individual (muy rápido)
@@ -6012,7 +6025,7 @@ void Read_Nivel_Ser() {
       }
     } else {
       // Si falla el checksum, vaciamos buffer para resincronizar
-      while(SensorSerial.available()) SensorSerial.read();
+      while (SensorSerial.available()) SensorSerial.read();
     }
   }
 }
@@ -6020,17 +6033,17 @@ void Read_Nivel_Ser() {
 void Read_Nivel_Ser_1s() {
   if (conteoLecturas > 0) {
     // Calculamos el promedio
-    int promedio = sumaDistancias / conteoLecturas;   
+    int promedio = sumaDistancias / conteoLecturas;
     Serial.print("Distancia media (mm): ");
     Serial.println(promedio);
-//    Serial.print(" mm, Muestras: ");
-//    Serial.println(conteoLecturas);
-    PM25_value = promedio;    
+    //    Serial.print(" mm, Muestras: ");
+    //    Serial.println(conteoLecturas);
+    PM25_value = promedio;
   } else {
     Serial.println("Advertencia: No se obtuvieron lecturas válidas este segundo (Sensor desconectado o zona ciega).");
   }
-    sumaDistancias = 0;
-    conteoLecturas = 0;
+  sumaDistancias = 0;
+  conteoLecturas = 0;
 }
 
 #elif Niv485
@@ -6050,7 +6063,7 @@ void Read_Nivel_485() {
       if (response485[0] == 0x01 && response485[1] == 0x03 && response485[2] == 0x02) {
         // Unir los dos bytes de datos (Alto y Bajo) [cite: 78]
         int distance_mm = (response485[3] << 8) | response485[4];
-        
+
         Serial.print("Distancia: ");
         Serial.print(distance_mm);
         Serial.println(" mm");
@@ -6059,9 +6072,9 @@ void Read_Nivel_485() {
         Serial.println("Error: Trama de datos Modbus incorrecta.");
       }
       esperandoRespuesta = false; // Terminamos, liberamos el estado
-    } 
+    }
     // Si ha pasado mucho tiempo (ej. 700ms) y no responde, declaramos Timeout
-    // (El manual dice que tarda ~500ms, damos 200ms extra de margen) 
+    // (El manual dice que tarda ~500ms, damos 200ms extra de margen)
     else if ((millis() - tiempoPeticion) > 700) {
       Serial.println("Error: Timeout. El sensor no respondió a tiempo.");
       esperandoRespuesta = false; // Liberamos el estado para que pueda volver a intentar
@@ -6075,12 +6088,12 @@ void Read_Nivel_485_1s() {
   if (!esperandoRespuesta) {
     digitalWrite(RE_DE_PIN, HIGH); // Modo Transmisión
     delay(2); // Una micro-pausa necesaria para que el MAX485 cambie de estado
-    
+
     rs485.write(readDistanceCmd, sizeof(readDistanceCmd));
     rs485.flush(); // Esperamos a que salga el último bit físicamente
-    
+
     digitalWrite(RE_DE_PIN, LOW); // Volvemos a modo Recepción inmediatamente
-    
+
     esperandoRespuesta = true; // Cambiamos el estado
     tiempoPeticion = millis(); // Registramos a qué hora hicimos la pregunta
     bytesLeidos = 0;           // Reiniciamos el contador de bytes
@@ -6211,7 +6224,7 @@ void LeerNivel() {
 
     // Si obtenemos una lectura válida, calcular y salir
     if (duration > 0) {
-//      distance = duration * 0.0343 / 2;  // Codigo Recomendado en todo lado
+      //      distance = duration * 0.0343 / 2;  // Codigo Recomendado en todo lado
       distance = duration * 0.343 / 2;  // Codigo medir mm
 
       // Mostrar intentos si fue necesario reintentar
@@ -7188,7 +7201,7 @@ void Aireciudadano_Characteristics()
 
 #endif
 
-// SPS30sen = 1
+  // SPS30sen = 1
   // SEN5Xsen = 2
   // PMSsen = 4
   // SDS011sen || ZH10sen = 8
@@ -7228,7 +7241,7 @@ void Aireciudadano_Characteristics()
   if (TDisplay)
     IDn = IDn + 256;
 #if Minver
-    IDn = IDn + 512;
+  IDn = IDn + 512;
 #endif
   if (MaxWifiTX)
     IDn = IDn + 1024;
@@ -8159,18 +8172,18 @@ void Suspend_Device()
 #if !Relay
     digitalWrite(OUT_EN, LOW); // step-up off
 #else
-  digitalWrite(PinRelayA, LOW);  // 0V
-  digitalWrite(PinRelayB, HIGH); // 3.3V
-  Serial.println("OFF RELAY!");
-  
-  // Pulso corto
-  delay(50);
-  
-  // APAGAR TODO
-  digitalWrite(PinRelayA, LOW);
-  digitalWrite(PinRelayB, LOW);
+    digitalWrite(PinRelayA, LOW);  // 0V
+    digitalWrite(PinRelayB, HIGH); // 3.3V
+    Serial.println("OFF RELAY!");
 
-  delay(500);
+    // Pulso corto
+    delay(50);
+
+    // APAGAR TODO
+    digitalWrite(PinRelayA, LOW);
+    digitalWrite(PinRelayB, LOW);
+
+    delay(500);
 
 #endif
 

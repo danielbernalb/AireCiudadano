@@ -24,6 +24,7 @@ void Read_CO2sensor();
 void Read_SoundMeter();
 void Read_UV();
 void Read_Rain();
+void Read_Rain_1s();
 void Read_Incli();
 void Read_Incli_1s();
 void Read_Nivel_Pin();
