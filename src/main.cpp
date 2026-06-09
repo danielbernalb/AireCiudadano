@@ -100,9 +100,9 @@
 #define SDS011sen false  // Set to true for SDS011 instead PMSX003
 #define NoxVoxTd false   // Lectura de NoxVox
 // Influxver:
-#define Influxver true   // Set to true for InfluxDB version SP - Rain - Incli - Nivel
-#define SoundMeter true  // set to true for Sound Meter
-#define SoundAM true     // Set to true to Sound meter airplane mode
+#define Influxver false  // Set to true for InfluxDB version SP - Rain - Incli - Nivel
+#define SoundMeter false // set to true for Sound Meter
+#define SoundAM false    // Set to true to Sound meter airplane mode
 #define Rain false       // Lectura de pluviometro
 #define Incli false      // Lectura de inclinometros
 #define ADXL false       // Lectura ADXL345
