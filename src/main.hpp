@@ -86,3 +86,4 @@ void displaySensorAverage(int average);
 void displaySensorData(int pm25, int humi, int temp, int rssi);
 void pageStart();
 void pageEnd();
+void smartDelay(unsigned long ms);

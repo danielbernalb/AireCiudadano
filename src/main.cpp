@@ -101,9 +101,9 @@
 #define NoxVoxTd false   // Lectura de NoxVox
 // Influxver:
 #define Influxver true   // Set to true for InfluxDB version SP - Rain - Incli - Nivel
-#define SoundMeter false // set to true for Sound Meter
-#define SoundAM false    // Set to true to Sound meter airplane mode
-#define Rain true        // Lectura de pluviometro
+#define SoundMeter true  // set to true for Sound Meter
+#define SoundAM true     // Set to true to Sound meter airplane mode
+#define Rain false       // Lectura de pluviometro
 #define Incli false      // Lectura de inclinometros
 #define ADXL false       // Lectura ADXL345
 #define LSM9 false       // Lectura LSM9DS1
@@ -1167,7 +1167,7 @@ void setup()
 #else
   Serial.begin(9600);
 #endif
-  delay(100);
+  smartDelay(100);
 #if Tdisplaydisp
   // Out for power on and off sensors
 #if !Relay
@@ -1178,7 +1178,7 @@ void setup()
   // Configurar pines como salida
   pinMode(PinRelayA, OUTPUT);
   pinMode(PinRelayB, OUTPUT);
-  delay(100);
+  smartDelay(100);
 
   // Estado inicial: Ambos en LOW (0V) -> Relé en reposo (sin consumo)
   digitalWrite(PinRelayA, LOW);  // 0V
@@ -1186,13 +1186,13 @@ void setup()
   Serial.println("OFF RELAY");
 
   // Pulso corto
-  delay(50);
+  smartDelay(50);
 
   // APAGAR TODO
   digitalWrite(PinRelayA, LOW);
   digitalWrite(PinRelayB, LOW);
 
-  delay(500);
+  smartDelay(500);
 #endif
 
 #if LTR390UV
@@ -1218,7 +1218,7 @@ void setup()
 
   while (!Serial)
   {
-    delay(500); // wait 0.5 seconds for connection
+    smartDelay(500); // wait 0.5 seconds for connection
   }
 
   Serial.setDebugOutput(true);
@@ -1245,9 +1245,9 @@ void setup()
   }
   else
   {
-    delay(100);
+    smartDelay(100);
 #if Rosver
-    delay(1900);
+    smartDelay(1900);
 #endif
   }
   Serial.print(F("Resetvar: "));
@@ -1261,10 +1261,10 @@ void setup()
 #if Bluetooth
   if (DeepSleepFlag == true)
   {
-    delay(100);
+    smartDelay(100);
     if (digitalRead(BUTTON_TOP) == false)
     {
-      delay(900);
+      smartDelay(900);
       if (digitalRead(BUTTON_TOP) == false)
       {
         NoiseBUTTONFlag = false;
@@ -1314,7 +1314,7 @@ void setup()
   digitalWrite(LEDPIN, LOW);
 #if ESP32C3AG
   digitalWrite(LEDPIN, HIGH);
-  delay(500);
+  smartDelay(500);
   digitalWrite(LEDPIN, LOW);
 #endif
 #else
@@ -1327,31 +1327,31 @@ void setup()
 
   LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(0, 255, 0)));   // Encendemos el led verde
   LED_RGB.show(); // Enciende el color
-  delay(500);
+  smartDelay(500);
 
   LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(180, 180, 0))); // Encendemos el led amarillo
   LED_RGB.show(); // Enciende el color
-  delay(500);
+  smartDelay(500);
 
   LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(255, 125, 0))); // Encendemos el led naranja
   LED_RGB.show(); // Enciende el color
-  delay(500);
+  smartDelay(500);
 
   LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(255, 0, 0)));   // Encendemos el led rojo
   LED_RGB.show(); // Enciende el color
-  delay(500);
+  smartDelay(500);
 
   LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(128, 0, 255))); // Encendemos el led morado
   LED_RGB.show(); // Enciende el color
-  delay(500);
+  smartDelay(500);
 
   LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(128, 128, 128))); // Encendemos el led blanco bajo brillo
   LED_RGB.show(); // Enciende el color
-  delay(500);
+  smartDelay(500);
 
   LED_RGB.setPixelColor(0, uint32_t(LED_RGB.Color(0, 0, 0)));     // Apagado
   LED_RGB.show(); // Enciende el color
-  delay(500);
+  smartDelay(500);
 
 #endif
 
@@ -1407,7 +1407,7 @@ void setup()
 #if Tdisplaydisp
       button_top.loop();
 #endif
-      delay(500);
+      smartDelay(500);
     }
 #endif
   }
@@ -1418,17 +1418,17 @@ void setup()
     displayInit();
     pageStart();
     showWelcome();
-    delay(100);
+    smartDelay(100);
     u8g2.drawXBM(16, 18, 32, 32, IconoAC);
     pageEnd();
 #endif
-    delay(3000);
+    smartDelay(3000);
   }
 
 #else
 
   pinMode(BUTTON_BOTTOM, INPUT_PULLUP);
-  delay(100);
+  smartDelay(100);
 
 #endif
 
@@ -1444,13 +1444,13 @@ void setup()
   digitalWrite(PinRelayB, LOW);  // 0V
 
   // Esperar solo lo necesario (el datasheet dice 5-10ms, usamos 50ms por seguridad)
-  delay(50);
+  smartDelay(50);
 
   // APAGAR TODO (El relé se queda pegado mecánicamente)
   digitalWrite(PinRelayA, LOW);
   digitalWrite(PinRelayB, LOW);
 
-  delay(500);
+  smartDelay(500);
 
 #endif
 
@@ -1458,7 +1458,7 @@ void setup()
   digitalWrite(EnLTR390, HIGH); // LTR390 on
 #endif
 
-  delay(100);
+  smartDelay(100);
 #endif
 
 #if Wifi
@@ -1504,7 +1504,7 @@ void setup()
 #endif
 #endif
     Start_Captive_Portal();
-    delay(100);
+    smartDelay(100);
   }
   if (SDflag == false)
   {
@@ -1526,7 +1526,7 @@ void setup()
 
 #if ESP8285
         digitalWrite(LEDPIN, LOW); // turn the LED off by making the voltage LOW
-        delay(750);                // wait for a 750 msecond
+        smartDelay(750);                // wait for a 750 msecond
         digitalWrite(LEDPIN, HIGH);
 #endif
       }
@@ -1536,7 +1536,7 @@ void setup()
   {
 #if MobData
     SerialAT.begin(19200);
-    delay(10);
+    smartDelay(10);
 
 #if SIM7070
     if (ResetFlag == true)
@@ -1544,9 +1544,9 @@ void setup()
       Serial.println("Power ON SIM7070 routine");
       pinMode(PowerSIM7070, OUTPUT);
       digitalWrite(PowerSIM7070, LOW);
-      delay(3000);
+      smartDelay(3000);
       pinMode(PowerSIM7070, INPUT);
-      delay(7000);
+      smartDelay(7000);
     }
 #endif
 
@@ -1630,13 +1630,13 @@ connectstart:
         // print to the serial port too:
         Serial.println(F("OK, SD card file open"));
         digitalWrite(LEDPIN, LOW);  // turn the LED on (HIGH is the voltage level)
-        delay(500);                 // wait for a 500 msecond
+        smartDelay(500);                 // wait for a 500 msecond
         digitalWrite(LEDPIN, HIGH); // turn the LED off by making the voltage LOW
-        delay(500);                 // wait for a 500 msecond
+        smartDelay(500);                 // wait for a 500 msecond
         digitalWrite(LEDPIN, LOW);  // turn the LED on (HIGH is the voltage level)
-        delay(500);                 // wait for a 500 msecond
+        smartDelay(500);                 // wait for a 500 msecond
         digitalWrite(LEDPIN, HIGH); // turn the LED off by making the voltage LOW
-        delay(500);                 // wait for a 500 msecond
+        smartDelay(500);                 // wait for a 500 msecond
       }
     }
 
@@ -1651,11 +1651,11 @@ connectstart:
     {
       Serial.println(F("OK, ds1307 init"));
       digitalWrite(LEDPIN, LOW);  // turn the LED on (HIGH is the voltage level)
-      delay(200);                 // wait for a 500 msecond
+      smartDelay(200);                 // wait for a 500 msecond
       digitalWrite(LEDPIN, HIGH); // turn the LED off by making the voltage LOW
-      delay(200);                 // wait for a 500 msecond
+      smartDelay(200);                 // wait for a 500 msecond
       digitalWrite(LEDPIN, LOW);  // turn the LED on (HIGH is the voltage level)
-      delay(200);                 // wait for a 500 msecond
+      smartDelay(200);                 // wait for a 500 msecond
       digitalWrite(LEDPIN, HIGH); // turn the LED off by making the voltage LOW
     }
 
@@ -1694,7 +1694,7 @@ connectstart:
     tft.drawString("AireCiudadano", tft.width() / 2, tft.height() / 2);
     tft.drawString("ver: " + String(), tft.width() / 2 - 20, (tft.height() / 2) + 30);
     tft.drawString(sw_version.c_str(), tft.width() / 2 + 20, (tft.height() / 2) + 30);
-    delay(2000);
+    smartDelay(2000);
     // Update display with new values
     Update_Display();
 #endif
@@ -1707,14 +1707,14 @@ connectstart:
     u8g2.setFont(u8g2_font_5x8_tf);
     u8g2.setCursor(0, (dh / 2 - 4));
     u8g2.print("Medidor Listo");
-    delay(1000);
+    smartDelay(1000);
     pageEnd();
 #endif
   }
 
 #endif
 
-  delay(1000);
+  smartDelay(1000);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1848,14 +1848,14 @@ void loop()
     else
     {
       // Rutina Test para enviar datos sin sensor conectado PM25 fake ESP8266
-      // /*
+       /*
       PM25_value = random(10, 30);
       PM25_accumulated += PM25_value;
       PM25_samples++;
       Con_loop_times++;
       Serial.print(F("Valor random: "));
       Serial.println(PM25_value);
-      // */
+       */
       Serial.println(F("Medidor No configurado"));
 
 #if (Tdisplaydisp || OLED96display || OLED66display)
@@ -1880,7 +1880,7 @@ void loop()
           tft.drawString("Medidor", tft.width() / 2, (tft.height() / 2) - 30);
           tft.drawString("No configurado", tft.width() / 2, (tft.height() / 2) + 20);
         }
-        delay(1000);
+        smartDelay(1000);
 #endif
 #endif
       }
@@ -1906,7 +1906,7 @@ void loop()
         }
         pageEnd();
 #endif
-        delay(2000);
+        smartDelay(2000);
       }
 
 #endif
@@ -2164,10 +2164,13 @@ void loop()
         {
           Serial.println(F("--- MQTT reconnect"));
           // Attempt to connect to MQTT broker
-#if !ESP8266
+//#if !ESP8266      // REVISAR !!!!
+          smartDelay(5050);
           MQTT_Reconnect();
-#endif
-          Init_MQTT();
+//#else
+//          smartDelay(5050);
+//          Init_MQTT();
+//#endif
         }
       }
     }
@@ -2202,7 +2205,7 @@ void loop()
   // Process Bluetooth events
 #if Bluetooth
   provider.handleDownload();
-  delay(20);
+  smartDelay(20);
 #endif
 
 #if !ESP8266
@@ -2409,7 +2412,7 @@ void Print_WiFi_Status()
       break;
   }
   Serial.println(F(""));
-  delay(3000);
+  smartDelay(3000);
 #if (OLED66 == true || OLED96 == true)
   pageEnd();
 #endif
@@ -2616,7 +2619,7 @@ void Connect_WiFi()
   // Wait for warming time while blinking blue led AQUI ESTA EL PROBLEMA DEL DHCP
   while ((WiFi.status() != WL_CONNECTED) && ((millis() - wifi_timeout_start) < WIFI_CONNECT_TIMEOUT))
   {
-    delay(500); // wait 0.5 seconds for connection
+    smartDelay(500); // wait 0.5 seconds for connection
     Serial.println(F("."));
   }
 
@@ -2847,7 +2850,6 @@ void Start_Captive_Portal()
     u8g2.print(captiveportaltime);
     u8g2.setCursor(20, dh / 2);
     u8g2.print(" segundos");
-    //    delay(2000);
     pageEnd();
 
 #endif
@@ -3240,6 +3242,23 @@ void saveParamCallback()
   ConfigPortalSave = true;
 }
 
+// Función de reemplazo para delay() que mantiene vivo el sistema
+void smartDelay(unsigned long ms) {
+  unsigned long startTime = millis();
+  
+  // Bucle que se ejecuta durante el tiempo solicitado
+  while (millis() - startTime < ms) {
+    
+    // 2. MANTENER VIVO EL WIFI Y EL WATCHDOG (Crucial para ESP8266):
+    // Evita el reinicio por Watchdog Timer (WDT) y mantiene el stack de red
+    yield(); 
+    
+    // 3. CEDER CONTROL AL SISTEMA OPERATIVO (Crucial para ESP32):
+    // Permite que FreeRTOS cambie de tarea y maneje el WiFi de fondo
+    delay(1); 
+  }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 //  2. MQTT
 ////////////////////////////////////////////////////////////////////////////////
@@ -3264,9 +3283,9 @@ void Init_MQTT()
 #endif
 
 #if !MobData
-  MQTT_client.setKeepAlive(120);
+  MQTT_client.setKeepAlive(45);
 #else
-  MQTT_client.setKeepAlive(500);
+  MQTT_client.setKeepAlive(500);      // PROBAR!!!!!!!!!!!!!!!!!!!!!
 #endif
 
   //  MQTT_client.setServer(eepromConfig.MQTT_server, eepromConfig.MQTT_port);
@@ -3280,16 +3299,16 @@ void Init_MQTT()
   MQTT_client.connect(aireciudadano_device_id.c_str());
 
 #if MobData
-  delay(1000);
+  smartDelay(1000);
 #endif
 
   if (!MQTT_client.connected())
   {
     err_MQTT = true;
     Serial.println("Fail, MQTT_Reconnect");
-#if MobData
-    delay(5000);
-#endif
+//#if MobData
+    smartDelay(5050);
+//#endif
     MQTT_Reconnect();
   }
   else
@@ -3304,15 +3323,15 @@ void Init_MQTT()
     contmqtt = 0;
 #if !ESP8266
     digitalWrite(LEDPIN, HIGH);
-    delay(1000);
+    smartDelay(1000);
     digitalWrite(LEDPIN, LOW);
-    delay(1000);
+    smartDelay(1000);
     digitalWrite(LEDPIN, HIGH);
 #else
     digitalWrite(LEDPIN, LOW);
-    delay(1000);
+    smartDelay(1000);
     digitalWrite(LEDPIN, HIGH);
-    delay(1000);
+    smartDelay(1000);
     digitalWrite(LEDPIN, LOW);
 #endif
   }
@@ -3340,15 +3359,15 @@ void MQTT_Reconnect()
       contmqtt = 0;
 #if !ESP8266
       digitalWrite(LEDPIN, HIGH);
-      delay(1000);
+      smartDelay(1000);
       digitalWrite(LEDPIN, LOW);
-      delay(1000);
+      smartDelay(1000);
       digitalWrite(LEDPIN, HIGH);
 #else
       digitalWrite(LEDPIN, LOW);
-      delay(1000);
+      smartDelay(1000);
       digitalWrite(LEDPIN, HIGH);
-      delay(1000);
+      smartDelay(1000);
       digitalWrite(LEDPIN, LOW);
 #endif
     }
@@ -3369,7 +3388,7 @@ void MQTT_Reconnect()
         cont++;
         Serial.print("TinyGSM: Retry MQQT ");
         Serial.println(cont);
-        delay(5000);
+        smartDelay(5000);
         if (cont > 5)
         {
           cont = 0;
@@ -3657,7 +3676,7 @@ void Send_Message_Cloud_App_MQTT()
 
 #if ESP8285
   digitalWrite(LEDPIN, LOW); // turn the LED off by making the voltage LOW
-  delay(750);                // wait for a 750 msecond
+  smartDelay(750);                // wait for a 750 msecond
   digitalWrite(LEDPIN, HIGH);
 #endif
 
@@ -3675,7 +3694,7 @@ void Send_Message_Cloud_App_MQTT()
   // Revisar el código de retorno
   if (responsepublish == 0) {
     Serial.println(", ERROR Mensaje no publicado");
-    delay(5000);
+    smartDelay(5000);
 #if MobData
     ResetMobDataConn();
 #endif
@@ -3740,7 +3759,7 @@ void Send_Message_Cloud_App_MQTTsam()
 
 #if ESP8285
   digitalWrite(LEDPIN, LOW); // turn the LED off by making the voltage LOW
-  delay(750);                // wait for a 750 msecond
+  smartDelay(750);                // wait for a 750 msecond
   digitalWrite(LEDPIN, HIGH);
 #endif
 
@@ -4021,7 +4040,7 @@ revini:
     SerialMon.println("MONTiny: Initializing modem...");
     modem.restart();
   }
-  delay(15000);
+  smartDelay(15000);
 
   String modemInfo = modem.getModemInfo();
   SerialMon.print("MONTiny: Modem Info: ");
@@ -4031,7 +4050,7 @@ revini2:
   SerialMon.print("MONTiny: Waiting for network...");
   if (!modem.waitForNetwork()) {
     SerialMon.println("MONTiny: fail");
-    delay(10000);
+    smartDelay(10000);
     if (modem.waitForNetwork()) {
       goto revexit;
     }
@@ -4051,7 +4070,7 @@ revexit:
   else
   {
     Serial.println("TinyGSM: NO Network connected");
-    delay(10);
+    smartDelay(10);
     goto revini;
   }
 
@@ -4062,7 +4081,7 @@ revexit:
   //  if (!modem.gprsConnect(apn, user1, pw1)) {
   if (!modem.gprsConnect(apn)) {
     SerialMon.println("MONTiny: fail apn");
-    delay(10000);
+    smartDelay(10000);
     //    return;
     goto revini;
   }
@@ -4078,7 +4097,7 @@ revexit:
     SerialMon.println("MONTiny: Network disconnected");
     if (!modem.waitForNetwork(180000L, true)) {
       SerialMon.println("MONTiny: fail1");
-      delay(10000);
+      smartDelay(10000);
       //      return;
       goto revini;
     }
@@ -4091,7 +4110,7 @@ revexit:
       SerialMon.print(apn);
       if (!modem.gprsConnect(apn)) {
         SerialMon.println("MONTiny: fail2");
-        delay(10000);
+        smartDelay(10000);
         //        return;
         goto revini;
       }
@@ -4111,7 +4130,7 @@ void MobDataConnected()
     Serial.println("TinyGSM: Network disconnected");
     if (!modem.waitForNetwork(180000L, true)) {
       Serial.println(" fail");
-      delay(10000);
+      smartDelay(10000);
       return;
     }
     if (modem.isNetworkConnected())
@@ -4123,7 +4142,7 @@ void MobDataConnected()
       Serial.print(apn);
       if (!modem.gprsConnect(apn)) {
         Serial.println("  fail");
-        delay(10000);
+        smartDelay(10000);
         return;
       }
       if (modem.isGprsConnected())
@@ -4141,7 +4160,7 @@ void MobDataConnected()
     SerialMon.print("Disconnecting from: ");
     SerialMon.println("sensor.aireciudadano.com");
     MQTT_client.disconnect(); // Disconnect from MQTT  //added 08/04/2023
-    delay(500);
+    smartDelay(500);
     SerialMon.print("Network State is: ");
     SerialMon.println(modem.isGprsConnected()); //added 08/04/2023
     // Reconnect every 10 seconds
@@ -4153,7 +4172,7 @@ void MobDataConnected()
         SerialMon.println("NEW ROUTINE: GPRS not connected, reconnecting...");
         if (!modem.gprsConnect(apn)) {
           SerialMon.println("GPRS reconnect failed");
-          delay(10000);
+          smartDelay(10000);
           return;
         }
       }
@@ -4161,7 +4180,7 @@ void MobDataConnected()
         lastReconnectAttempt = 0;
       }
     }
-    delay(100);
+    smartDelay(100);
     return;
   }
   else
@@ -4195,10 +4214,10 @@ void ResetMobDataConn()
     {
       Serial.println("Reset Mobile Data Connection, first Connect_MobData");
       Connect_MobData();
-      delay(100);
+      smartDelay(100);
       Serial.println("second Init MQTT routine 1");
       Init_MQTT();
-      delay(100);
+      smartDelay(100);
       contmqtt ++;
       FlagPoweroff = false;
     }
@@ -4208,10 +4227,10 @@ void ResetMobDataConn()
       FlagPoweroff = true;
       ResetFlagMobData = true;
       Connect_MobData();
-      delay(100);
+      smartDelay(100);
       Serial.println("second Init MQTT routine 2");
       Init_MQTT();
-      delay(100);
+      smartDelay(100);
       contmqtt = 0;
     }
   }
@@ -4223,10 +4242,10 @@ void ResetMobDataConn()
       FlagPoweroff = true;
       ResetFlagMobData = true;
       Connect_MobData();
-      delay(100);
+      smartDelay(100);
       Serial.println("second Init MQTT routine 3");
       Init_MQTT();
-      delay(100);
+      smartDelay(100);
       contmqtt ++;
     }
     else
@@ -4385,11 +4404,11 @@ void RTCadjustTime()
     rtc.adjust(DateTime(year, month, day, hour, min, sec));
 
     digitalWrite(LEDPIN, LOW);  // turn the LED on (HIGH is the voltage level)
-    delay(200);                 // wait for a 500 msecond
+    smartDelay(200);                 // wait for a 500 msecond
     digitalWrite(LEDPIN, HIGH); // turn the LED off by making the voltage LOW
-    delay(200);                 // wait for a 500 msecond
+    smartDelay(200);                 // wait for a 500 msecond
     digitalWrite(LEDPIN, LOW);  // turn the LED on (HIGH is the voltage level)
-    delay(200);                 // wait for a 500 msecond
+    smartDelay(200);                 // wait for a 500 msecond
     digitalWrite(LEDPIN, HIGH); // turn the LED off by making the voltage LOW
   }
 }
@@ -4496,9 +4515,9 @@ void Test_Sensor()
     ErrorFlag ++;
   }
   Serial.println(F("Test Sensirion SEN5X sensor"));
-  delay(10);
+  smartDelay(10);
   sen5x.begin(Wire);
-  delay(10);
+  smartDelay(10);
   uint16_t error;
   error = sen5x.deviceReset();
   if (error)
@@ -4522,7 +4541,7 @@ void Test_Sensor()
   pmsSerial1.begin(9600); // Software serial begin for PMS sensor
 #endif
 #endif
-  delay(100);
+  smartDelay(100);
 
 #if !TwoPMS
   if (pms.readUntil(data))
@@ -4557,15 +4576,15 @@ void Test_Sensor()
   if (ErrorFlag > 0)
   {
     digitalWrite(LEDPIN, LOW); // turn the LED on by making the voltage LOW
-    delay(400);                // wait for a 400 ms
+    smartDelay(400);                // wait for a 400 ms
     digitalWrite(LEDPIN, HIGH);
-    delay(400);
+    smartDelay(400);
     digitalWrite(LEDPIN, LOW);
-    delay(400);
+    smartDelay(400);
     digitalWrite(LEDPIN, HIGH);
-    delay(400);
+    smartDelay(400);
     digitalWrite(LEDPIN, LOW);
-    delay(400);
+    smartDelay(400);
     digitalWrite(LEDPIN, HIGH);
   }
   ErrorFlag = 0;
@@ -4618,17 +4637,17 @@ void Test_Sensor()
   if (ErrorFlag > 0)
   {
     Serial.println(F("OK SHT3X, SHT4x, SEN54, SEN55 o PMSx003T"));
-    delay(200);
+    smartDelay(200);
     digitalWrite(LEDPIN, LOW); // turn the LED on by making the voltage LOW
-    delay(200);                // wait for a 200 ms
+    smartDelay(200);                // wait for a 200 ms
     digitalWrite(LEDPIN, HIGH);
-    delay(200);
+    smartDelay(200);
     digitalWrite(LEDPIN, LOW);
-    delay(200);
+    smartDelay(200);
     digitalWrite(LEDPIN, HIGH);
-    delay(200);
+    smartDelay(200);
     digitalWrite(LEDPIN, LOW);
-    delay(200);
+    smartDelay(200);
     digitalWrite(LEDPIN, HIGH);
   }
 }
@@ -4703,9 +4722,9 @@ void Setup_Sensor()
       Wire.begin(Sensor_SDA_pin, Sensor_SCL_pin);
 #endif
 
-      delay(10);
+      smartDelay(10);
       sen5x.begin(Wire);
-      delay(10);
+      smartDelay(10);
 
       uint16_t error;
       char errorMessage[256];
@@ -4782,10 +4801,10 @@ void Setup_Sensor()
     Serial1.begin(PMS::BAUD_RATE, SERIAL_8N1);
     Serial2.begin(PMS::BAUD_RATE, SERIAL_8N1);
 #endif
-    delay(100);
+    smartDelay(100);
     pms1.activeMode();
     pms2.activeMode();
-    delay(100);
+    smartDelay(100);
 #endif
 
 #else
@@ -4814,7 +4833,7 @@ void Setup_Sensor()
 #endif
 
 #if !(TwoPMS || SoundMeter || Rain || Incli || Nivel)
-    delay(1000);
+    smartDelay(1000);
 
 #if SDS011sen
     errSDS011 = my_sds.read(&p25, &p10);
@@ -4824,7 +4843,7 @@ void Setup_Sensor()
 #elif ZH10sen
 
     mySerial.write(command, sizeof(command)); // Enviar comando al sensor
-    delay(100); // Esperar respuesta del sensor
+    smartDelay(100); // Esperar respuesta del sensor
 
     if (mySerial.available() >= 22) { // Se esperan 22 bytes en total
       Serial.print("Trama recibida: ");
@@ -4881,7 +4900,7 @@ void Setup_Sensor()
       PMSsen = true;
 #if ESP8285
       digitalWrite(LEDPIN, LOW); // turn the LED off by making the voltage LOW
-      delay(750);                // wait for a 750 msecond
+      smartDelay(750);                // wait for a 750 msecond
       digitalWrite(LEDPIN, HIGH);
 #endif
     }
@@ -4898,7 +4917,7 @@ void Setup_Sensor()
 
     }
 #elif TwoPMS
-    delay(500);
+    smartDelay(500);
 
     if (pms1.readUntil(data))
     {
@@ -4906,14 +4925,14 @@ void Setup_Sensor()
       PMSsen = true;
 #if ESP8285
       digitalWrite(LEDPIN, LOW); // turn the LED off by making the voltage LOW
-      delay(750);                // wait for a 750 msecond
+      smartDelay(750);                // wait for a 750 msecond
       digitalWrite(LEDPIN, HIGH);
 #endif
     }
     else
       Serial.println(F("Could not find Plantower1 sensor!"));
 
-    delay(500);
+    smartDelay(500);
 
     if (pms2.readUntil(data))
       Serial.println(F("Plantower2 sensor found!"));
@@ -5045,7 +5064,7 @@ void Read_Sensor()
       }
       else
         failpm = failpm + 1;
-      delay(1000);
+      smartDelay(1000);
     } while (ret != SPS30_ERR_OK);
 
     PM25_valueold = PM25_value;
@@ -5107,10 +5126,10 @@ void Read_Sensor()
       Serial.print(F("Error trying to execute readMeasuredValues(): "));
       errorToString(error, errorMessage, 256);
       Serial.println(errorMessage);
-      delay(10);
+      smartDelay(10);
       Setup_Sensor();
       Serial.println(F("Reinit I2C"));
-      delay(10);
+      smartDelay(10);
       if (failpm > 120)
       {
         failpm = 0;
@@ -5200,7 +5219,7 @@ void Read_Sensor()
 #elif ZH10sen
 
     mySerial.write(command, sizeof(command)); // Enviar comando al sensor
-    delay(100); // Esperar respuesta del sensor
+    smartDelay(100); // Esperar respuesta del sensor
 
     if (mySerial.available() >= 22) { // Se esperan 22 bytes en total
       // Leer y mostrar la trama recibida
@@ -5404,7 +5423,7 @@ void Setup_CO2sensor()
     airSensor.setMeasurementInterval(2); // Change number of seconds between measurements: 2 to 1800 (30 minutes), stored in non-volatile memory of SCD30
 
     // While the setting is recorded, it is not immediately available to be read.
-    delay(200);
+    smartDelay(200);
 
     Serial.print("Auto calibration set to ");
     if (airSensor.getAutoSelfCalibration() == true)
@@ -5466,7 +5485,7 @@ void Setup_CO2sensor()
 
     Serial.println("S8 Disabling ABC period");
     sensor_S8->set_ABC_period(0);
-    delay(100);
+    smartDelay(100);
     sensorS8.abc_period = sensor_S8->get_ABC_period();
 
     if (sensorS8.abc_period > 0)
@@ -5556,9 +5575,7 @@ void Read_SoundMeter()
 {
   // Serial.println("Read Sound Meter ESP_MEMS");
   String frame;
-#if SoundAM
-  byte dBActual;
-#endif
+
 
 #if !ESP8266
 
@@ -5605,6 +5622,7 @@ void Read_SoundMeter()
 #endif
 
 #if SoundAM
+  byte dBActual;
 
   PM25_valuesam = PM25_value;
   if (PM25_valuesam > 255)
@@ -5615,30 +5633,32 @@ void Read_SoundMeter()
   Serial.print(dBAmaxsam);
   Serial.println(" dBA");
 
-  if (PM25_valuesam > 70)
-  {
+// dBActual se usa para que Influxseconds se actualice mas rapido en valores altos, no bajos
+
+if (PM25_valuesam > 70)           // Ruido alto   → escribir cada  2 s
+{
     dBActual = 2;
-    if (dBActual < Influxsecondssam)
-      Influxsecondssam = 2;
-  }
-  else if (PM25_valuesam > 65)
-  {
+    if (Influxsecondssam > dBActual)
+        Influxsecondssam = 2;
+}
+else if (PM25_valuesam > 65)      // Ruido moderado-alto → cada  8 s
+{
     dBActual = 5;
-    if (dBActual < Influxsecondssam)
-      Influxsecondssam = 8;
-  }
-  else if (PM25_valuesam > 60)
-  {
+    if (Influxsecondssam > dBActual)
+        Influxsecondssam = 8;
+}
+else if (PM25_valuesam > 60)      // Ruido moderado      → cada 30 s
+{
     dBActual = 10;
-    if (dBActual < Influxsecondssam)
-      Influxsecondssam = 30;
-  }
-  else
-  {
+    if (Influxsecondssam > dBActual)
+        Influxsecondssam = 30;
+}
+else                            // Ruido bajo (≤60 dB) → cada 60 s
+{
     dBActual = 60;
-    if (dBActual < Influxsecondssam)
-      Influxsecondssam = 60;
-  }
+    if (Influxsecondssam > dBActual)
+        Influxsecondssam = 60;
+}
   Serial.print("Influxsecondssam = ");
   Serial.println(Influxsecondssam);
 
@@ -5772,7 +5792,7 @@ void Setup_Incli()
 {
 #if ADXL
   Wire.begin();
-  delay(100);
+  smartDelay(100);
 
   if (!accel.begin()) {
     Serial.println("ERROR: Sensor ADXL345 no detectado.");
@@ -5792,7 +5812,7 @@ void Setup_Incli()
 
 #elif LSM9
   Wire.begin();
-  delay(100);
+  smartDelay(100);
 
   if (imu.begin() == false) {
     Serial.println("Error al conectar LSM9DS1");
@@ -7365,7 +7385,7 @@ void Firmware_Update()
   u8g2.setFont(u8g2_font_5x8_tf);
   u8g2.setCursor(0, (dh / 2 - 4));
   u8g2.print("Actualizacion");
-  delay(1000);
+  smartDelay(1000);
   pageEnd();
 #endif
 
@@ -7458,7 +7478,7 @@ void Firmware_Update()
       u8g2.print("Act Fallo");
       pageEnd();
 #endif
-      delay(1000);
+      smartDelay(1000);
       break;
 
     case HTTP_UPDATE_NO_UPDATES:
@@ -7478,7 +7498,7 @@ void Firmware_Update()
       u8g2.print("Act OK");
       pageEnd();
 #endif
-      delay(1000);
+      smartDelay(1000);
       break;
   }
 
@@ -7854,7 +7874,7 @@ void Button_Init()
     tft.drawString("RSSI " + String(WiFi.RSSI()), 8, 124);
 #endif
 
-    delay(5000); // keep the info in the display for 5s
+    smartDelay(5000); // keep the info in the display for 5s
     Update_Display();
   });
 
@@ -7912,11 +7932,11 @@ void Button_Init()
       tft.drawString("NO Adjust Sensor", 3, 150);
     else
       tft.drawString("Adjust Sensor", 3, 150);
-    delay(2500);
+    smartDelay(2500);
     if (digitalRead(BUTTON_TOP) == false) {
-      delay(100);
+      smartDelay(100);
       if (digitalRead(BUTTON_TOP) == false) {
-        delay(100);
+        smartDelay(100);
         if (digitalRead(BUTTON_TOP) == false) {
           if (FlagAdjustSensor == 0) {
             FlagAdjustSensor = 1;
@@ -7931,7 +7951,7 @@ void Button_Init()
         }
       }
     }
-    delay(2500);
+    smartDelay(2500);
     Update_Display();
   });
 
@@ -7948,7 +7968,7 @@ void Button_Init()
 #if !CO2sensor
     tft.drawString("Eval Time:", tft.width() / 2, tft.height() / 2 - 15);
     tft.drawString(String(eepromConfig.BluetoothTime) + " seg", tft.width() / 2, tft.height() / 2 + 15);
-    delay(1000);
+    smartDelay(1000);
     Bluetooth_loop_time = eepromConfig.BluetoothTime;
 
     while (digitalRead(BUTTON_BOTTOM) == false)
@@ -7971,10 +7991,10 @@ void Button_Init()
         Bluetooth_loop_time = 2;
       tft.drawString("                    ", tft.width() / 2, tft.height() / 2 + 15);
       tft.drawString(String(Bluetooth_loop_time) + " seg", tft.width() / 2, tft.height() / 2 + 15);
-      delay(1000);
+      smartDelay(1000);
     }
     tft.drawString(String(Bluetooth_loop_time) + " seg", tft.width() / 2, tft.height() / 2 + 15);
-    delay(1000);
+    smartDelay(1000);
     FlashBluetoothTime();
 #else
     Serial.print("CALIBRATION:");
@@ -7983,7 +8003,7 @@ void Button_Init()
       tft.drawString("Calib Time:", tft.width() / 2, tft.height() / 2 - 15);
       tft.drawString("                    ", tft.width() / 2, tft.height() / 2 + 15);
       tft.drawString(String(i) + " seg", tft.width() / 2, tft.height() / 2 + 15);
-      delay(1000); // wait 1000 ms
+      smartDelay(1000); // wait 1000 ms
 
       if (toggleLive == false)
       {
@@ -8015,12 +8035,12 @@ void Button_Init()
     Serial.println("Resetting forced calibration factor to 400: done");
     tft.drawString("Reset calib:", tft.width() / 2, tft.height() / 2 - 15);
     tft.drawString("400 ppm", tft.width() / 2, tft.height() / 2 + 15);
-    delay(5000);
+    smartDelay(5000);
 #endif
 
 #else
     tft.drawString("Reiniciando", tft.width() / 2, tft.height() / 2 - 5);
-    delay(2000);
+    smartDelay(2000);
     ESP.restart();
 #endif
   });
@@ -8177,13 +8197,13 @@ void Suspend_Device()
     Serial.println("OFF RELAY!");
 
     // Pulso corto
-    delay(50);
+    smartDelay(50);
 
     // APAGAR TODO
     digitalWrite(PinRelayA, LOW);
     digitalWrite(PinRelayB, LOW);
 
-    delay(500);
+    smartDelay(500);
 
 #endif
 
@@ -8236,7 +8256,7 @@ void Suspend_Device()
   gpio_deep_sleep_hold_en();  // Mantener el estado de los pines durante deep sleep
 #endif
 
-  delay(200);
+  smartDelay(200);
   esp_deep_sleep_start();
 #endif
 }
@@ -8267,7 +8287,7 @@ void displayAverage(int average)
   {
     tft.fillScreen(TFT_YELLOW);
     tft.setTextColor(TFT_BLACK, TFT_YELLOW);
-    delay(50);
+    smartDelay(50);
 #if Bluetooth
     displayBatteryLevel(TFT_BLACK);
 #endif
@@ -8429,7 +8449,7 @@ void displayAverage(int average)
   {
     tft.fillScreen(TFT_ORANGE);
     tft.setTextColor(TFT_BLACK, TFT_ORANGE);
-    delay(50);
+    smartDelay(50);
 #if Bluetooth
     displayBatteryLevel(TFT_BLACK);
 #endif
@@ -8535,7 +8555,7 @@ void displayAverage(int average)
   {
     tft.fillScreen(TFT_YELLOW);
     tft.setTextColor(TFT_BLACK, TFT_YELLOW);
-    delay(50);
+    smartDelay(50);
 #if Bluetooth
     displayBatteryLevel(TFT_BLACK);
 #endif
@@ -8631,7 +8651,7 @@ void displayAverage(int average)
   {
     tft.fillScreen(TFT_YELLOW);
     tft.setTextColor(TFT_BLACK, TFT_YELLOW);
-    delay(50);
+    smartDelay(50);
 #if Bluetooth
     displayBatteryLevel(TFT_BLACK);
 #endif
@@ -8768,7 +8788,7 @@ void TimeConfig()
 {
   if (digitalRead(BUTTON_BOTTOM) == false)
   {
-    delay(500);
+    smartDelay(500);
     if (digitalRead(BUTTON_BOTTOM) == false)
     {
 #if !CO2sensor
@@ -8784,7 +8804,7 @@ void TimeConfig()
 
 #endif
 
-      delay(1000);
+      smartDelay(1000);
 
       Bluetooth_loop_time = eepromConfig.BluetoothTime;
 
@@ -8820,7 +8840,7 @@ void TimeConfig()
         Serial.print(F("Evaluation time: "));
         Serial.print(Bluetooth_loop_time);
         Serial.println(F(" seg"));
-        delay(1000);
+        smartDelay(1000);
       }
       FlashBluetoothTime();
 #else
@@ -8838,7 +8858,7 @@ void TimeConfig()
         u8g2.print(String(i) + " seg");
         pageEnd();
 #endif
-        delay(1000); // wait 1000 ms
+        smartDelay(1000); // wait 1000 ms
 
         if (toggleLive == false)
         {
@@ -8876,7 +8896,7 @@ void TimeConfig()
       u8g2.print("400 ppm");
       pageEnd();
 #endif
-      delay(5000);
+      smartDelay(5000);
 #endif
     }
   }
