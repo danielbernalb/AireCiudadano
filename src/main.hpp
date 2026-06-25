@@ -32,6 +32,7 @@ void Read_Nivel_Ser();
 void Read_Nivel_Ser_1s();
 void Read_Nivel_485();
 void Read_Nivel_485_1s();
+void Read_Nivel_0676();
 void LeerNivel();
 bool detectarOutlier(int nuevaLectura);
 void Send_Message_Cloud_App_MQTT();

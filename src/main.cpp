@@ -48,6 +48,7 @@
 // 33. Ajuste lectura SoundMeter para ESP32 por no borrado de buffer que generaba delays
 // 34. Lectura del Seed Studio RS485 ultrasonic sensor
 // 35. Lectura del LSM9DS1 al mismo rate que el ADXL345
+// 36. Lectura de nivel mmWave 80 GHz sen0676
 
 
 // Refactorizacion de codigo por bloques:
@@ -100,17 +101,18 @@
 #define SDS011sen false  // Set to true for SDS011 instead PMSX003
 #define NoxVoxTd false   // Lectura de NoxVox
 // Influxver:
-#define Influxver false  // Set to true for InfluxDB version SP - Rain - Incli - Nivel
+#define Influxver true   // Set to true for InfluxDB version SP - Rain - Incli - Nivel
 #define SoundMeter false // set to true for Sound Meter
 #define SoundAM false    // Set to true to Sound meter airplane mode
 #define Rain false       // Lectura de pluviometro
 #define Incli false      // Lectura de inclinometros
 #define ADXL false       // Lectura ADXL345
 #define LSM9 false       // Lectura LSM9DS1
-#define Nivel false      // Lectura Medidores de Nivel
+#define Nivel true       // Lectura Medidores de Nivel
 #define NivPin false     // Medidor Nivel ultrasonico por pines Trig - Echo, tipo JSN-SR04M
 #define NivSer false     // Medidor Nivel ultrasonico serial tipo JSN-SR04M
 #define Niv485 false     // Medidor Nivel ultrasonico RS485 SeedStudio
+#define Niv0676 true     // Medidor Nivel mmWave 80 GHz sen0676
 // Otros:
 #define LTR390UV false   // LTR390 para version ESP32
 #define LedNeo false     // Set to true for Led Neo multicolor
@@ -961,7 +963,11 @@ uint32_t rawUVS;
 
 #if Rain
 // Definición de pines y constantes
-const int REED_SWITCH_PIN = 12;     // Pin D6 en la mayoría de placas ESP8266 (GPIO4)
+#if !ESP8266
+#define REED_SWITCH_PIN 21     // IO21 ESP32
+#else
+#define REED_SWITCH_PIN 12     // Pin D6 en la mayoría de placas ESP8266 GPIO12
+#endif
 const float MM_POR_PULSO = 0.2794;  // Cantidad de lluvia por cada "tip" o pulso (ajusta este valor según tu pluviómetro)
 
 // Variables para el conteo de lluvia
@@ -971,7 +977,7 @@ float lluviaTotal = 0.0;
 unsigned int lluvia1minInt = 0;
 unsigned int lluviaTotalInt = 0;
 unsigned int pulsosTotal = 0;
-bool flagPulsos = false;
+volatile bool flagPulsos = false;
 
 // Variables para el Debouncing (anti-rebote)
 volatile unsigned long ultimoTiempoPulso = 0;
@@ -1076,6 +1082,24 @@ bool esperandoRespuesta = false;
 unsigned long tiempoPeticion = 0; // Guarda el momento en que se preguntas al sensor
 byte response485[7];
 int bytesLeidos = 0;              // Contador de bytes recibidos
+
+#elif Niv0676
+#include <LiquidLevelDetection.h>
+
+#if ESP8266
+#define RX_PIN 13
+#define TX_PIN 12
+#else
+#define RX_PIN 2
+#define TX_PIN 3
+#endif
+
+// Define baud rate
+#define BAUD_RATE 115200
+#define InsHeight 1000    // Alto en cm, 100 es 1 metro
+
+// Create sensor object
+LiquidLevelDetection sensor(RX_PIN, TX_PIN);
 
 #endif
 #else
@@ -1778,6 +1802,8 @@ void loop()
     Read_Nivel_Ser_1s();
 #elif Niv485
     Read_Nivel_485_1s();
+#elif Niv0676
+    Read_Nivel_0676();
 #endif
 #else
     Read_Sensor();
@@ -2228,11 +2254,13 @@ void loop()
 
 // Esta función se ejecuta CADA VEZ que el pin del reed switch cambia de ALTO a BAJO.
 void IRAM_ATTR contarPulso() {
-  // Comprueba si ha pasado suficiente tiempo desde el último pulso para evitar rebotes
-  if ((millis() - ultimoTiempoPulso) > tiempoDebounce) {
-    contadorPulsos++;
-    ultimoTiempoPulso = millis(); // Actualiza el tiempo del último pulso válido
-    flagPulsos = true;
+  // Leemos el estado real del pin. 
+  if (digitalRead(REED_SWITCH_PIN) == LOW) {
+    if ((millis() - ultimoTiempoPulso) > tiempoDebounce) {
+      contadorPulsos++;
+      ultimoTiempoPulso = millis(); // Actualiza el tiempo del último pulso válido
+      flagPulsos = true;
+    }
   }
 }
 
@@ -6006,6 +6034,42 @@ void Setup_Nivel() {
   pinMode(RE_DE_PIN, OUTPUT);
   digitalWrite(RE_DE_PIN, LOW); // Iniciar en modo "Escuchar"
   Serial.println("Iniciando sensor Seed Studio RS485");
+#elif Niv0676
+  // Initialize serial communication with 115200 baud rate
+  Serial.begin(BAUD_RATE);
+  
+  #if ESP32
+  Serial.println("ESP32, HardwareSerial active");
+  #elif ESP8266
+  Serial.println("ESP8266, SoftwareSerial active");
+  #endif
+
+  Serial.println("Millimeter-wave Liquid Level Sensor Test");
+  
+  // Initialize sensor with 115200 baud rate
+  if (!sensor.begin(BAUD_RATE)) {
+      Serial.println("Sensor initialization failed!");
+  }
+  else {
+      // Set installation height (unit: centimeter)
+      if (sensor.setInstallationHeight(InsHeight)) {  
+          Serial.println("Installation height set successfully"); 
+          // Wait a moment for the device to update the range
+          delay(1000);
+        
+          // Read current range directly without local buffers or dtostrf to prevent compiler bugs
+          float range = sensor.getRange();
+          Serial.print("Current range: ");
+          if (range >= 0) {
+              Serial.print(range, 3); // Print float directly with 3 decimal places
+              Serial.println(" m");
+          } else {
+              Serial.println("Communication Error");
+          }
+      } else {
+          Serial.println("Failed to set installation height");
+      }
+  }
 #endif
 }
 
@@ -6264,6 +6328,20 @@ void LeerNivel() {
   // Si llegamos aquí, todos los intentos fallaron
   distance = -1;
   //  Serial.print("5Re_");
+}
+#elif Niv0676
+void Read_Nivel_0676() {
+// 1. Direct sensor read without any preceding or local buffer anomalies
+  float emptyHeight = sensor.getEmptyHeight();
+  if (emptyHeight >= 0) {
+      // 2. Direct mathematical conversion to millimeters
+      PM25_value = emptyHeight * 1000.0;
+      Serial.print("Distancia: ");
+      Serial.print(PM25_value, 0);
+      Serial.println(" mm");
+  } else {
+      Serial.println("Reading Error");
+  }
 }
 #endif
 
@@ -7435,6 +7513,9 @@ void Firmware_Update()
 #elif Niv485
   Serial.println("Firmware Nivel - RS485");
   t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WINivel485.bin");
+#elif Niv0676
+  Serial.println("Firmware Nivel - 0676");
+  t_httpUpdate_return ret = httpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/WINivel0676.bin");
 #endif
 #elif Minver
   Serial.println("Firmware MinVer");
@@ -7594,7 +7675,10 @@ void Firmware_Update()
 #elif Niv485
   Serial.println("Firmware ESP8266WI_Nivel_RS485_InfluxDB");
   t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WINivelRS485InfluxDB.bin");
-#endif
+#elif Niv0676
+  Serial.println("Firmware ESP8266WI_Nivel_0676_InfluxDB");
+  t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WINivel0676InfluxDB.bin");
+  #endif
 #else
   Serial.println("Firmware ESP8266WIFI");
   t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WI.bin");
