@@ -1874,14 +1874,14 @@ void loop()
     else
     {
       // Rutina Test para enviar datos sin sensor conectado PM25 fake ESP8266
-       /*
-      PM25_value = random(10, 30);
-      PM25_accumulated += PM25_value;
-      PM25_samples++;
-      Con_loop_times++;
-      Serial.print(F("Valor random: "));
-      Serial.println(PM25_value);
-       */
+      /*
+        PM25_value = random(10, 30);
+        PM25_accumulated += PM25_value;
+        PM25_samples++;
+        Con_loop_times++;
+        Serial.print(F("Valor random: "));
+        Serial.println(PM25_value);
+      */
       Serial.println(F("Medidor No configurado"));
 
 #if (Tdisplaydisp || OLED96display || OLED66display)
@@ -2190,13 +2190,8 @@ void loop()
         {
           Serial.println(F("--- MQTT reconnect"));
           // Attempt to connect to MQTT broker
-//#if !ESP8266      // REVISAR !!!!
           smartDelay(5050);
           MQTT_Reconnect();
-//#else
-//          smartDelay(5050);
-//          Init_MQTT();
-//#endif
         }
       }
     }
@@ -2254,7 +2249,7 @@ void loop()
 
 // Esta función se ejecuta CADA VEZ que el pin del reed switch cambia de ALTO a BAJO.
 void IRAM_ATTR contarPulso() {
-  // Leemos el estado real del pin. 
+  // Leemos el estado real del pin
   if (digitalRead(REED_SWITCH_PIN) == LOW) {
     if ((millis() - ultimoTiempoPulso) > tiempoDebounce) {
       contadorPulsos++;
@@ -3273,17 +3268,14 @@ void saveParamCallback()
 // Función de reemplazo para delay() que mantiene vivo el sistema
 void smartDelay(unsigned long ms) {
   unsigned long startTime = millis();
-  
   // Bucle que se ejecuta durante el tiempo solicitado
   while (millis() - startTime < ms) {
-    
     // 2. MANTENER VIVO EL WIFI Y EL WATCHDOG (Crucial para ESP8266):
     // Evita el reinicio por Watchdog Timer (WDT) y mantiene el stack de red
-    yield(); 
-    
+    yield();
     // 3. CEDER CONTROL AL SISTEMA OPERATIVO (Crucial para ESP32):
     // Permite que FreeRTOS cambie de tarea y maneje el WiFi de fondo
-    delay(1); 
+    delay(1);
   }
 }
 
@@ -5661,32 +5653,32 @@ void Read_SoundMeter()
   Serial.print(dBAmaxsam);
   Serial.println(" dBA");
 
-// dBActual se usa para que Influxseconds se actualice mas rapido en valores altos, no bajos
+  // dBActual se usa para que Influxseconds se actualice mas rapido en valores altos, no bajos
 
-if (PM25_valuesam > 70)           // Ruido alto   → escribir cada  2 s
-{
+  if (PM25_valuesam > 70)           // Ruido alto   → escribir cada  2 s
+  {
     dBActual = 2;
     if (Influxsecondssam > dBActual)
-        Influxsecondssam = 2;
-}
-else if (PM25_valuesam > 65)      // Ruido moderado-alto → cada  8 s
-{
+      Influxsecondssam = 2;
+  }
+  else if (PM25_valuesam > 65)      // Ruido moderado-alto → cada  8 s
+  {
     dBActual = 5;
     if (Influxsecondssam > dBActual)
-        Influxsecondssam = 8;
-}
-else if (PM25_valuesam > 60)      // Ruido moderado      → cada 30 s
-{
+      Influxsecondssam = 8;
+  }
+  else if (PM25_valuesam > 60)      // Ruido moderado      → cada 30 s
+  {
     dBActual = 10;
     if (Influxsecondssam > dBActual)
-        Influxsecondssam = 30;
-}
-else                            // Ruido bajo (≤60 dB) → cada 60 s
-{
+      Influxsecondssam = 30;
+  }
+  else                            // Ruido bajo (≤60 dB) → cada 60 s
+  {
     dBActual = 60;
     if (Influxsecondssam > dBActual)
-        Influxsecondssam = 60;
-}
+      Influxsecondssam = 60;
+  }
   Serial.print("Influxsecondssam = ");
   Serial.println(Influxsecondssam);
 
@@ -6037,38 +6029,38 @@ void Setup_Nivel() {
 #elif Niv0676
   // Initialize serial communication with 115200 baud rate
   Serial.begin(BAUD_RATE);
-  
-  #if ESP32
+
+#if ESP32
   Serial.println("ESP32, HardwareSerial active");
-  #elif ESP8266
+#elif ESP8266
   Serial.println("ESP8266, SoftwareSerial active");
-  #endif
+#endif
 
   Serial.println("Millimeter-wave Liquid Level Sensor Test");
-  
+
   // Initialize sensor with 115200 baud rate
   if (!sensor.begin(BAUD_RATE)) {
-      Serial.println("Sensor initialization failed!");
+    Serial.println("Sensor initialization failed!");
   }
   else {
-      // Set installation height (unit: centimeter)
-      if (sensor.setInstallationHeight(InsHeight)) {  
-          Serial.println("Installation height set successfully"); 
-          // Wait a moment for the device to update the range
-          delay(1000);
-        
-          // Read current range directly without local buffers or dtostrf to prevent compiler bugs
-          float range = sensor.getRange();
-          Serial.print("Current range: ");
-          if (range >= 0) {
-              Serial.print(range, 3); // Print float directly with 3 decimal places
-              Serial.println(" m");
-          } else {
-              Serial.println("Communication Error");
-          }
+    // Set installation height (unit: centimeter)
+    if (sensor.setInstallationHeight(InsHeight)) {
+      Serial.println("Installation height set successfully");
+      // Wait a moment for the device to update the range
+      delay(1000);
+
+      // Read current range directly without local buffers or dtostrf to prevent compiler bugs
+      float range = sensor.getRange();
+      Serial.print("Current range: ");
+      if (range >= 0) {
+        Serial.print(range, 3); // Print float directly with 3 decimal places
+        Serial.println(" m");
       } else {
-          Serial.println("Failed to set installation height");
+        Serial.println("Communication Error");
       }
+    } else {
+      Serial.println("Failed to set installation height");
+    }
   }
 #endif
 }
@@ -6331,16 +6323,16 @@ void LeerNivel() {
 }
 #elif Niv0676
 void Read_Nivel_0676() {
-// 1. Direct sensor read without any preceding or local buffer anomalies
+  // 1. Direct sensor read without any preceding or local buffer anomalies
   float emptyHeight = sensor.getEmptyHeight();
   if (emptyHeight >= 0) {
-      // 2. Direct mathematical conversion to millimeters
-      PM25_value = emptyHeight * 1000.0;
-      Serial.print("Distancia: ");
-      Serial.print(PM25_value, 0);
-      Serial.println(" mm");
+    // 2. Direct mathematical conversion to millimeters
+    PM25_value = emptyHeight * 1000.0;
+    Serial.print("Distancia: ");
+    Serial.print(PM25_value, 0);
+    Serial.println(" mm");
   } else {
-      Serial.println("Reading Error");
+    Serial.println("Reading Error");
   }
 }
 #endif
@@ -7678,7 +7670,7 @@ void Firmware_Update()
 #elif Niv0676
   Serial.println("Firmware ESP8266WI_Nivel_0676_InfluxDB");
   t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WINivel0676InfluxDB.bin");
-  #endif
+#endif
 #else
   Serial.println("Firmware ESP8266WIFI");
   t_httpUpdate_return ret = ESPhttpUpdate.update(UpdateClient, "https://raw.githubusercontent.com/danielbernalb/AireCiudadano/main/bin/ESP8266WI.bin");
