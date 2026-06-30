@@ -101,18 +101,18 @@
 #define SDS011sen false  // Set to true for SDS011 instead PMSX003
 #define NoxVoxTd false   // Lectura de NoxVox
 // Influxver:
-#define Influxver true   // Set to true for InfluxDB version SP - Rain - Incli - Nivel
+#define Influxver false  // Set to true for InfluxDB version SP - Rain - Incli - Nivel
 #define SoundMeter false // set to true for Sound Meter
 #define SoundAM false    // Set to true to Sound meter airplane mode
 #define Rain false       // Lectura de pluviometro
 #define Incli false      // Lectura de inclinometros
 #define ADXL false       // Lectura ADXL345
 #define LSM9 false       // Lectura LSM9DS1
-#define Nivel true       // Lectura Medidores de Nivel
+#define Nivel false      // Lectura Medidores de Nivel
 #define NivPin false     // Medidor Nivel ultrasonico por pines Trig - Echo, tipo JSN-SR04M
 #define NivSer false     // Medidor Nivel ultrasonico serial tipo JSN-SR04M
 #define Niv485 false     // Medidor Nivel ultrasonico RS485 SeedStudio
-#define Niv0676 true     // Medidor Nivel mmWave 80 GHz sen0676
+#define Niv0676 false    // Medidor Nivel mmWave 80 GHz sen0676
 // Otros:
 #define LTR390UV false   // LTR390 para version ESP32
 #define LedNeo false     // Set to true for Led Neo multicolor
@@ -981,7 +981,7 @@ volatile bool flagPulsos = false;
 
 // Variables para el Debouncing (anti-rebote)
 volatile unsigned long ultimoTiempoPulso = 0;
-const long tiempoDebounce = 50;     // Tiempo en milisegundos para ignorar rebotes
+const long tiempoDebounce = 100;     // Tiempo en milisegundos para ignorar rebotes
 
 #endif
 
@@ -1873,7 +1873,7 @@ void loop()
     }
     else
     {
-      // Rutina Test para enviar datos sin sensor conectado PM25 fake ESP8266
+      // Rutina Test para enviar datos sin sensor conectado PM25 fake ESP8266 dummy
       /*
         PM25_value = random(10, 30);
         PM25_accumulated += PM25_value;
@@ -3303,7 +3303,7 @@ void Init_MQTT()
 #endif
 
 #if !MobData
-  MQTT_client.setKeepAlive(45);
+  MQTT_client.setKeepAlive(45);       // Importante para evitar desconexiones en algunas wifis, menor a 60 segundos
 #else
   MQTT_client.setKeepAlive(500);      // PROBAR!!!!!!!!!!!!!!!!!!!!!
 #endif
@@ -3397,7 +3397,7 @@ void MQTT_Reconnect()
       err_MQTT = true;
       Serial.print(F("failed, rc="));
       Serial.print(MQTT_client.state());
-      Serial.println(F(" try again in 5 seconds"));
+      Serial.println(F(" try again in next cycle"));
 #else
       Serial.print("TinyGSM: Retry MQQT connect ");
       Serial.println(apn);
@@ -5758,7 +5758,8 @@ void Setup_Rain()
 {
   // Configura el pin del reed switch como entrada con resistencia de pull-up interna
   // Esto mantiene el pin en HIGH y lo lleva a LOW cuando el switch se cierra
-  pinMode(REED_SWITCH_PIN, INPUT_PULLUP);
+//  pinMode(REED_SWITCH_PIN, INPUT_PULLUP);
+  pinMode(REED_SWITCH_PIN, INPUT);    // Sin resistencia de pull-up interna para filtro externo
 
   // Configura la interrupción
   // Se activará la función 'contarPulso' cada vez que el pin cambie de HIGH a LOW (FALLING edge)
