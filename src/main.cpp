@@ -6320,7 +6320,7 @@ void Read_Nivel_0676() {
     Serial.println(F(" mm"));
     PM25_value = emptyHeight;
   } else {
-    Serial.println(F("Error reading empty height (timeout/CRC)."));
+    Serial.println(F("SEN0676 error reading distance"));
   }
 }
 #endif
