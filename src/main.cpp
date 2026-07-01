@@ -101,18 +101,18 @@
 #define SDS011sen false  // Set to true for SDS011 instead PMSX003
 #define NoxVoxTd false   // Lectura de NoxVox
 // Influxver:
-#define Influxver false  // Set to true for InfluxDB version SP - Rain - Incli - Nivel
+#define Influxver true   // Set to true for InfluxDB version SP - Rain - Incli - Nivel
 #define SoundMeter false // set to true for Sound Meter
 #define SoundAM false    // Set to true to Sound meter airplane mode
 #define Rain false       // Lectura de pluviometro
 #define Incli false      // Lectura de inclinometros
 #define ADXL false       // Lectura ADXL345
 #define LSM9 false       // Lectura LSM9DS1
-#define Nivel false      // Lectura Medidores de Nivel
+#define Nivel true       // Lectura Medidores de Nivel
 #define NivPin false     // Medidor Nivel ultrasonico por pines Trig - Echo, tipo JSN-SR04M
 #define NivSer false     // Medidor Nivel ultrasonico serial tipo JSN-SR04M
 #define Niv485 false     // Medidor Nivel ultrasonico RS485 SeedStudio
-#define Niv0676 false    // Medidor Nivel mmWave 80 GHz sen0676
+#define Niv0676 true     // Medidor Nivel mmWave 80 GHz sen0676
 // Otros:
 #define LTR390UV false   // LTR390 para version ESP32
 #define LedNeo false     // Set to true for Led Neo multicolor
@@ -1084,22 +1084,26 @@ byte response485[7];
 int bytesLeidos = 0;              // Contador de bytes recibidos
 
 #elif Niv0676
-#include <LiquidLevelDetection.h>
+#include <DFRobot_SEN0676.h>
 
-#if ESP8266
-#define RX_PIN 13
-#define TX_PIN 12
-#else
-#define RX_PIN 2
-#define TX_PIN 3
+// Installation height in cm (distance from radar to reference bottom)
+// IMPORTANT: adjust this value to your actual installation.
+#define INSTALL_HEIGHT_CM  1000
+#define SENBaudRate 9600 
+
+#if ESP32
+  #define SENSOR_RX_PIN  17
+  #define SENSOR_TX_PIN  16
+  DFRobot_SEN0676 sensor(Serial2);
+
+#elif ESP8266
+  #include <SoftwareSerial.h>
+  #define SENSOR_RX_PIN  13
+  #define SENSOR_TX_PIN  12
+  SoftwareSerial sensorSerial(SENSOR_RX_PIN, SENSOR_TX_PIN); // RX, TX
+  DFRobot_SEN0676 sensor(sensorSerial);
+
 #endif
-
-// Define baud rate
-#define BAUD_RATE 115200
-#define InsHeight 1000    // Alto en cm, 100 es 1 metro
-
-// Create sensor object
-LiquidLevelDetection sensor(RX_PIN, TX_PIN);
 
 #endif
 #else
@@ -6028,40 +6032,24 @@ void Setup_Nivel() {
   digitalWrite(RE_DE_PIN, LOW); // Iniciar en modo "Escuchar"
   Serial.println("Iniciando sensor Seed Studio RS485");
 #elif Niv0676
-  // Initialize serial communication with 115200 baud rate
-  Serial.begin(BAUD_RATE);
-
 #if ESP32
-  Serial.println("ESP32, HardwareSerial active");
+  Serial2.begin(SENBaudRate, SERIAL_8N1, SENSOR_RX_PIN, SENSOR_TX_PIN);
 #elif ESP8266
-  Serial.println("ESP8266, SoftwareSerial active");
+  sensorSerial.begin(SENBaudRate);
 #endif
 
-  Serial.println("Millimeter-wave Liquid Level Sensor Test");
+  sensor.begin();
 
-  // Initialize sensor with 115200 baud rate
-  if (!sensor.begin(BAUD_RATE)) {
-    Serial.println("Sensor initialization failed!");
-  }
-  else {
-    // Set installation height (unit: centimeter)
-    if (sensor.setInstallationHeight(InsHeight)) {
-      Serial.println("Installation height set successfully");
-      // Wait a moment for the device to update the range
-      delay(1000);
+  Serial.println(F("DFRobot SEN0676 Sensor"));
+  Serial.print(F("Setting installation height to "));
+  Serial.print(INSTALL_HEIGHT_CM);
+  Serial.println(F(" cm..."));
 
-      // Read current range directly without local buffers or dtostrf to prevent compiler bugs
-      float range = sensor.getRange();
-      Serial.print("Current range: ");
-      if (range >= 0) {
-        Serial.print(range, 3); // Print float directly with 3 decimal places
-        Serial.println(" m");
-      } else {
-        Serial.println("Communication Error");
-      }
-    } else {
-      Serial.println("Failed to set installation height");
-    }
+  if (sensor.setInstallationHeight(INSTALL_HEIGHT_CM)) {
+    Serial.println(F("Installation height set OK."));
+  } else {
+    Serial.println(F("ERROR: could not set installation height."));
+    Serial.println(F("Check wiring (RX/TX swapped), sensor address and baud rate."));
   }
 #endif
 }
@@ -6324,16 +6312,15 @@ void LeerNivel() {
 }
 #elif Niv0676
 void Read_Nivel_0676() {
-  // 1. Direct sensor read without any preceding or local buffer anomalies
-  float emptyHeight = sensor.getEmptyHeight();
-  if (emptyHeight >= 0) {
-    // 2. Direct mathematical conversion to millimeters
-    PM25_value = emptyHeight * 1000.0;
-    Serial.print("Distancia: ");
-    Serial.print(PM25_value, 0);
-    Serial.println(" mm");
+  uint16_t emptyHeight = 0;
+  bool okEmpty = sensor.readEmptyHeight(emptyHeight);
+  if (okEmpty) {
+    Serial.print(F("SEN distance: "));
+    Serial.print(emptyHeight);
+    Serial.println(F(" mm"));
+    PM25_value = emptyHeight;
   } else {
-    Serial.println("Reading Error");
+    Serial.println(F("Error reading empty height (timeout/CRC)."));
   }
 }
 #endif
