@@ -104,15 +104,15 @@
 #define Influxver true   // Set to true for InfluxDB version SP - Rain - Incli - Nivel
 #define SoundMeter false // set to true for Sound Meter
 #define SoundAM false    // Set to true to Sound meter airplane mode
-#define Rain false       // Lectura de pluviometro
+#define Rain true        // Lectura de pluviometro
 #define Incli false      // Lectura de inclinometros
 #define ADXL false       // Lectura ADXL345
 #define LSM9 false       // Lectura LSM9DS1
-#define Nivel true       // Lectura Medidores de Nivel
+#define Nivel false      // Lectura Medidores de Nivel
 #define NivPin false     // Medidor Nivel ultrasonico por pines Trig - Echo, tipo JSN-SR04M
 #define NivSer false     // Medidor Nivel ultrasonico serial tipo JSN-SR04M
 #define Niv485 false     // Medidor Nivel ultrasonico RS485 SeedStudio
-#define Niv0676 true     // Medidor Nivel mmWave 80 GHz sen0676
+#define Niv0676 false     // Medidor Nivel mmWave 80 GHz sen0676
 // Otros:
 #define LTR390UV false   // LTR390 para version ESP32
 #define LedNeo false     // Set to true for Led Neo multicolor
@@ -935,6 +935,8 @@ const char *customHtml = R"(
 #define LEDPIN 13
 #elif ESP32C3AG
 #define LEDPIN 10
+#elif ESP32S3
+#define LEDPIN LED_BUILTIN
 #else
 #define LEDPIN 2
 #endif
@@ -1048,10 +1050,14 @@ float sum_mx = 0.0f, sum_my = 0.0f, sum_mz = 0.0f;
 
 #if Nivel
 
-#if ESP8266
 #if NivPin
+#if ESP8266
 #define trigPin 12      // D6
 #define echoPin 13      // D7
+#else
+#define trigPin 16      // Pendiente de probar en ESP32
+#define echoPin 17      // Pendiente de probar en ESP32
+#endif
 
 #elif NivSer
 #include <SoftwareSerial.h>
@@ -1104,11 +1110,6 @@ int bytesLeidos = 0;              // Contador de bytes recibidos
   DFRobot_SEN0676 sensor(sensorSerial);
 
 #endif
-
-#endif
-#else
-#define trigPin 16      // Pendiente de probar en ESP32
-#define echoPin 17      // Pendiente de probar en ESP32
 #endif
 
 // Variables de medición
@@ -1189,6 +1190,9 @@ PubSubClient MQTT_client(client);
 
 void setup()
 {
+#if ESP32S3
+  delay(200);
+#endif
   // Initialize serial port for serial monitor in Arduino IDE
 #if !ESP8266SH
   Serial.begin(115200);
@@ -1338,8 +1342,10 @@ void setup()
 #endif
 
   pinMode(LEDPIN, OUTPUT);
+  delay(1);
 #if !ESP8266
   digitalWrite(LEDPIN, LOW);
+  delay(1);
 #if ESP32C3AG
   digitalWrite(LEDPIN, HIGH);
   smartDelay(500);
@@ -5762,8 +5768,8 @@ void Setup_Rain()
 {
   // Configura el pin del reed switch como entrada con resistencia de pull-up interna
   // Esto mantiene el pin en HIGH y lo lleva a LOW cuando el switch se cierra
-//  pinMode(REED_SWITCH_PIN, INPUT_PULLUP);
-  pinMode(REED_SWITCH_PIN, INPUT);    // Sin resistencia de pull-up interna para filtro externo
+  pinMode(REED_SWITCH_PIN, INPUT_PULLUP);
+//  pinMode(REED_SWITCH_PIN, INPUT);    // Sin resistencia de pull-up interna para filtro externo
 
   // Configura la interrupción
   // Se activará la función 'contarPulso' cada vez que el pin cambie de HIGH a LOW (FALLING edge)
