@@ -101,10 +101,10 @@
 #define SDS011sen false  // Set to true for SDS011 instead PMSX003
 #define NoxVoxTd false   // Lectura de NoxVox
 // Influxver:
-#define Influxver true   // Set to true for InfluxDB version SP - Rain - Incli - Nivel
+#define Influxver false  // Set to true for InfluxDB version SP - Rain - Incli - Nivel
 #define SoundMeter false // set to true for Sound Meter
 #define SoundAM false    // Set to true to Sound meter airplane mode
-#define Rain true        // Lectura de pluviometro
+#define Rain false       // Lectura de pluviometro
 #define Incli false      // Lectura de inclinometros
 #define ADXL false       // Lectura ADXL345
 #define LSM9 false       // Lectura LSM9DS1
@@ -6647,26 +6647,18 @@ void ReadHyT()
       Serial.println(F("   Failed to read temperature AM2320"));
   }
 #endif
-  else if (data.HUMI != 0)
+  else if ((data.HUMI >= 1.0 && data.HUMI <= 99.0) && (data.TEMP >= 1.0 && data.TEMP <= 60.0))
   {
-    temperature = 0.0;
-    humidity = 0.0;
     humidity = data.HUMI;
     temperature = data.TEMP;
 
-    if (!isnan(humidity) && humidity > 1)
-    {
-      Serial.print(F("PMSx003T Humi % = "));
-      Serial.print(humidity);
-      humi = round(humidity);
-    }
+    Serial.print(F("PMSx003T Humi % = "));
+    Serial.print(humidity);
+    humi = round(humidity);
 
-    if (!isnan(temperature) && temperature > 1)
-    {
-      Serial.print(F("   Temp *C = "));
-      Serial.println(temperature);
-      temp = round(temperature);
-    }
+    Serial.print(F("   Temp *C = "));
+    Serial.println(temperature);
+    temp = round(temperature);
   }
   else if (FlagSENHyT == true)
   {
@@ -6674,6 +6666,12 @@ void ReadHyT()
     Serial.print(humi);
     Serial.print(F("   Temp *C = "));
     Serial.println(temp);
+  }
+  else
+  {
+    Serial.println(F("Error or bad range humi &or temp"));
+    humi = 0;
+    temp = 0;
   }
 }
 #endif
