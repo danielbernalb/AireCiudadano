@@ -3346,7 +3346,7 @@ void Init_MQTT()
     err_MQTT = false;
     lastReconnectAttempt = 0;
     // Once connected resubscribe
-    MQTT_client.subscribe(MQTT_receive_topic.c_str());
+    MQTT_client.subscribe(MQTT_receive_topic.c_str(), MQTT_QOS1);
     Serial.print(F("Init MQTT connected - Receive topic: "));
     Serial.println(MQTT_receive_topic);
     FlagMQTTcon = true;
@@ -3382,7 +3382,7 @@ void MQTT_Reconnect()
       Serial.println(F("MQTT connected"));
       lastReconnectAttempt = 0;
       // Once connected resubscribe
-      MQTT_client.subscribe(MQTT_receive_topic.c_str());
+      MQTT_client.subscribe(MQTT_receive_topic.c_str(), MQTT_QOS1);   // TEST QoS1
       Serial.print(F("Reconnect MQTT connected - Receive topic: "));
       Serial.println(MQTT_receive_topic);
       //      FlagMQTTcon = true;
@@ -3717,7 +3717,7 @@ void Send_Message_Cloud_App_MQTT()
   // Publicar un mensaje MQTT
 
   int responsepublish = 0;
-  responsepublish = MQTT_client.publish(MQTT_send_topic.c_str(), MQTT_message);
+  responsepublish = MQTT_client.publish(MQTT_send_topic.c_str(), MQTT_message, MQTT_QOS1, false);
   Serial.print("response: ");
   Serial.print(responsepublish);
 
@@ -3728,7 +3728,7 @@ void Send_Message_Cloud_App_MQTT()
 #if MobData
     ResetMobDataConn();
 #endif
-    responsepublish = MQTT_client.publish(MQTT_send_topic.c_str(), MQTT_message);
+    responsepublish = MQTT_client.publish(MQTT_send_topic.c_str(), MQTT_message, MQTT_QOS1, false);
     if (responsepublish == 0)
       Serial.println("Reintento fallido, mensaje no publicado");
     else
@@ -3800,7 +3800,7 @@ void Send_Message_Cloud_App_MQTTsam()
   // Publicar un mensaje MQTT
 
   int responsepublish = 0;
-  responsepublish = MQTT_client.publish(MQTT_send_topicsam.c_str(), MQTT_message);
+  responsepublish = MQTT_client.publish(MQTT_send_topicsam.c_str(), MQTT_message, MQTT_QOS1, false);
   Serial.print("response: ");
   Serial.println(responsepublish);
 
@@ -4231,7 +4231,7 @@ boolean MqttConnectok()
     return false;
   }
   Serial.println("Success MqttConnectok");
-  MQTT_client.subscribe(MQTT_receive_topic.c_str());
+  MQTT_client.subscribe(MQTT_receive_topic.c_str(), MQTT_QOS1);
   return MQTT_client.connected();
 }
 
