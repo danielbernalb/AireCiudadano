@@ -655,7 +655,7 @@ PMS::DATA data;
 #define PMS_RX 2 // PMS RX pin
 #endif
 
-#if !(TwoPMS || SoundMeter)
+#if !TwoPMS
 SoftwareSerial pmsSerial(PMS_TX, PMS_RX); // SoftwareSerial(rxPin, txPin)
 PMS pms(pmsSerial);
 PMS::DATA data;
