@@ -31,7 +31,7 @@
 // 19. SPS30 ajuste resultado de intercomparacion con SEN y PMS
 // 20. MinVer con SD
 // 21. Conectividad movil, FlagMobData
-// 22. mqtt.loop ser realiza ahora con la duracion  de MQTT_loop_review en milisegundos
+// 22. mqtt.loop ser realiza ahora con la duracion de MQTT_loop_review en milisegundos
 // 23. Wifi Power max con flag MaxWifiTX SOLO programada desde web mqtt AireCiudadano: Resultado no concluyente de incremento de cobertura
 // 24. ZH10 sensor para ESP32
 // 25. SDS011 sensor para ESP8266 y ESP32
@@ -49,6 +49,13 @@
 // 34. Lectura del Seed Studio RS485 ultrasonic sensor
 // 35. Lectura del LSM9DS1 al mismo rate que el ADXL345
 // 36. Lectura de nivel mmWave 80 GHz sen0676
+// 37. Nueva opcion env: esp8266minwi para boards con problemas de reseteos, bajar dBm y flash
+// 38. Cambios en Mobdata:
+//      mqtt.loop cada 10 seg, keeplive de 30 seg. 
+//      cambio en el codigo de conexion y reconexion
+//      serial al A7670 a 9600 para evitar errores
+//      DUMP_AT_COMMANDS se debe eliminar despues de OK
+//      Todas las rutinas cambiaron
 
 
 // Refactorizacion de codigo por bloques:
@@ -182,6 +189,12 @@
 #define MinVer false
 #endif
 
+#ifdef MinVerdefWi
+#define MinVerWi  true       // Version minima para boards ESP8266 con problemas de reset frecuente
+#else
+#define MinVerWi  false
+#endif
+
 #ifdef MobDatadef
 #define MobData true      // Opcion para datos mobiles
 #else
@@ -221,7 +234,7 @@ bool SDflag = false;
 bool FlagMobData = false;
 bool FlagSENHyT = false;
 bool FlagpmsHyT = false;
-bool FlagMQTTcon = false;
+//bool FlagMQTTcon = false;
 bool FlagPoweroff = false;
 bool MaxWifiTX = false;
 bool FlagAdjustSensor;
@@ -234,6 +247,12 @@ char CustomValTotalString[9] = "00000000";
 uint32_t IDn = 0;
 String chipIdHEX;
 
+#if MinVerWi
+// dBm max: +20.5dBm  min: 0dBm
+//#define PowerWi 20.5         // Maxium power for ESP8266 with Reset problems
+#define PowerWi 14.5        // Maxium power for ESP8266 with Reset problems
+#endif
+
 #if Rosver
 uint64_t chipId;
 #else
@@ -241,7 +260,7 @@ uint32_t chipId = 0;
 #endif
 
 // device id, automatically filled by concatenating the last three fields of the wifi mac address, removing the ":" in betweeen, in HEX format. Example: ChipId (HEX) = 85e646, ChipId (DEC) = 8775238, macaddress = E0:98:06:85:E6:46
-String sw_version = "3.0";
+String sw_version = "3.1";
 String aireciudadano_device_id;
 uint8_t Swver;
 
@@ -352,7 +371,7 @@ float longitudef = 0.0;
 
 bool err_wifi = false;
 bool err_MQTT = false;
-bool err_sensor = false;
+//bool err_sensor = false;
 bool FlagDATAicon = false;
 bool NoSensor = false;
 
@@ -372,12 +391,19 @@ unsigned int SDyRTC_loop_time;
 unsigned long MQTT_loop_start; // holds a timestamp for each cloud loop start
 unsigned long MQTT_loop_startsam;
 unsigned long MQTT_loop_review;
-unsigned int MQTT_loop_review_duration = 15000;
+unsigned int MQTT_loop_review_duration = 16000;
+unsigned int MQTT_loop_review_duration_Mobdata = 10000;
 unsigned long lastReconnectAttempt = 0; // MQTT reconnections
 
+unsigned int mqttConsecutiveFailures = 0;
+const unsigned int MQTT_MAX_CONSECUTIVE_FAILURES = 60;
+unsigned int mqttConsecutiveDashTwoFailures = 0;
+const unsigned int MQTT_DASH_TWO_RESET_THRESHOLD = 8;
+
 // Errors loop: time between error condition recovery
-unsigned int errors_loop_duration = 60000; // 60 seconds
-unsigned long errors_loop_start;           // holds a timestamp for each error loop start
+//unsigned int errors_loop_duration = 60000; // 60 seconds
+unsigned int errors_loop_duration = 3000;    // 10 seconds
+unsigned long errors_loop_start;             // holds a timestamp for each error loop start
 
 byte cont = 0;
 
@@ -707,7 +733,7 @@ byte failh = 0;
 Adafruit_SHT4x sht4 = Adafruit_SHT4x();
 #endif
 
-#if !(Rosver || MinVer || MobData || MinVerSD || SoundMeter || Rain || Incli || Nivel)
+#if !(Rosver || MinVer || MinVerWi || MobData || MinVerSD || SoundMeter || Rain || Incli || Nivel)
 
 #include "Adafruit_Sensor.h"
 #include "Adafruit_AM2320.h"
@@ -822,6 +848,9 @@ WiFiServer wifi_server(80); // to check if it is alive
 #endif
 
 #if Wifi
+
+unsigned long wifiReconnectAttemptTime = 0;                    // NUEVO
+const unsigned long WIFI_RECONNECT_MIN_INTERVAL = 15000;       // NUEVO: no reintentar antes de 15s
 
 // MQTT
 #include <PubSubClient.h>
@@ -1169,6 +1198,10 @@ const char apn[] = "internet.comcel.com.co";
 const char apn[] = "internet.wom.co";
 #endif
 
+#if ESP8266
+#include "esp8266_compat.h"
+#endif
+
 #include <TinyGsmClient.h>
 
 #ifdef DUMP_AT_COMMANDS
@@ -1181,6 +1214,15 @@ TinyGsm modem(SerialAT);
 
 TinyGsmClient client(modem);
 PubSubClient MQTT_client(client);
+
+// ---- Parámetros centralizados ----
+#define MAX_INTENTOS_SOFT         4        // reintentos blandos antes de power-cycle del módem
+#define MAX_INTENTOS_POWERCYCLE   3         // power-cycles antes de ESP.restart()
+#define ESPERA_RED_MS             60000UL
+
+// ---- Estado de reconexión para MobData ----
+uint8_t  intentosSoft   = 0;
+uint8_t  intentosDuros  = 0;
 
 #endif
 
@@ -1273,7 +1315,7 @@ void setup()
   if (Resetvar == 1 || Resetvar == 2 || Resetvar == 3 || Resetvar == 4)
   {
     ResetFlag = false;
-    Serial.print(F("Resetvar: false"));
+    Serial.print(F("Resetvar: false, "));
   }
   else
   {
@@ -1337,7 +1379,7 @@ void setup()
   Read_EEPROM(); // Read EEPROM config values //MIRAR SDflag   ////////////////////TEST
 #if PreProgSensor
   strncpy(eepromConfig.aireciudadano_device_name, aireciudadano_device_nameTemp, sizeof(eepromConfig.aireciudadano_device_name));
-  Serial.print(F("T2:"));
+  Serial.print(F("T2: "));
   Serial.println(eepromConfig.aireciudadano_device_name);
 #endif
 
@@ -1422,7 +1464,7 @@ void setup()
 #endif
 
 #if BrownoutOFF
-  // OFF BROWNOUT/////////////////////
+  // OFF BROWNOUT//
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); // disable   detector
 #endif
 
@@ -1526,11 +1568,27 @@ void setup()
 
 #if Wifi
 
+#if MinVerWi
+// Para versiones con problemas de Reset.
+// dBm max: +20.5dBm  min: 0dBm
+// Por defecto 20.5, no sirve
+// 18 NO sirve, parece al limite
+// 17,16 sirve portal cautivo, falla a veces en conexion al servidor
+// 15 sirve
+  WiFi.setSleepMode(WIFI_NONE_SLEEP);
+  WiFi.setOutputPower(PowerWi);
+#endif
+
+#endif
+
+
+#if Wifi
+
   // Start Captive Portal for 60 seconds
   if (ResetFlag == true)
   {
 #if !MobDataSP
-#if (Rosver || MinVer || MobData || MinVerSD)
+#if (Rosver || MinVer || MinVerWi || MobData || MinVerSD)
 
     Serial.println(F("Test_Sensor"));
     Test_Sensor();
@@ -1544,9 +1602,29 @@ void setup()
   {
     if (FlagMobData == false)
     {
+#if !ESP8266
+      MQTT_client.setBufferSize(512); // to receive messages up to 512 bytes length (default is 256)
+#else
+      MQTT_client.setBufferSize(1024);    // PROBAR!!!!!!!!!!!!!!!!!!!!!
+#endif
+
+#if !MobData
+      MQTT_client.setKeepAlive(45);       // Importante para evitar desconexiones en algunas wifis, menor a 60 segundos
+#else
+      MQTT_client.setKeepAlive(30);      // PROBAR!!!!!!!!!!!!!!!!!!!!!
+#endif
+
+#if !Influxver
+      MQTT_client.setServer("sensor.aireciudadano.com", 80);
+#else
+      MQTT_client.setServer("sensor.aireciudadano.com", 30183);
+#endif
+
+      MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
+
       // Attempt to connect to WiFi network:
+      Serial.println("Start Connect_Wifi");
       Connect_WiFi();
-      Serial.println("Connect_Wifi");
 
 #if Influxver
       Serial.println("Data to InfluxDB platform");
@@ -1557,6 +1635,7 @@ void setup()
       {
         Serial.println("Init_MQTT");
         Init_MQTT();
+        wifi_server.begin();   // NUEVO lugar: ya no compite con el primer intento MQTT
 
 #if ESP8285
         digitalWrite(LEDPIN, LOW); // turn the LED off by making the voltage LOW
@@ -1569,7 +1648,8 @@ void setup()
   if (FlagMobData == true)
   {
 #if MobData
-    SerialAT.begin(19200);
+//    SerialAT.begin(19200);
+//%%%    SerialAT.begin(9600);
     smartDelay(10);
 
 #if SIM7070
@@ -1584,16 +1664,41 @@ void setup()
     }
 #endif
 
-    // Attempt to connect to Mobile Data network:
-connectstart:
-    Serial.println("Connect MobData routine");
-    Connect_MobData();                // Setup Connect Mob Data
-    // Attempt to connect to MQTT broker
-    Serial.println("Init MQTT routine");
-    FlagMQTTcon = false;
-    Init_MQTT();
-    if (FlagMQTTcon == false)
-      goto connectstart;
+#if !ESP8266
+    MQTT_client.setBufferSize(512); // to receive messages up to 512 bytes length (default is 256)
+#else
+    MQTT_client.setBufferSize(1024);    // PROBAR!!!!!!!!!!!!!!!!!!!!!
+#endif
+
+#if !MobData
+    MQTT_client.setKeepAlive(45);       // Importante para evitar desconexiones en algunas wifis, menor a 60 segundos
+#else
+    MQTT_client.setKeepAlive(30);      // PROBAR!!!!!!!!!!!!!!!!!!!!!
+#endif
+
+#if !Influxver
+    MQTT_client.setServer("sensor.aireciudadano.com", 80);
+#else
+    MQTT_client.setServer("sensor.aireciudadano.com", 30183);
+#endif
+
+//%%%   MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
+
+  // Attempt to connect to Mobile Data network:
+//%%%  for (uint8_t i = 0; i < MAX_INTENTOS_SOFT; i++) {
+//%%%    Serial.printf("Connect MobData routine (intento %d/%d)\n", i + 1, MAX_INTENTOS_SOFT);
+//%%%    if (ConectarModemYRed() && MQTT_client.connect(aireciudadano_device_id.c_str())) {
+//%%%      MQTT_client.subscribe(MQTT_receive_topic.c_str(), MQTT_QOS1);
+//%%%      Serial.println("MobData listo");
+//%%%      break;
+//%%%    }
+//%%%    smartDelay(5000);
+//%%%  }
+//%%%  Serial.println("Init MQTT routine");
+//  FlagMQTTcon = false;
+  Init_MQTT();
+  // Si no logró conectar aquí, MQTT_Reconnect() en el loop() seguirá
+  // reintentando con su propio gate de 5s
 #endif
   }
 #endif
@@ -1704,7 +1809,7 @@ connectstart:
 #endif
 
   // Get device id
-#if (Rosver || SoundMeter || MinVer || MinVerSD || Rain || Incli || Nivel)
+#if (Rosver || SoundMeter || MinVer || MinVerWi || MinVerSD || Rain || Incli || Nivel)
   IDn = 0;
   Aireciudadano_Characteristics();
 #endif
@@ -2034,17 +2139,16 @@ void loop()
       // New timestamp for the loop start time
       MQTT_loop_start = millis();
 
-#if MobData
-      MobDataConnected();     // MobDataConnected revision!!!!!!!!
-#endif
-
+      if (!MQTT_client.connected()) {
+        MQTT_Reconnect();
+      }
+      if (MQTT_client.connected()) {
+        MQTT_client.loop();
+        Serial.println("MQTT_client.loop");
+      }
       // Message the MQTT broker in the cloud app to send the measured values
       if (PM25_samples > 0)  //!!!!!!!!!!!
-      {
-        MQTT_client.loop();               // Ocurre cada lectura de Sensor, osea cada 1seg
-        Serial.println("MQTT_client.loop");
         Send_Message_Cloud_App_MQTT();
-      }
 #if SaveSDyRTC
       Write_SD();
 #endif
@@ -2162,13 +2266,6 @@ void loop()
     // New timestamp for the loop start time
     errors_loop_start = millis();
 
-    // Try to recover error conditions
-    if (err_sensor)
-    {
-      Serial.println(F("--- err_sensor"));
-      // Setup_Sensor();  // Init pm25 sensors
-    }
-
 #if Wifi
 
     if (SDflag == false)
@@ -2180,7 +2277,11 @@ void loop()
         {
           Serial.println(F("--- err_wifi"));
           err_wifi = true;
-          WiFi.reconnect();
+          if ((millis() - wifiReconnectAttemptTime) >= WIFI_RECONNECT_MIN_INTERVAL)   // NUEVO
+          {
+            wifiReconnectAttemptTime = millis();                                   // NUEVO
+            WiFi.reconnect();
+          }
         }
         else
         {
@@ -2200,7 +2301,7 @@ void loop()
         {
           Serial.println(F("--- MQTT reconnect"));
           // Attempt to connect to MQTT broker
-          smartDelay(5050);
+//          smartDelay(5050);
           MQTT_Reconnect();
         }
       }
@@ -2214,7 +2315,7 @@ void loop()
   {
     if (FlagMobData == false)
     {
-      if ((millis() - MQTT_loop_review) >= MQTT_loop_review_duration)     // Revisar cada x milisegundos
+      if ((millis() - MQTT_loop_review) >= MQTT_loop_review_duration)     // Revisar cada 15000 milisegundos
       {
         // New timestamp for the loop start time
         MQTT_loop_review = millis();
@@ -2225,10 +2326,32 @@ void loop()
         {
           MQTT_client.loop();                     // Ocurre cada lectura de Sensor, osea cada 1seg
           Serial.println("MQTT_client.loop");
+          // Process wifi server requests
+          Check_WiFi_Server();
         }
-        // Process wifi server requests
-        Check_WiFi_Server();
       }
+    }
+    else
+    {
+//%%%      if ((millis() - MQTT_loop_review) >= MQTT_loop_review_duration_Mobdata)     // Revisar cada 10000 milisegundos
+//%%%      {
+        // New timestamp for the loop start time
+//%%%        MQTT_loop_review = millis();
+        // From here, all other tasks performed outside of measurements, MQTT and error loops
+
+        // if not there are not connectivity errors, receive MQTT messages
+//%%%        if (!err_MQTT)
+//%%%        {
+//%%%          if (MQTT_client.connected()) {
+//%%%              MQTT_client.loop();                     // Ocurre cada lectura de Sensor, osea cada 1seg
+//%%%              Serial.println("MQTT_client.loop");
+//%%%              // Process wifi server requests
+//%%%              Check_WiFi_Server(); // Se necesita para MobData no para Wifi!!!!!!!!!!!!!!!!!!!
+//%%%          } else {
+//%%%              Serial.println("MQTT_client not connected");
+//%%%          }
+//%%%        }
+//%%%      }
     }
   }
 #endif
@@ -2503,7 +2626,7 @@ void Print_WiFi_Status_ESP8266()
   Serial.println(WiFi.macAddress());
 
   // Print the received signal strength:
-  Serial.print(F("Signal strength (RSSI):"));
+  Serial.print(F("Signal strength (RSSI): "));
 
   Serial.print(WiFi.RSSI());
 
@@ -2668,7 +2791,7 @@ void Connect_WiFi()
     Serial.println(F("WiFi connected"));
 
     // start the web server on port 80
-    wifi_server.begin();
+//    wifi_server.begin();
   }
 
 #if ESP8266
@@ -2845,7 +2968,7 @@ void Start_Captive_Portal()
 
   if (SDflag == false)
     captiveportaltime = 60;
-  //    captiveportaltime = 15;
+  //  captiveportaltime = 15;
   else
     captiveportaltime = 30;
   // captiveportaltime = 15;
@@ -2904,7 +3027,7 @@ void Start_Captive_Portal()
   WiFiManagerParameter custom_wifi_html("<p>Set WPA2 Enterprise</p>"); // only custom html
   WiFiManagerParameter custom_wifi_user("User", "WPA2 Enterprise identity", eepromConfig.wifi_user, 24);
   WiFiManagerParameter custom_wpa2_pass;
-#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || Incli || Nivel)
+#if !(Rosver || SoundMeter || MinVer || MinVerWi || MinVerSD || Rain || Incli || Nivel)
   WiFiManagerParameter custom_wifi_html2("<p></p>"); // only custom html
 #else
   WiFiManagerParameter custom_wifi_html2("<hr><br/>"); // only custom html
@@ -2927,7 +3050,7 @@ void Start_Captive_Portal()
   WiFiManagerParameter custom_id_name("CustomName", "Set Station Name (25 characters max):", eepromConfig.aireciudadano_device_name, 25);
 #endif
 
-#if !(Rosver || SoundMeter || Minver || MinVerSD || Rain || Incli || Nivel)
+#if !(Rosver || SoundMeter || MinVer || MinVerWi || MinVerSD || Rain || Incli || Nivel)
   char Ptime[5];
   itoa(eepromConfig.PublicTime, Ptime, 10);
   WiFiManagerParameter custom_public_time("Ptime", "Set Publication Time in minutes:", Ptime, 4);
@@ -2935,7 +3058,7 @@ void Start_Captive_Portal()
 #endif
   WiFiManagerParameter custom_sensor_latitude("Latitude", "Latitude (5-4 dec digits are enough)", eepromConfig.sensor_lat, 10);
   WiFiManagerParameter custom_sensor_longitude("Longitude", "Longitude (5-4 dec)", eepromConfig.sensor_lon, 10);
-#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || Incli || Nivel)
+#if !(Rosver || SoundMeter || MinVer || MinVerWi || MinVerSD || Rain || Incli || Nivel)
   WiFiManagerParameter custom_sensorPM_type;
   WiFiManagerParameter custom_sensorHYT_type;
   WiFiManagerParameter custom_display_type;
@@ -2948,7 +3071,7 @@ void Start_Captive_Portal()
 #endif
   WiFiManagerParameter custom_endhtml("<p></p>"); // only custom html
 
-#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || Incli || Nivel)
+#if !(Rosver || SoundMeter || MinVer || MinVerWi || MinVerSD || Rain || Incli || Nivel)
   // Sensor PM menu
 
   if (eepromConfig.ConfigValues[7] == '0')
@@ -3083,14 +3206,14 @@ void Start_Captive_Portal()
 #endif
 
   wifiManager.addParameter(&custom_id_name);
-#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || Incli || Nivel)
+#if !(Rosver || SoundMeter || MinVer || MinVerWi || MinVerSD || Rain || Incli || Nivel)
   wifiManager.addParameter(&custom_public_time);
   wifiManager.addParameter(&custom_sensor_html);
 #endif
 
   wifiManager.addParameter(&custom_sensor_latitude);
   wifiManager.addParameter(&custom_sensor_longitude);
-#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || Incli || Nivel)
+#if !(Rosver || SoundMeter || MinVer || MinVerWi || MinVerSD || Rain || Incli || Nivel)
   wifiManager.addParameter(&custom_sensorPM_type);
   wifiManager.addParameter(&custom_sensorHYT_type);
   wifiManager.addParameter(&custom_display_type);
@@ -3152,7 +3275,7 @@ void Start_Captive_Portal()
     eepromConfig.aireciudadano_device_name[sizeof(eepromConfig.aireciudadano_device_name) - 1] = '\0';
     Serial.println(F("Devname write_eeprom = true"));
 
-#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || Incli || Nivel)
+#if !(Rosver || SoundMeter || MinVer || MinVerWi || MinVerSD || Rain || Incli || Nivel)
     eepromConfig.PublicTime = atoi(custom_public_time.getValue());
     Serial.println(F("PublicTime write_eeprom = true"));
 #endif
@@ -3306,27 +3429,10 @@ void Init_MQTT()
   Serial.println(F("30183")); // InfluxDB port
 #endif
 
-#if !ESP8266
-  MQTT_client.setBufferSize(512); // to receive messages up to 512 bytes length (default is 256)
-#else
-  MQTT_client.setBufferSize(1024);    // PROBAR!!!!!!!!!!!!!!!!!!!!!
-#endif
-
-#if !MobData
-  MQTT_client.setKeepAlive(45);       // Importante para evitar desconexiones en algunas wifis, menor a 60 segundos
-#else
-  MQTT_client.setKeepAlive(500);      // PROBAR!!!!!!!!!!!!!!!!!!!!!
-#endif
-
-  //  MQTT_client.setServer(eepromConfig.MQTT_server, eepromConfig.MQTT_port);
-#if !Influxver
-  MQTT_client.setServer("sensor.aireciudadano.com", 80);
-#else
-  MQTT_client.setServer("sensor.aireciudadano.com", 30183);
-#endif
-  MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
-
   MQTT_client.connect(aireciudadano_device_id.c_str());
+
+  Serial.print(F("Init_MQTT rc="));                   // NUEVO: diagnóstico
+  Serial.println(MQTT_client.state()); 
 
 #if MobData
   smartDelay(1000);
@@ -3349,7 +3455,7 @@ void Init_MQTT()
     MQTT_client.subscribe(MQTT_receive_topic.c_str(), MQTT_QOS1);
     Serial.print(F("Init MQTT connected - Receive topic: "));
     Serial.println(MQTT_receive_topic);
-    FlagMQTTcon = true;
+//    FlagMQTTcon = true;
     contmqtt = 0;
 #if !ESP8266
     digitalWrite(LEDPIN, HIGH);
@@ -3369,12 +3475,28 @@ void Init_MQTT()
 
 void MQTT_Reconnect()
 { // MQTT reconnect function
-  // Try to reconnect only if it has been more than 5 sec since last attemp
+  // Try to reconnect only if it has been more than 5 sec aprox since last attemp
   unsigned long now = millis();
-  if (now - lastReconnectAttempt > 5000)
+//  if (now - lastReconnectAttempt > 5000)
+  if (now - lastReconnectAttempt > 2750)
   {
     lastReconnectAttempt = now;
-    Serial.print(F("Attempting MQTT connection..."));
+
+#if MobData
+    // Antes de intentar MQTT, asegurar que la capa de red/GPRS esté arriba.
+//%%%    if (!modem.isNetworkConnected() || !modem.isGprsConnected()) {
+//%%%      Serial.println("MQTT_Reconnect: red/GPRS caída, reintentando capa inferior...");
+//%%%      if (!ConectarModemYRed()) {
+//%%%        intentosSoft++;
+//%%%        Serial.printf("Fallo de red/GPRS (intento blando %d/%d)\n",
+//%%%                      intentosSoft, MAX_INTENTOS_SOFT);
+//%%%        EscalarSiNecesario();
+//%%%        return;
+//%%%      }
+//%%%    }
+#endif
+
+    Serial.print(F("Try to reconnect MQTT connection..."));
     // Attempt to connect
     if (MQTT_client.connect(aireciudadano_device_id.c_str()))
     {
@@ -3387,6 +3509,13 @@ void MQTT_Reconnect()
       Serial.println(MQTT_receive_topic);
       //      FlagMQTTcon = true;
       contmqtt = 0;
+
+      mqttConsecutiveFailures = 0;   // NUEVO
+
+#if MobData
+//%%%      intentosSoft = 0;
+//%%%      intentosDuros = 0;
+#endif
 #if !ESP8266
       digitalWrite(LEDPIN, HIGH);
       smartDelay(1000);
@@ -3403,40 +3532,36 @@ void MQTT_Reconnect()
     }
     else
     {
-#if !MobData
       err_MQTT = true;
       Serial.print(F("failed, rc="));
       Serial.print(MQTT_client.state());
       Serial.println(F(" try again in next cycle"));
-#else
-      Serial.print("TinyGSM: Retry MQQT connect ");
-      Serial.println(apn);
-      MQTT_client.setServer("sensor.aireciudadano.com", 80);
-      MQTT_client.connect(aireciudadano_device_id.c_str());
-      cont = 0;
-      while (!MQTT_client.connected()) {
-        cont++;
-        Serial.print("TinyGSM: Retry MQQT ");
-        Serial.println(cont);
-        smartDelay(5000);
-        if (cont > 5)
-        {
-          cont = 0;
-          FlagMQTTcon = true;
-          break;
-          //          ESP.restart();    // CASO sin MQTT_client.loop();
-        }
-        MQTT_client.setServer("sensor.aireciudadano.com", 80);
-        MQTT_client.connect(aireciudadano_device_id.c_str());
-      }
-      if (MQTT_client.connected())
-        Serial.println("TinyGSM:  success to apn");
-      else
-      {
-        Serial.println("TinyGSM:  no connection to apn");
-        ResetMobDataConn();
-      }
+#if MobData
+//%%%      intentosSoft++;
+//%%%      Serial.printf("Fallo MQTT (intento blando %d/%d)\n",
+//%%%                    intentosSoft, MAX_INTENTOS_SOFT);
+//%%%      EscalarSiNecesario();
 #endif
+      mqttConsecutiveFailures++;                                              // NUEVO
+      if (mqttConsecutiveFailures >= MQTT_MAX_CONSECUTIVE_FAILURES)
+      {
+        Serial.println(F("Demasiados fallos MQTT consecutivos, reiniciando ESP..."));
+        smartDelay(500);        // deja salir el mensaje por Serial antes de reiniciar
+        ESP.restart();
+      }
+
+      int rc = MQTT_client.state();
+      if (rc == -2)
+        mqttConsecutiveDashTwoFailures++;
+      else
+        mqttConsecutiveDashTwoFailures = 0;   // cualquier otro código sugiere que el pool ya no está agotado
+
+      if (mqttConsecutiveDashTwoFailures >= MQTT_DASH_TWO_RESET_THRESHOLD)
+      {
+        Serial.println(F("rc=-2 persistente, probable agotamiento de recursos TCP. Reiniciando..."));
+        smartDelay(200);
+        ESP.restart();
+      }
     }
   }
 }
@@ -3720,14 +3845,15 @@ void Send_Message_Cloud_App_MQTT()
   responsepublish = MQTT_client.publish(MQTT_send_topic.c_str(), MQTT_message, MQTT_QOS1, false);
   Serial.print("response: ");
   Serial.print(responsepublish);
+  MQTT_loop_review = millis();
 
   // Revisar el código de retorno
   if (responsepublish == 0) {
     Serial.println(", ERROR Mensaje no publicado");
-    smartDelay(5000);
-#if MobData
-    ResetMobDataConn();
-#endif
+    smartDelay(5050);
+    if (!MQTT_client.connected()) {
+      MQTT_Reconnect();
+    }
     responsepublish = MQTT_client.publish(MQTT_send_topic.c_str(), MQTT_message, MQTT_QOS1, false);
     if (responsepublish == 0)
       Serial.println("Reintento fallido, mensaje no publicado");
@@ -3769,7 +3895,7 @@ void Send_Message_Cloud_App_MQTTsam()
 
   RSSI = WiFi.RSSI();
 
-  Serial.print(F("Signal strength (RSSI):"));
+  Serial.print(F("Signal strength (RSSI): "));
   Serial.print(RSSI);
   Serial.println(F(" dBm"));
 
@@ -3803,7 +3929,7 @@ void Send_Message_Cloud_App_MQTTsam()
   responsepublish = MQTT_client.publish(MQTT_send_topicsam.c_str(), MQTT_message, MQTT_QOS1, false);
   Serial.print("response: ");
   Serial.println(responsepublish);
-
+  MQTT_loop_review = millis();
   // Revisar el código de retorno
   if (responsepublish == 0) {
     Serial.println("ERROR Mensaje no publicado");
@@ -3913,7 +4039,7 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
 
   // CustomSenPM
 
-#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || Incli || Nivel)
+#if !(Rosver || SoundMeter || MinVer || MinVerWi || MinVerSD || Rain || Incli || Nivel)
 
   tempcustom = ((uint16_t)jsonBuffer["altitude_compensation"]);
   if (tempcustom != 0)
@@ -3929,7 +4055,7 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
 
   // CustomSenHYT OR MaxWifiTX
 
-#if !(Rosver || SoundMeter || MinVer || MinVerSD || Rain || Incli || Nivel)
+#if !(Rosver || SoundMeter || MinVer || MinVerWi || MinVerSD || Rain || Incli || Nivel)
 
   tempcustom = ((uint16_t)jsonBuffer["FRC_value"]);
 
@@ -4046,6 +4172,80 @@ void Receive_Message_Cloud_App_MQTT(char *topic, byte *payload, unsigned int len
 ////////////////////////////////////////////////////////////////////////////////
 
 #if MobData
+
+// ============================================================================
+//  FUNCIONES
+// ============================================================================
+
+// Deja el módem registrado en la red y con GPRS activo.
+bool ConectarModemYRed() {
+  Serial.println("ConectarModemYRed: iniciando módem...");
+  modem.init();
+  smartDelay(3000);
+
+  String modemInfo = modem.getModemInfo();
+  SerialMon.print("MONTiny: Modem Info: ");
+  SerialMon.println(modemInfo);
+
+  Serial.print("ConectarModemYRed: esperando red... ");
+  if (!modem.waitForNetwork(ESPERA_RED_MS)) {
+    Serial.println("fallo");
+    return false;
+  }
+  Serial.println("ok");
+
+  if (!modem.isGprsConnected()) {
+    Serial.print("ConectarModemYRed: conectando GPRS a ");
+    Serial.println(apn);
+    if (!modem.gprsConnect(apn)) {
+      Serial.println("ConectarModemYRed: fallo GPRS");
+      return false;
+    }
+  }
+
+  Serial.print("ConectarModemYRed: IP = ");
+  Serial.println(modem.getLocalIP());
+  return true;
+}
+
+// Reset del módem por software (sin PWRKEY físico -- no es viable en tu hardware).
+void ReiniciarModem() {
+  Serial.println("ReiniciarModem: reset por software (AT)");
+  #if A7670
+    SerialAT.println("AT+CPOF");
+  #elif SIM7070
+    SerialAT.println("AT+CPOWD");
+  #elif SIM800
+    SerialAT.println("AT+CPOWD");
+  #endif
+  smartDelay(3000);
+  modem.restart();
+  smartDelay(10000);
+}
+
+// Escala la severidad de la recuperación según cuántos intentos blandos
+// consecutivos han fallado. Nunca bloquea más de lo que ya bloquea
+// ReiniciarModem() por sí sola (~13s), y nunca reintenta MQTT en el mismo
+// golpe -- deja que el gate de 5s de MQTT_Reconnect() se encargue en la
+// siguiente pasada.
+
+void EscalarSiNecesario() {
+  if (intentosSoft < MAX_INTENTOS_SOFT) return;
+
+  intentosSoft = 0;
+  intentosDuros++;
+  Serial.printf("Escalando: power-cycle del módem (%d/%d)\n",
+                intentosDuros, MAX_INTENTOS_POWERCYCLE);
+  ReiniciarModem();
+
+  if (intentosDuros >= MAX_INTENTOS_POWERCYCLE) {
+    Serial.println("Demasiados power-cycles sin éxito, reiniciando ESP...");
+    smartDelay(100);
+    ESP.restart();
+  }
+}
+
+/*
 
 void Connect_MobData()
 {
@@ -4294,6 +4494,8 @@ void ResetMobDataConn()
     }
   }
 }
+
+*/
 #endif
 
 #endif
@@ -4516,12 +4718,12 @@ void Write_SD()
 
 #if !MobDataSP
 
-#if (Rosver || MinVer || MobData || MinVerSD)
+#if (Rosver || MinVer || MinVerWi || MobData || MinVerSD)
 void Test_Sensor()
 {
   byte ErrorFlag = 0;
 
-#if (MinVer || MinVerSD)
+#if (MinVer || MinVerWi || MinVerSD)
   Serial.println(F("Test Sensirion SPS30 sensor"));
 #if ESP8266
   Wire.begin();
@@ -4691,7 +4893,7 @@ void Setup_Sensor()
 
   // Test PM2.5 SPS30
 
-#if !(MinVer || MinVerSD)
+#if !(MinVer || MinVerWi || MinVerSD)
 #if Wifi
 
   if (SPS30sen == true)
@@ -4729,7 +4931,7 @@ void Setup_Sensor()
       else
         Errorloop((char *)"Could NOT start measurement", 0);
     }
-#if !(MinVer || MinVerSD)
+#if !(MinVer || MinVerWi || MinVerSD)
 #if Wifi
   }
 
@@ -4740,7 +4942,7 @@ void Setup_Sensor()
   {
 #endif
 #endif
-#if (Bluetooth || SDyRTC || MinVer || MinVerSD)
+#if (Bluetooth || SDyRTC || MinVer || MinVerWi || MinVerSD)
     if (SPS30sen == false)
     {
 #endif
@@ -4785,7 +4987,7 @@ void Setup_Sensor()
         else
           Serial.println(F("SEN5X measurement OK"));
       }
-#if (Bluetooth || SDyRTC || MinVer || MinVerSD)
+#if (Bluetooth || SDyRTC || MinVer || MinVerWi || MinVerSD)
     }
 #else
     }
@@ -4970,7 +5172,7 @@ void Setup_Sensor()
       Serial.println(F("Could not find Plantower2 sensor!"));
 #endif
 
-#if !(Rosver || MinVer || MinVerSD)
+#if !(Rosver || MinVer || MinVerWi || MinVerSD)
 #if Wifi
   }
 
@@ -5026,7 +5228,7 @@ void Setup_Sensor()
       }
     }
 
-#if !(Rosver || MinVer || MobData || MinVerSD)
+#if !(Rosver || MinVer || MinVerWi || MobData || MinVerSD)
 #if Wifi
   }
 
@@ -5101,45 +5303,42 @@ void Read_Sensor()
     PM25_value = val.MassPM2;
     PM1_value = val.MassPM1;
 
-    if (!err_sensor)
-    {
-      if ((PM25_value == 0 && PM1_value == 0) || (PM25_value == PM25_valueold))
-      { // Recuperación de error en 0
-        if (failpm > 120)
-        {
-          failpm = 0;
-          Serial.print(F("Reset lectura sensor erronea 2"));
-          ESP.restart();
-        }
-        else
-          failpm = failpm + 1;
+    if ((PM25_value == 0 && PM1_value == 0) || (PM25_value == PM25_valueold))
+    { // Recuperación de error en 0
+      if (failpm > 120)
+      {
+        failpm = 0;
+        Serial.print(F("Reset lectura sensor erronea 2"));
+        ESP.restart();
       }
       else
-        failpm = 0;
-      // Provide the sensor values for Tools -> Serial Monitor or Serial Plotter
-      Serial.print(F("SPS30 PM2.5: "));
-      Serial.print(PM25_value);
-      Serial.print(F(" ug/m3   "));
-      PM25_value_ori = PM25_value;
+        failpm = failpm + 1;
+    }
+    else
+      failpm = 0;
+    // Provide the sensor values for Tools -> Serial Monitor or Serial Plotter
+    Serial.print(F("SPS30 PM2.5: "));
+    Serial.print(PM25_value);
+    Serial.print(F(" ug/m3   "));
+    PM25_value_ori = PM25_value;
 
 #if Bluetooth
-      if (FlagAdjustSensor == 0) {
-        Serial.print("No ");
-      }
-      else {
-        //Serial.println("Adjust PM2.5 SPS30");
-        PM25_value = ((1207 * PM25_value_ori) / 1000) - 1.01; // Ajuste propuesto por paper USA, falta calibracion propia
-      }
-#else
-      // PM25_value = ((1280 * PM25_value_ori) / 1000) + 1.78; // Ajuste propuesto por paper USA, falta calibracion propia
-      PM25_value = ((1207 * PM25_value_ori) / 1000) - 1.01; // Ajuste propuesto por paper USA, falta calibracion propia
-#endif
-      if (PM25_value < 0)
-        PM25_value = 0;
-      Serial.print(F("Adjust: "));
-      Serial.print(PM25_value);
-      Serial.println(F(" ug/m3"));
+    if (FlagAdjustSensor == 0) {
+      Serial.print("No ");
     }
+    else {
+      //Serial.println("Adjust PM2.5 SPS30");
+      PM25_value = ((1207 * PM25_value_ori) / 1000) - 1.01; // Ajuste propuesto por paper USA, falta calibracion propia
+    }
+#else
+    // PM25_value = ((1280 * PM25_value_ori) / 1000) + 1.78; // Ajuste propuesto por paper USA, falta calibracion propia
+    PM25_value = ((1207 * PM25_value_ori) / 1000) - 1.01; // Ajuste propuesto por paper USA, falta calibracion propia
+#endif
+    if (PM25_value < 0)
+      PM25_value = 0;
+    Serial.print(F("Adjust: "));
+    Serial.print(PM25_value);
+    Serial.println(F(" ug/m3"));
   }
   else if (SEN5Xsen == true)
   {
@@ -5355,14 +5554,14 @@ void Read_Sensor()
 #else
       Serial.println(F("No data by Plantower sensor!"));
       // Rutina Test para enviar datos sin sensor conectado PM25 fake ESP32
-      // /*
+      /*
       PM25_value = random(10, 30);
-      //        PM25_accumulated += PM25_value;
-      //        PM25_samples++;
-      //        Con_loop_times++;
+      PM25_accumulated += PM25_value;
+      PM25_samples++;
+      Con_loop_times++;
       Serial.print(F("Valor random: "));
       Serial.println(PM25_value);
-      // */
+      */
 #endif
 
       if (failpm > 120)
@@ -6442,7 +6641,7 @@ void printModuleVersions()
     Serial.print(F("Error trying to execute getProductName(): "));
     errorToString(error, errorMessage, 256);
     Serial.println(errorMessage);
-#if (MinVer || MinVerSD)
+#if (MinVer || MinVerWi || MinVerSD)
     SEN5Xsen = false;  // Sensor Sensirion SEN5X
 #endif
   }
@@ -6455,7 +6654,7 @@ void printModuleVersions()
       FlagSENHyT = true;
     if (String(((char *)productName)) == "SEN55")
       FlagSENHyT = true;
-#if (MinVer || MinVerSD)
+#if (MinVer || MinVerWi || MinVerSD)
     SEN5Xsen = true;  // Sensor Sensirion SEN5X
 #endif
   }
@@ -6608,7 +6807,7 @@ void ReadHyT()
     }
   }
 
-#if !(Rosver || MinVer || MobData || MinVerSD)
+#if !(Rosver || MinVer || MinVerWi || MobData || MinVerSD)
   // AM2320//
   else if (AM2320sen == true)
   {
@@ -6669,7 +6868,7 @@ void ReadHyT()
   }
   else
   {
-    Serial.println(F("Error or bad range humi &or temp"));
+//    Serial.println(F("Error or bad range humi &or temp"));  //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     humi = 0;
     temp = 0;
   }
@@ -6790,7 +6989,7 @@ void Get_AireCiudadano_DeviceId()
   chipIdHEX = String(ESP.getChipId(), HEX);
   strncpy(aireciudadano_device_id_endframe, chipIdHEX.c_str(), sizeof(aireciudadano_device_id_endframe));
 #if Wifi
-#if !(Rosver || MinVer || MobData || MinVerSD)
+#if !(Rosver || MinVer || MinVerWi || MobData || MinVerSD)
   Aireciudadano_Characteristics();
 #else
   if (eepromConfig.ConfigValues[4] == '0')
@@ -6832,7 +7031,7 @@ void Get_AireCiudadano_DeviceId()
 void Aireciudadano_Characteristics()
 {
 #if !Bluetooth
-#if !(Rosver || SoundMeter || MinVer || MobData || MinVerSD || LTR390UV || Rain || Incli || Nivel)
+#if !(Rosver || SoundMeter || MinVer || MinVerWi || MobData || MinVerSD || LTR390UV || Rain || Incli || Nivel)
   Serial.print(F("eepromConfig.ConfigValues: "));
   Serial.println(eepromConfig.ConfigValues);
 
