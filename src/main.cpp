@@ -56,6 +56,7 @@
 //      serial al A7670 a 9600 para evitar errores
 //      DUMP_AT_COMMANDS se debe eliminar despues de OK
 //      Todas las rutinas cambiaron
+//      En Captive Portal eliminado el menu de wifi y password
 
 
 // Refactorizacion de codigo por bloques:
@@ -102,6 +103,8 @@
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
 
+#define VerWiMin true    // Set to true for ESP8266 with problems of reset, lower wifi power and flash size
+
 // PM opciones:
 #define TwoPMS false     // Set to true if you want 2 PMS7003 sensors
 #define ZH10sen false    // Set to true for ZH10 instead PMSX003
@@ -131,14 +134,17 @@
 #define OLED96display false   // Pantalla OLED 0.96"
 
 // MobData: Seleccion de operador de telefonia movil
-#define TigoKalleyExito false
+#define TigoKalleyExito true
 #define MovistarVirgin false
 #define Claro false
 #define Wom false
 // Seleccion board SIM
-#define A7670 false
+#define A7670 true
 #define SIM7070 false
 #define SIM800 false
+
+// See all AT commands, if wanted
+//#define DUMP_AT_COMMANDS
 
 // CO2:
 #define CO2sensor false       // Set to true for CO2 sensors: SCD30 and SenseAir S8
@@ -251,6 +257,10 @@ String chipIdHEX;
 // dBm max: +20.5dBm  min: 0dBm
 //#define PowerWi 20.5         // Maxium power for ESP8266 with Reset problems
 #define PowerWi 14.5        // Maxium power for ESP8266 with Reset problems
+#endif
+
+#if VerWiMin
+#define PowerWi 14        // Maxium power for ESP8266 with Reset problems and wifi only for Captive Portal
 #endif
 
 #if Rosver
@@ -402,7 +412,11 @@ const unsigned int MQTT_DASH_TWO_RESET_THRESHOLD = 8;
 
 // Errors loop: time between error condition recovery
 //unsigned int errors_loop_duration = 60000; // 60 seconds
+#if Mobdata
+unsigned int errors_loop_duration = 8000;    // 10 seconds
+#else
 unsigned int errors_loop_duration = 3000;    // 10 seconds
+#endif
 unsigned long errors_loop_start;             // holds a timestamp for each error loop start
 
 byte cont = 0;
@@ -1181,11 +1195,12 @@ SoftwareSerial SerialAT(13, 12);  // D7 RX, D6 TX en la board, conectar al SIM  
 // Use Hardware Serial on Mega, Leonardo, Micro
 //#define SerialAT Serial2
 
-// See all AT commands, if wanted
-#define DUMP_AT_COMMANDS
-
 // Define the serial console for debug prints, if needed
 #define TINY_GSM_DEBUG SerialMon
+
+bool err_mobdata = false;
+unsigned long mobDataReconnectAttemptTime = 0;
+#define MOBDATA_RECONNECT_MIN_INTERVAL 20000   // ajusta este valor
 
 // Your GPRS credentials, if any
 #if TigoKalleyExito
@@ -1216,9 +1231,9 @@ TinyGsmClient client(modem);
 PubSubClient MQTT_client(client);
 
 // ---- Parámetros centralizados ----
-#define MAX_INTENTOS_SOFT         4        // reintentos blandos antes de power-cycle del módem
+#define MAX_INTENTOS_SOFT         10        // reintentos blandos antes de power-cycle del módem
 #define MAX_INTENTOS_POWERCYCLE   3         // power-cycles antes de ESP.restart()
-#define ESPERA_RED_MS             60000UL
+#define ESPERA_RED_MS             20000UL
 
 // ---- Estado de reconexión para MobData ----
 uint8_t  intentosSoft   = 0;
@@ -1568,7 +1583,7 @@ void setup()
 
 #if Wifi
 
-#if MinVerWi
+#if (MinVerWi || VerWiMin)
 // Para versiones con problemas de Reset.
 // dBm max: +20.5dBm  min: 0dBm
 // Por defecto 20.5, no sirve
@@ -1649,7 +1664,7 @@ void setup()
   {
 #if MobData
 //    SerialAT.begin(19200);
-//%%%    SerialAT.begin(9600);
+    SerialAT.begin(9600);
     smartDelay(10);
 
 #if SIM7070
@@ -1682,19 +1697,23 @@ void setup()
     MQTT_client.setServer("sensor.aireciudadano.com", 30183);
 #endif
 
-//%%%   MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
+   MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
 
   // Attempt to connect to Mobile Data network:
-//%%%  for (uint8_t i = 0; i < MAX_INTENTOS_SOFT; i++) {
-//%%%    Serial.printf("Connect MobData routine (intento %d/%d)\n", i + 1, MAX_INTENTOS_SOFT);
-//%%%    if (ConectarModemYRed() && MQTT_client.connect(aireciudadano_device_id.c_str())) {
-//%%%      MQTT_client.subscribe(MQTT_receive_topic.c_str(), MQTT_QOS1);
-//%%%      Serial.println("MobData listo");
-//%%%      break;
-//%%%    }
-//%%%    smartDelay(5000);
-//%%%  }
-//%%%  Serial.println("Init MQTT routine");
+  for (uint8_t i = 0; i < MAX_INTENTOS_SOFT; i++) {
+    Serial.printf("Connect MobData rutina (intento %d/%d)\n", i + 1, MAX_INTENTOS_SOFT);
+
+    bool redOk = (modem.isNetworkConnected() && modem.isGprsConnected()) || ConectarModemYRed();
+
+    if (redOk && MQTT_client.connect(aireciudadano_device_id.c_str())) {
+      MQTT_client.subscribe(MQTT_receive_topic.c_str(), MQTT_QOS1);
+      Serial.println("MobData listo");
+      break;
+    }
+    Serial.printf("MQTT connect fallo, rc=%d\n", MQTT_client.state());   // <- clave para saber por qué
+    smartDelay(5000);
+  }
+  Serial.println("Init MQTT routine");
 //  FlagMQTTcon = false;
   Init_MQTT();
   // Si no logró conectar aquí, MQTT_Reconnect() en el loop() seguirá
@@ -2305,6 +2324,43 @@ void loop()
           MQTT_Reconnect();
         }
       }
+      else        // FlagMobData == true   !!!!!!!!!REVISAR
+      {
+        if (!modem.isNetworkConnected() || !modem.isGprsConnected())
+        {
+          Serial.println(F("--- err_mobdata"));
+          err_mobdata = true;
+          if ((millis() - mobDataReconnectAttemptTime) >= MOBDATA_RECONNECT_MIN_INTERVAL)
+          {
+            mobDataReconnectAttemptTime = millis();
+            if (!ConectarModemYRed())
+            {
+              intentosSoft++;
+              Serial.printf("Fallo de red/GPRS (intento blando %d/%d)\n", intentosSoft, MAX_INTENTOS_SOFT);
+              EscalarSiNecesario();
+            }
+          }
+        }
+        else
+        {
+          err_mobdata = false;
+        }
+
+        // Reconnect MQTT if needed
+        if ((!MQTT_client.connected()) && (!err_mobdata))
+        {
+          Serial.println(F("--- err_mqtt"));
+          err_MQTT = true;
+          FlagDATAicon = false;
+        }
+
+        // Reconnect MQTT if needed
+        if ((err_MQTT) && (!err_mobdata))
+        {
+          Serial.println(F("--- MQTT reconnect"));
+          MQTT_Reconnect();
+        }
+      }
     }
 #endif
   }
@@ -2333,25 +2389,25 @@ void loop()
     }
     else
     {
-//%%%      if ((millis() - MQTT_loop_review) >= MQTT_loop_review_duration_Mobdata)     // Revisar cada 10000 milisegundos
-//%%%      {
+      if ((millis() - MQTT_loop_review) >= MQTT_loop_review_duration_Mobdata)     // Revisar cada 10000 milisegundos
+      {
         // New timestamp for the loop start time
-//%%%        MQTT_loop_review = millis();
+        MQTT_loop_review = millis();
         // From here, all other tasks performed outside of measurements, MQTT and error loops
 
         // if not there are not connectivity errors, receive MQTT messages
-//%%%        if (!err_MQTT)
-//%%%        {
-//%%%          if (MQTT_client.connected()) {
-//%%%              MQTT_client.loop();                     // Ocurre cada lectura de Sensor, osea cada 1seg
-//%%%              Serial.println("MQTT_client.loop");
-//%%%              // Process wifi server requests
-//%%%              Check_WiFi_Server(); // Se necesita para MobData no para Wifi!!!!!!!!!!!!!!!!!!!
-//%%%          } else {
-//%%%              Serial.println("MQTT_client not connected");
-//%%%          }
-//%%%        }
-//%%%      }
+        if (!err_MQTT)
+        {
+          if (MQTT_client.connected()) {
+              MQTT_client.loop();                     // Ocurre cada lectura de Sensor, osea cada 1seg
+              Serial.println("MQTT_client.loop");
+              // Process wifi server requests
+              Check_WiFi_Server(); // Se necesita para MobData no para Wifi!!!!!!!!!!!!!!!!!!!
+          } else {
+              Serial.println("MQTT_client not connected");
+          }
+        }
+      }
     }
   }
 #endif
@@ -3236,8 +3292,13 @@ void Start_Captive_Portal()
 
   wifiManager.setConfigPortalTimeout(captiveportaltime);
 
+#if !(MobData || MobDataSP)   
   const char *menu[] = {"wifi", "wifinoscan", "info", "exit", "sep", "update"};
   wifiManager.setMenu(menu, 6);
+#else
+  const char *menu[] = {"param", "info", "exit", "sep", "update"};
+  wifiManager.setMenu(menu, 5);
+#endif
 
   // it starts an access point
   // and goes into a blocking loop awaiting configuration
@@ -3390,6 +3451,7 @@ void saveParamCallback()
 #if MobData
   FlagMobData = true;
   Serial.println(F("Mobile Data mode"));
+  wifiManager.stopConfigPortal();  // fuerza el cierre inmediato, sin esperar el timeout
 #else
   FlagMobData = false;
   Serial.println(F("NO Mobile Data mode"));
@@ -3484,16 +3546,16 @@ void MQTT_Reconnect()
 
 #if MobData
     // Antes de intentar MQTT, asegurar que la capa de red/GPRS esté arriba.
-//%%%    if (!modem.isNetworkConnected() || !modem.isGprsConnected()) {
-//%%%      Serial.println("MQTT_Reconnect: red/GPRS caída, reintentando capa inferior...");
-//%%%      if (!ConectarModemYRed()) {
-//%%%        intentosSoft++;
-//%%%        Serial.printf("Fallo de red/GPRS (intento blando %d/%d)\n",
-//%%%                      intentosSoft, MAX_INTENTOS_SOFT);
-//%%%        EscalarSiNecesario();
-//%%%        return;
-//%%%      }
-//%%%    }
+    if (!modem.isNetworkConnected() || !modem.isGprsConnected()) {
+      Serial.println("MQTT_Reconnect: red/GPRS caída, reintentando capa inferior...");
+      if (!ConectarModemYRed()) {
+        intentosSoft++;
+        Serial.printf("Fallo de red/GPRS (intento blando %d/%d)\n",
+                      intentosSoft, MAX_INTENTOS_SOFT);
+        EscalarSiNecesario();
+        return;
+      }
+    }
 #endif
 
     Serial.print(F("Try to reconnect MQTT connection..."));
@@ -3511,10 +3573,11 @@ void MQTT_Reconnect()
       contmqtt = 0;
 
       mqttConsecutiveFailures = 0;   // NUEVO
+      mqttConsecutiveDashTwoFailures = 0;   // <- agregar esta línea
 
 #if MobData
-//%%%      intentosSoft = 0;
-//%%%      intentosDuros = 0;
+      intentosSoft = 0;
+      intentosDuros = 0;
 #endif
 #if !ESP8266
       digitalWrite(LEDPIN, HIGH);
@@ -3537,16 +3600,17 @@ void MQTT_Reconnect()
       Serial.print(MQTT_client.state());
       Serial.println(F(" try again in next cycle"));
 #if MobData
-//%%%      intentosSoft++;
-//%%%      Serial.printf("Fallo MQTT (intento blando %d/%d)\n",
-//%%%                    intentosSoft, MAX_INTENTOS_SOFT);
-//%%%      EscalarSiNecesario();
+      intentosSoft++;
+      Serial.printf("Fallo MQTT (intento blando %d/%d)\n",
+                    intentosSoft, MAX_INTENTOS_SOFT);
+      EscalarSiNecesario();
 #endif
       mqttConsecutiveFailures++;                                              // NUEVO
       if (mqttConsecutiveFailures >= MQTT_MAX_CONSECUTIVE_FAILURES)
       {
         Serial.println(F("Demasiados fallos MQTT consecutivos, reiniciando ESP..."));
         smartDelay(500);        // deja salir el mensaje por Serial antes de reiniciar
+        MQTT_client.disconnect();
         ESP.restart();
       }
 
@@ -3560,6 +3624,7 @@ void MQTT_Reconnect()
       {
         Serial.println(F("rc=-2 persistente, probable agotamiento de recursos TCP. Reiniciando..."));
         smartDelay(200);
+        MQTT_client.disconnect();
         ESP.restart();
       }
     }
@@ -4219,6 +4284,8 @@ void ReiniciarModem() {
     SerialAT.println("AT+CPOWD");
   #endif
   smartDelay(3000);
+  MQTT_client.disconnect();
+  smartDelay(1000);
   modem.restart();
   smartDelay(10000);
 }
@@ -4241,261 +4308,11 @@ void EscalarSiNecesario() {
   if (intentosDuros >= MAX_INTENTOS_POWERCYCLE) {
     Serial.println("Demasiados power-cycles sin éxito, reiniciando ESP...");
     smartDelay(100);
+    MQTT_client.disconnect();
     ESP.restart();
   }
 }
 
-/*
-
-void Connect_MobData()
-{
-  Serial.println("");
-  Serial.println("Connect_MobData");
-  Serial.println("TinyGSM: Wait...");
-revini:
-
-  if (FlagPoweroff == true)
-  { // Power off
-    SerialMon.println("MONTiny: Reinit Power off - on");
-#if A7670
-    SerialAT.println("AT+CPOF");
-#elif SIM7070
-    SerialAT.println("AT+CPOWD");
-#elif SIM800
-    SerialAT.println("AT+CPOWD");
-#endif
-  }
-  else
-  { // Restart
-    SerialMon.println("MONTiny: Initializing modem...");
-    modem.restart();
-  }
-  smartDelay(15000);
-
-  String modemInfo = modem.getModemInfo();
-  SerialMon.print("MONTiny: Modem Info: ");
-  SerialMon.println(modemInfo);
-
-revini2:
-  SerialMon.print("MONTiny: Waiting for network...");
-  if (!modem.waitForNetwork()) {
-    SerialMon.println("MONTiny: fail");
-    smartDelay(10000);
-    if (modem.waitForNetwork()) {
-      goto revexit;
-    }
-    Contacon ++;
-    if (Contacon < 60)
-      goto revini2;
-    else
-      goto revini;
-  }
-revexit:
-  Contacon = 0;
-  SerialMon.println("MONTiny: success waiting for network");
-
-  if (modem.isNetworkConnected()) {
-    SerialMon.println("MONTiny: Network connected");
-  }
-  else
-  {
-    Serial.println("TinyGSM: NO Network connected");
-    smartDelay(10);
-    goto revini;
-  }
-
-
-  // GPRS connection parameters are usually set after network registration
-  SerialMon.print("MONTiny: Connecting to ");
-  SerialMon.print(apn);
-  //  if (!modem.gprsConnect(apn, user1, pw1)) {
-  if (!modem.gprsConnect(apn)) {
-    SerialMon.println("MONTiny: fail apn");
-    smartDelay(10000);
-    //    return;
-    goto revini;
-  }
-  SerialMon.println("MONTiny:  success to apn");
-
-  if (modem.isGprsConnected()) {
-    SerialMon.println("MONTiny: GPRS connected");
-  }
-
-  // CASI SE REPITE 2 VECES !!!!!!!!!!!!!!!!
-  // Make sure we're still registered on the network.
-  if (!modem.isNetworkConnected()) {
-    SerialMon.println("MONTiny: Network disconnected");
-    if (!modem.waitForNetwork(180000L, true)) {
-      SerialMon.println("MONTiny: fail1");
-      smartDelay(10000);
-      //      return;
-      goto revini;
-    }
-    if (modem.isNetworkConnected()) {
-      SerialMon.println("MONTiny: Network re-connected");
-    }
-    if (!modem.isGprsConnected()) {
-      SerialMon.println("MONTiny: GPRS disconnected!");
-      SerialMon.print(F("Connecting to "));
-      SerialMon.print(apn);
-      if (!modem.gprsConnect(apn)) {
-        SerialMon.println("MONTiny: fail2");
-        smartDelay(10000);
-        //        return;
-        goto revini;
-      }
-      if (modem.isGprsConnected()) {
-        SerialMon.println("MONTiny: GPRS reconnected");
-      }
-      Serial.println("MonTiny: NEW IP ADDRESS : " + modem.getLocalIP());
-    }
-  }
-}
-
-void MobDataConnected()
-{
-  Serial.println("MobDataConnected");
-  // Make sure we're still registered on the network
-  if (!modem.isNetworkConnected()) {
-    Serial.println("TinyGSM: Network disconnected");
-    if (!modem.waitForNetwork(180000L, true)) {
-      Serial.println(" fail");
-      smartDelay(10000);
-      return;
-    }
-    if (modem.isNetworkConnected())
-      Serial.println("TinyGSM:: Network re-connected");
-    // and make sure GPRS/EPS is still connected
-    if (!modem.isGprsConnected()) {
-      Serial.print("TinyGSM: GPRS disconnected!");
-      Serial.print(F("Connecting to "));
-      Serial.print(apn);
-      if (!modem.gprsConnect(apn)) {
-        Serial.println("  fail");
-        smartDelay(10000);
-        return;
-      }
-      if (modem.isGprsConnected())
-        Serial.println("TinyGSM: GPRS reconnected");
-    }
-  }
-  else
-    Serial.println("TinyGSM: Network connected ok");
-
-  Serial.println("TinyGSM: IP ADDRESS : " + modem.getLocalIP());
-  Serial.println("Signal Quality: " + modem.getSignalQuality());//  delay(5);   // TEST
-
-  if (!MQTT_client.connected()) {
-    Serial.println("TinyGSM: MQTT not connected");
-    SerialMon.print("Disconnecting from: ");
-    SerialMon.println("sensor.aireciudadano.com");
-    MQTT_client.disconnect(); // Disconnect from MQTT  //added 08/04/2023
-    smartDelay(500);
-    SerialMon.print("Network State is: ");
-    SerialMon.println(modem.isGprsConnected()); //added 08/04/2023
-    // Reconnect every 10 seconds
-    uint32_t t = millis();
-    if (t - lastReconnectAttempt > 10000L) {
-      lastReconnectAttempt = t;
-      if (!modem.isGprsConnected()) {
-        // Reconnect to GPRS network if not connected
-        SerialMon.println("NEW ROUTINE: GPRS not connected, reconnecting...");
-        if (!modem.gprsConnect(apn)) {
-          SerialMon.println("GPRS reconnect failed");
-          smartDelay(10000);
-          return;
-        }
-      }
-      if (MqttConnectok()) {
-        lastReconnectAttempt = 0;
-      }
-    }
-    smartDelay(100);
-    return;
-  }
-  else
-    Serial.println("TinyGSM: MQTT connected");
-}
-
-boolean MqttConnectok()
-{
-  Serial.println("MqttConnectok");
-  Serial.println("Re Connecting to: sensor.aireciudadano.com");
-
-  ResetMobDataConn();
-
-  boolean status = MQTT_client.connect(aireciudadano_device_id.c_str());
-
-  if (status == false) {
-    Serial.println("Fail MqttConnectok");
-    return false;
-  }
-  Serial.println("Success MqttConnectok");
-  MQTT_client.subscribe(MQTT_receive_topic.c_str(), MQTT_QOS1);
-  return MQTT_client.connected();
-}
-
-void ResetMobDataConn()
-{
-  Serial.println("ResetMobDataCon");
-  if (ResetFlagMobData == false)
-  {
-    if (contmqtt < 4)
-    {
-      Serial.println("Reset Mobile Data Connection, first Connect_MobData");
-      Connect_MobData();
-      smartDelay(100);
-      Serial.println("second Init MQTT routine 1");
-      Init_MQTT();
-      smartDelay(100);
-      contmqtt ++;
-      FlagPoweroff = false;
-    }
-    else
-    {
-      Serial.println("Reset Mobile Data Connection, first Power off and Connect_MobData");
-      FlagPoweroff = true;
-      ResetFlagMobData = true;
-      Connect_MobData();
-      smartDelay(100);
-      Serial.println("second Init MQTT routine 2");
-      Init_MQTT();
-      smartDelay(100);
-      contmqtt = 0;
-    }
-  }
-  else
-  {
-    if (contmqtt < 4)
-    {
-      Serial.println("Reset Mobile Data Connection, first Power off and Connect_MobData");
-      FlagPoweroff = true;
-      ResetFlagMobData = true;
-      Connect_MobData();
-      smartDelay(100);
-      Serial.println("second Init MQTT routine 3");
-      Init_MQTT();
-      smartDelay(100);
-      contmqtt ++;
-    }
-    else
-    {
-#if A7670
-      Serial.println("Reset module A7670");
-#elif SIM7070
-      Serial.println("Reset module SIM7070");
-#elif SIM800
-      Serial.println("Reset module SIM800");
-#endif
-      FlagPoweroff = false;
-      ResetFlagMobData = false;
-      contmqtt = 0;
-      ESP.restart();
-    }
-  }
-}
-
-*/
 #endif
 
 #endif
@@ -7189,6 +7006,52 @@ void Aireciudadano_Characteristics()
   Serial.println(F("WPA2 security"));
 #endif
 
+#elif MobData
+
+  Serial.print(F("eepromConfig.ConfigValues: "));
+  Serial.println(eepromConfig.ConfigValues);
+
+  Serial.print(F("eepromConfig.ConfigValues[3]: "));
+  Serial.println(eepromConfig.ConfigValues[3]);
+  if (eepromConfig.ConfigValues[3] == '0')
+  {
+    AmbInOutdoors = false;
+    Serial.println(F("Outdoors"));
+  }
+  else
+  {
+    AmbInOutdoors = true;
+    Serial.println(F("Indoors"));
+  }
+
+  if (SPS30sen == true)
+    Serial.println(F("SPS30 sensor"));
+  else
+    Serial.println(F("No SPS30 sensor"));
+
+  if (SEN5Xsen == true)
+    Serial.println(F("SEN5X sensor"));
+  else
+    Serial.println(F("No SEN5X sensor"));
+
+  if (PMSsen == true)
+    Serial.println(F("PMS sensor"));
+  else
+    Serial.println(F("No PMS sensor"));
+
+  if (SHTsen == true)
+    Serial.println(F("SHT31/SHT4x sensor"));
+  else
+    Serial.println("No SHT31/SHT4x sensor");
+
+#if MobData
+  FlagMobData = true;
+  Serial.println(F("Mobile Data mode"));
+#else
+  FlagMobData = false;
+  Serial.println(F("NO Mobile Data mode"));
+#endif
+
 #elif MinVer
   Serial.print(F("eepromConfig.ConfigValues: "));
   Serial.println(eepromConfig.ConfigValues);
@@ -7304,52 +7167,6 @@ void Aireciudadano_Characteristics()
     SDflag = true;
     Serial.println(F("SD & RTC mode"));
   }
-
-#elif MobData
-
-  Serial.print(F("eepromConfig.ConfigValues: "));
-  Serial.println(eepromConfig.ConfigValues);
-
-  Serial.print(F("eepromConfig.ConfigValues[3]: "));
-  Serial.println(eepromConfig.ConfigValues[3]);
-  if (eepromConfig.ConfigValues[3] == '0')
-  {
-    AmbInOutdoors = false;
-    Serial.println(F("Outdoors"));
-  }
-  else
-  {
-    AmbInOutdoors = true;
-    Serial.println(F("Indoors"));
-  }
-
-  if (SPS30sen == true)
-    Serial.println(F("SPS30 sensor"));
-  else
-    Serial.println(F("No SPS30 sensor"));
-
-  if (SEN5Xsen == true)
-    Serial.println(F("SEN5X sensor"));
-  else
-    Serial.println(F("No SEN5X sensor"));
-
-  if (PMSsen == true)
-    Serial.println(F("PMS sensor"));
-  else
-    Serial.println(F("No PMS sensor"));
-
-  if (SHTsen == true)
-    Serial.println(F("SHT31/SHT4x sensor"));
-  else
-    Serial.println("No SHT31/SHT4x sensor");
-
-#if MobData
-  FlagMobData = true;
-  Serial.println(F("Mobile Data mode"));
-#else
-  FlagMobData = false;
-  Serial.println(F("NO Mobile Data mode"));
-#endif
 
 #else // SoundMeter & LTR390UV & Rain & Incli & Nivel
 #if !(LTR390UV || Rain || Incli || Nivel)
