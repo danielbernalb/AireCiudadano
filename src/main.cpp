@@ -103,7 +103,7 @@
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
 
-#define VerWiMin false   // Set to true for ESP8266 with problems of reset, lower wifi power and flash size
+#define VerWiMin false    // Set to true for ESP8266 with problems of reset, lower wifi power and flash size
 
 // PM opciones:
 #define TwoPMS false     // Set to true if you want 2 PMS7003 sensors
@@ -254,13 +254,12 @@ uint32_t IDn = 0;
 String chipIdHEX;
 
 #if MinVerWi
-// dBm max: +20.5dBm  min: 0dBm
-//#define PowerWi 20.5         // Maxium power for ESP8266 with Reset problems
+// dBm max: +20.5dBm (Default)  min: 0dBm
 #define PowerWi 14.5        // Maxium power for ESP8266 with Reset problems
 #endif
 
 #if VerWiMin
-#define PowerWi 14        // Maxium power for ESP8266 with Reset problems and wifi only for Captive Portal
+#define PowerWi 14.5        // Maxium power for ESP8266 with Reset problems and wifi only for Captive Portal
 #endif
 
 #if Rosver
@@ -686,11 +685,11 @@ PMS::DATA data;
 #define PMS_TX2 12 // PMS TX pin      // D6
 #define PMS_RX2 2  // PMS RX pin
 #endif
-#else
-#define PMS_TX 0  // PMS TX pin
-#define PMS_RX 16 // PMS RX pin
+#else   // Rosver
+#define PMS_TX 0  // PMS TX pin   D3
+#define PMS_RX 16 // PMS RX pin   NC
 #endif
-#else
+#else   // ESP8285
 #define PMS_TX 3 // PMS TX pin
 #define PMS_RX 2 // PMS RX pin
 #endif
@@ -1592,6 +1591,11 @@ void setup()
 // 15 sirve
   WiFi.setSleepMode(WIFI_NONE_SLEEP);
   WiFi.setOutputPower(PowerWi);
+  Serial.print(F("WiFi output power: "));
+  Serial.print(PowerWi);
+  Serial.println(F(" dBm"));
+#else
+  Serial.println(F("WiFi output power: Default 20.5dBm"));
 #endif
 
 #endif
