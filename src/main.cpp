@@ -53,7 +53,7 @@
 // 38. Cambios en Mobdata:
 //      mqtt.loop cada 10 seg, keeplive de 30 seg. 
 //      cambio en el codigo de conexion y reconexion
-//      serial al A7670 a 9600 para evitar errores
+//      serial para MobData a 9600 para evitar errores, SIM7070 no sirve para Tigo
 //      DUMP_AT_COMMANDS se debe eliminar despues de OK
 //      Todas las rutinas cambiaron
 //      En Captive Portal eliminado el menu de wifi y password
@@ -103,7 +103,7 @@
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
 
-#define VerWiMin false    // Set to true for ESP8266 with problems of reset, lower wifi power and flash size
+#define VerWiMin true    // Set to true for ESP8266 with problems of reset, lower wifi power and flash size
 
 // PM opciones:
 #define TwoPMS false     // Set to true if you want 2 PMS7003 sensors
@@ -134,12 +134,12 @@
 #define OLED96display false   // Pantalla OLED 0.96"
 
 // MobData: Seleccion de operador de telefonia movil
-#define TigoKalleyExito false
+#define TigoKalleyExito true
 #define MovistarVirgin false
 #define Claro false
 #define Wom false
 // Seleccion board SIM
-#define A7670 false
+#define A7670 true
 #define SIM7070 false
 #define SIM800 false
 
@@ -1672,7 +1672,8 @@ void setup()
     smartDelay(10);
 
 #if SIM7070
-    if (ResetFlag == true)
+//    if (ResetFlag == true)
+    if (ResetFlag == false)
     {
       Serial.println("Power ON SIM7070 routine");
       pinMode(PowerSIM7070, OUTPUT);
@@ -5208,6 +5209,21 @@ void Read_Sensor()
       Serial.print(F("SEN5X PM2.5: "));
       Serial.print(PM25_value);
       Serial.print(F(" ug/m3   "));
+
+//////////////////////////////////// AJUSTE DIRECTO
+/*
+      PM25_value_ori = PM25_value;
+
+      // PM2.5_Carepa02_corregido = PM2.5_Carepa02 * 1.56236 + 0.87197
+      PM25_value = ((1562 * PM25_value_ori) / 1000) + 0.87;
+      if (PM25_value < 0)
+        PM25_value = 0;
+      Serial.print(F("Adjust: "));
+      Serial.print(PM25_value);
+      Serial.print(F(" ug/m3   "));
+*/
+////////////////////////////////////
+
       PM1_value = massConcentrationPm1p0;
       Serial.print(F(" Humi % = "));
       if (isnan(ambientHumidity))
@@ -5376,7 +5392,7 @@ void Read_Sensor()
       Serial.println(F("No data by SDS011 sensor!"));
 #else
       Serial.println(F("No data by Plantower sensor!"));
-      // Rutina Test para enviar datos sin sensor conectado PM25 fake ESP32
+      // Rutina Test para enviar datos sin sensor conectado PM25 fake ESP32 dummy
       /*
       PM25_value = random(10, 30);
       PM25_accumulated += PM25_value;
