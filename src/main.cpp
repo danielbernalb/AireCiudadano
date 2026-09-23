@@ -40,8 +40,8 @@
 // 28. Lectura Nivel con JSN-SR04M-2 por pines
 // 29. LTR390UV: inout = 2
 //     Rain:     inout = 3
-//     Incli:  inout = 4
-//     Nivel: inout = 5
+//     Incli:    inout = 4
+//     Nivel:    inout = 5
 // 30. Constantes de Ajuste de sensores programables: pendiente e intercepto. ANALIZAR MAS
 // 31. Opción de Relay para sensor móvil
 // 32. Lectura del JSN-SR04M-2 serial
@@ -51,7 +51,7 @@
 // 36. Lectura de nivel mmWave 80 GHz sen0676
 // 37. Nueva opcion env: esp8266minwi para boards con problemas de reseteos, bajar dBm y flash
 // 38. Cambios en Mobdata:
-//      mqtt.loop cada 10 seg, keeplive de 30 seg. 
+//      mqtt.loop cada 10 seg, keeplive de 30 seg.
 //      cambio en el codigo de conexion y reconexion
 //      serial para MobData a 9600 para evitar errores, SIM7070 no sirve para Tigo
 //      DUMP_AT_COMMANDS se debe eliminar despues de OK
@@ -1138,19 +1138,19 @@ int bytesLeidos = 0;              // Contador de bytes recibidos
 // Installation height in cm (distance from radar to reference bottom)
 // IMPORTANT: adjust this value to your actual installation.
 #define INSTALL_HEIGHT_CM  1000
-#define SENBaudRate 9600 
+#define SENBaudRate 9600
 
 #if ESP32
-  #define SENSOR_RX_PIN  17
-  #define SENSOR_TX_PIN  16
-  DFRobot_SEN0676 sensor(Serial2);
+#define SENSOR_RX_PIN  17
+#define SENSOR_TX_PIN  16
+DFRobot_SEN0676 sensor(Serial2);
 
 #elif ESP8266
-  #include <SoftwareSerial.h>
-  #define SENSOR_RX_PIN  13
-  #define SENSOR_TX_PIN  12
-  SoftwareSerial sensorSerial(SENSOR_RX_PIN, SENSOR_TX_PIN); // RX, TX
-  DFRobot_SEN0676 sensor(sensorSerial);
+#include <SoftwareSerial.h>
+#define SENSOR_RX_PIN  13
+#define SENSOR_TX_PIN  12
+SoftwareSerial sensorSerial(SENSOR_RX_PIN, SENSOR_TX_PIN); // RX, TX
+DFRobot_SEN0676 sensor(sensorSerial);
 
 #endif
 #endif
@@ -1584,12 +1584,12 @@ void setup()
 #if Wifi
 
 #if (MinVerWi || VerWiMin)
-// Para versiones con problemas de Reset.
-// dBm max: +20.5dBm  min: 0dBm
-// Por defecto 20.5, no sirve
-// 18 NO sirve, parece al limite
-// 17,16 sirve portal cautivo, falla a veces en conexion al servidor
-// 15 sirve
+  // Para versiones con problemas de Reset.
+  // dBm max: +20.5dBm  min: 0dBm
+  // Por defecto 20.5, no sirve
+  // 18 NO sirve, parece al limite
+  // 17,16 sirve portal cautivo, falla a veces en conexion al servidor
+  // 15 sirve
   WiFi.setSleepMode(WIFI_NONE_SLEEP);
   WiFi.setOutputPower(PowerWi);
   Serial.print(F("WiFi output power: "));
@@ -1668,12 +1668,12 @@ void setup()
   if (FlagMobData == true)
   {
 #if MobData
-//    SerialAT.begin(19200);
+    //    SerialAT.begin(19200);
     SerialAT.begin(9600);
     smartDelay(10);
 
 #if SIM7070
-//    if (ResetFlag == true)
+    //    if (ResetFlag == true)
     if (ResetFlag == false)
     {
       Serial.println("Power ON SIM7070 routine");
@@ -1703,27 +1703,27 @@ void setup()
     MQTT_client.setServer("sensor.aireciudadano.com", 30183);
 #endif
 
-   MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
+    MQTT_client.setCallback(Receive_Message_Cloud_App_MQTT);
 
-  // Attempt to connect to Mobile Data network:
-  for (uint8_t i = 0; i < MAX_INTENTOS_SOFT; i++) {
-    Serial.printf("Connect MobData rutina (intento %d/%d)\n", i + 1, MAX_INTENTOS_SOFT);
+    // Attempt to connect to Mobile Data network:
+    for (uint8_t i = 0; i < MAX_INTENTOS_SOFT; i++) {
+      Serial.printf("Connect MobData rutina (intento %d/%d)\n", i + 1, MAX_INTENTOS_SOFT);
 
-    bool redOk = (modem.isNetworkConnected() && modem.isGprsConnected()) || ConectarModemYRed();
+      bool redOk = (modem.isNetworkConnected() && modem.isGprsConnected()) || ConectarModemYRed();
 
-    if (redOk && MQTT_client.connect(aireciudadano_device_id.c_str())) {
-      MQTT_client.subscribe(MQTT_receive_topic.c_str(), MQTT_QOS1);
-      Serial.println("MobData listo");
-      break;
+      if (redOk && MQTT_client.connect(aireciudadano_device_id.c_str())) {
+        MQTT_client.subscribe(MQTT_receive_topic.c_str(), MQTT_QOS1);
+        Serial.println("MobData listo");
+        break;
+      }
+      Serial.printf("MQTT connect fallo, rc=%d\n", MQTT_client.state());   // <- clave para saber por qué
+      smartDelay(5000);
     }
-    Serial.printf("MQTT connect fallo, rc=%d\n", MQTT_client.state());   // <- clave para saber por qué
-    smartDelay(5000);
-  }
-  Serial.println("Init MQTT routine");
+    Serial.println("Init MQTT routine");
 //  FlagMQTTcon = false;
-  Init_MQTT();
-  // Si no logró conectar aquí, MQTT_Reconnect() en el loop() seguirá
-  // reintentando con su propio gate de 5s
+    Init_MQTT();
+    // Si no logró conectar aquí, MQTT_Reconnect() en el loop() seguirá
+    // reintentando con su propio gate de 5s
 #endif
   }
 #endif
@@ -2407,12 +2407,12 @@ void loop()
         if (!err_MQTT)
         {
           if (MQTT_client.connected()) {
-              MQTT_client.loop();                     // Ocurre cada lectura de Sensor, osea cada 1seg
-              Serial.println("MQTT_client.loop");
-              // Process wifi server requests
-              Check_WiFi_Server(); // Se necesita para MobData no para Wifi!!!!!!!!!!!!!!!!!!!
+            MQTT_client.loop();                     // Ocurre cada lectura de Sensor, osea cada 1seg
+            Serial.println("MQTT_client.loop");
+            // Process wifi server requests
+            Check_WiFi_Server(); // Se necesita para MobData no para Wifi!!!!!!!!!!!!!!!!!!!
           } else {
-              Serial.println("MQTT_client not connected");
+            Serial.println("MQTT_client not connected");
           }
         }
       }
@@ -3300,7 +3300,7 @@ void Start_Captive_Portal()
 
   wifiManager.setConfigPortalTimeout(captiveportaltime);
 
-#if !(MobData || MobDataSP)   
+#if !(MobData || MobDataSP)
   const char *menu[] = {"wifi", "wifinoscan", "info", "exit", "sep", "update"};
   wifiManager.setMenu(menu, 6);
 #else
@@ -3502,7 +3502,7 @@ void Init_MQTT()
   MQTT_client.connect(aireciudadano_device_id.c_str());
 
   Serial.print(F("Init_MQTT rc="));                   // NUEVO: diagnóstico
-  Serial.println(MQTT_client.state()); 
+  Serial.println(MQTT_client.state());
 
 #if MobData
   smartDelay(1000);
@@ -4284,13 +4284,13 @@ bool ConectarModemYRed() {
 // Reset del módem por software (sin PWRKEY físico -- no es viable en tu hardware).
 void ReiniciarModem() {
   Serial.println("ReiniciarModem: reset por software (AT)");
-  #if A7670
-    SerialAT.println("AT+CPOF");
-  #elif SIM7070
-    SerialAT.println("AT+CPOWD");
-  #elif SIM800
-    SerialAT.println("AT+CPOWD");
-  #endif
+#if A7670
+  SerialAT.println("AT+CPOF");
+#elif SIM7070
+  SerialAT.println("AT+CPOWD");
+#elif SIM800
+  SerialAT.println("AT+CPOWD");
+#endif
   smartDelay(3000);
   MQTT_client.disconnect();
   smartDelay(1000);
