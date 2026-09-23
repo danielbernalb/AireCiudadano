@@ -197,7 +197,7 @@
 #endif
 
 #ifdef MinVerdefWi
-#define MinVerWi  true       // Version minima para boards ESP8266 con problemas de reset frecuente
+#define MinVerWi  true     // Version minima para boards ESP8266 con problemas de reset frecuente
 #else
 #define MinVerWi  false
 #endif
