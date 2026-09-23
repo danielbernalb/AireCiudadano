@@ -57,6 +57,7 @@
 //      DUMP_AT_COMMANDS se debe eliminar despues de OK
 //      Todas las rutinas cambiaron
 //      En Captive Portal eliminado el menu de wifi y password
+// 39. Mejoras en lectura de PMSx003T
 
 
 // Refactorizacion de codigo por bloques:
@@ -103,7 +104,7 @@
 #define SDyRTC false     // Set to true in case SD card and RTC (Real Time clock) if desired, Wifi and Bluetooth off
 #define SaveSDyRTC false // Set to true in case SD card and RTC (Real Time clock) if desired to save data in Wifi or Bluetooth mode
 
-#define VerWiMin true    // Set to true for ESP8266 with problems of reset, lower wifi power and flash size
+#define VerWiMin false   // Set to true for ESP8266 with problems of reset, lower wifi power and flash size
 
 // PM opciones:
 #define TwoPMS false     // Set to true if you want 2 PMS7003 sensors
@@ -134,12 +135,12 @@
 #define OLED96display false   // Pantalla OLED 0.96"
 
 // MobData: Seleccion de operador de telefonia movil
-#define TigoKalleyExito true
+#define TigoKalleyExito false
 #define MovistarVirgin false
 #define Claro false
 #define Wom false
 // Seleccion board SIM
-#define A7670 true
+#define A7670 false
 #define SIM7070 false
 #define SIM800 false
 
