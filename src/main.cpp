@@ -75,10 +75,10 @@
 // 2. MQTT
 // 3. Mobile data
 // 4. Bluetooth
-//- Sensor routines
+// - Sensor routines
 // 6. Sensors
 // - General functions
-// 7. Device Info
+// 7. Delay & Device Info
 // 8. Firmware Update
 // 9. EEPROM
 // 10. LedNeo
@@ -241,12 +241,9 @@ bool SDflag = false;
 bool FlagMobData = false;
 bool FlagSENHyT = false;
 bool FlagpmsHyT = false;
-//bool FlagMQTTcon = false;
 bool FlagPoweroff = false;
 bool MaxWifiTX = false;
 bool FlagAdjustSensor;
-
-uint8_t Contacon = 0;
 
 uint8_t CustomValue = 0;
 uint32_t CustomValtotal = 0;
@@ -385,17 +382,12 @@ bool err_MQTT = false;
 bool FlagDATAicon = false;
 bool NoSensor = false;
 
-bool MQTT_toggle = false;
-bool MQTT_token = false;
-
 // Measurements loop: time between measurements
 unsigned int measurements_loop_duration = 1000; // 1 second
 unsigned long measurements_loop_start;          // holds a timestamp for each control loop start
 
 unsigned int Bluetooth_loop_time;
 unsigned int Con_loop_times = 0;
-
-unsigned int SDyRTC_loop_time;
 
 // MQTT loop: time between MQTT measurements sent to the cloud
 unsigned long MQTT_loop_start; // holds a timestamp for each cloud loop start
@@ -412,14 +404,12 @@ const unsigned int MQTT_DASH_TWO_RESET_THRESHOLD = 8;
 
 // Errors loop: time between error condition recovery
 //unsigned int errors_loop_duration = 60000; // 60 seconds
-#if Mobdata
-unsigned int errors_loop_duration = 8000;    // 10 seconds
+#if MobData
+unsigned int errors_loop_duration = 8000;
 #else
-unsigned int errors_loop_duration = 3000;    // 10 seconds
+unsigned int errors_loop_duration = 3000;
 #endif
 unsigned long errors_loop_start;             // holds a timestamp for each error loop start
-
-byte cont = 0;
 
 #if !ESP8266
 // TTGO ESP32 board
@@ -429,10 +419,7 @@ byte cont = 0;
 #include <Wire.h>
 
 // OLED display
-unsigned int mcount, ecode = 0;
 int lastDrawedLine = 0;
-unsigned int inthumi = 0;
-unsigned int inttemp = 0;
 unsigned int cursor = 0;
 bool toggleLive;
 int dw = 0; // display width
@@ -752,7 +739,6 @@ Adafruit_SHT4x sht4 = Adafruit_SHT4x();
 #include "Adafruit_Sensor.h"
 #include "Adafruit_AM2320.h"
 Adafruit_AM2320 am2320 = Adafruit_AM2320();
-bool AM2320flag = false;
 
 #endif
 
@@ -913,7 +899,6 @@ bool ResetFlag = false;
 bool DeepSleepFlag = false;
 bool NoiseBUTTONFlag = false;
 bool ResetFlagMobData = false;
-bool ResetFlagMobDataTemp = false;
 
 #if !ESP8266
 void print_reset_reason(RESET_REASON reason);
@@ -924,7 +909,6 @@ bool updating = false;
 
 // To know when the device is in the following states
 bool InCaptivePortal = false;
-bool Calibrating = false;
 
 // uint16_t SDyRTCtime = 15;       // Valor de Sample Time de SD y RTC
 uint16_t SDyRTCtime = 60; // Valor de Sample Time de SD y RTC
@@ -1041,7 +1025,7 @@ Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified(12345);
 
 // ---------------- Parámetros configurables (editar manualmente antes de compilar) ----------------
 // Offsets de calibración en m/s^2 (rellénalos manualmente desde tu cálculo externo)
-constexpr float CALIB_OX = 0.00f;
+constexpr float CALIB_OX_ADXL = 0.00f;
 constexpr float CALIB_OY = 0.00f;
 // Nota: en el código original oz se calculaba como (sz_mean - g). Aquí debes
 // entrenar/poner el valor final en m/s^2 (por ejemplo, -9.81 si quieres quitar gravedad).
@@ -1067,7 +1051,7 @@ LSM9DS1 imu;
 
 // ---------------- Parámetros configurables (editar manualmente) ----------------
 // Offsets de calibración del Acelerómetro en m/s^2
-constexpr float CALIB_OX = 0.0f;
+constexpr float CALIB_OX_LSM9 = 0.0f;
 constexpr float CALIB_OY = 0.0f;
 constexpr float CALIB_OZ = 0.0f;
 
@@ -1110,7 +1094,6 @@ SoftwareSerial SensorSerial(TXsensor, 13);
 // --- VARIABLES PARA EL PROMEDIO ---
 unsigned long sumaDistancias = 0;   // Suma acumulada de las distancias
 int conteoLecturas = 0;             // Cuántas lecturas válidas hemos recibido
-unsigned long tiempoUltimaPublicacion = 0;
 const int INTERVALO_PUBLICACION = 1000; // Publicar cada 1000ms (1 segundo)
 
 // Buffer temporal para lectura serial
@@ -1313,7 +1296,7 @@ void setup()
   Serial.setDebugOutput(true);
   Serial.println(F(""));
 
-  ResetFlagMobDataTemp = true;
+  ResetFlagMobData = true;
 
 #if Wifi
 
@@ -1720,7 +1703,6 @@ void setup()
       smartDelay(5000);
     }
     Serial.println("Init MQTT routine");
-//  FlagMQTTcon = false;
     Init_MQTT();
     // Si no logró conectar aquí, MQTT_Reconnect() en el loop() seguirá
     // reintentando con su propio gate de 5s
@@ -3468,19 +3450,6 @@ void saveParamCallback()
   ConfigPortalSave = true;
 }
 
-// Función de reemplazo para delay() que mantiene vivo el sistema
-void smartDelay(unsigned long ms) {
-  unsigned long startTime = millis();
-  // Bucle que se ejecuta durante el tiempo solicitado
-  while (millis() - startTime < ms) {
-    // 2. MANTENER VIVO EL WIFI Y EL WATCHDOG (Crucial para ESP8266):
-    // Evita el reinicio por Watchdog Timer (WDT) y mantiene el stack de red
-    yield();
-    // 3. CEDER CONTROL AL SISTEMA OPERATIVO (Crucial para ESP32):
-    // Permite que FreeRTOS cambie de tarea y maneje el WiFi de fondo
-    delay(1);
-  }
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 //  2. MQTT
@@ -3525,7 +3494,6 @@ void Init_MQTT()
     MQTT_client.subscribe(MQTT_receive_topic.c_str(), MQTT_QOS1);
     Serial.print(F("Init MQTT connected - Receive topic: "));
     Serial.println(MQTT_receive_topic);
-//    FlagMQTTcon = true;
     contmqtt = 0;
 #if !ESP8266
     digitalWrite(LEDPIN, HIGH);
@@ -3577,7 +3545,6 @@ void MQTT_Reconnect()
       MQTT_client.subscribe(MQTT_receive_topic.c_str(), MQTT_QOS1);   // TEST QoS1
       Serial.print(F("Reconnect MQTT connected - Receive topic: "));
       Serial.println(MQTT_receive_topic);
-      //      FlagMQTTcon = true;
       contmqtt = 0;
 
       mqttConsecutiveFailures = 0;   // NUEVO
@@ -3812,11 +3779,11 @@ void Send_Message_Cloud_App_MQTT()
 #if !Influxver
     // TEST PARA CONTAR RESET MOBDATA!!!!!!!!!!!!!!!!!
     //snprintf(MQTT_message, 512, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, VOC: %d, NOx: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, voc, nox, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId);
-    if (ResetFlagMobDataTemp == true)
+    if (ResetFlagMobData == true)
     {
       byte temp1 = 1;
       snprintf(MQTT_message, 512, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, VOC: %d, NOx: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d, datavar2: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, voc, nox, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId, temp1);
-      ResetFlagMobDataTemp = false;
+      ResetFlagMobData = false;
     }
     else
     {
@@ -3836,11 +3803,11 @@ void Send_Message_Cloud_App_MQTT()
 
     // TEST PARA CONTAR RESET MOBDATA!!!!!!!!!!!!!!!!!
 
-    if (ResetFlagMobDataTemp == true)
+    if (ResetFlagMobData == true)
     {
       byte temp1 = 1;
       snprintf(MQTT_message, 512, "{id: %s, PM25: %d, PM25raw: %d, PM1: %d, humidity: %d, temperature: %d, RSSI: %d, latitude: %f, longitude: %f, inout: %d, configval: %d, datavar1: %d, datavar2: %d}", aireciudadano_device_id.c_str(), pm25int, pm25intori, pm1int, humi, temp, RSSI, latitudef, longitudef, inout, IDn, chipId, temp1);
-      ResetFlagMobDataTemp = false;
+      ResetFlagMobData = false;
     }
     else
     {
@@ -5873,7 +5840,7 @@ void Setup_Incli()
     accel.setDataRate(DATA_RATE_ADXL);
     Serial.println("Inclinómetro ADXL345 encontrado, modo: offsets grabados");
     Serial.println("Offsets precalibrados (m/s^2): ");
-    Serial.print("ox: "); Serial.print(CALIB_OX, 2);
+    Serial.print("ox: "); Serial.print(CALIB_OX_ADXL, 2);
     Serial.print("  oy: "); Serial.print(CALIB_OY, 2);
     Serial.print("  oz: "); Serial.println(CALIB_OZ, 2);
     Serial.println("X(m/s^2)   Y(m/s^2)   Z(m/s^2)   Roll(°)   Pitch(°)");
@@ -5897,7 +5864,7 @@ void Setup_Incli()
 
     Serial.println("Inclinómetro LSM9DS1 encontrado, modo: offsets grabados");
     Serial.println("Offsets precalibrados (m/s^2): ");
-    Serial.print("ox: "); Serial.print(CALIB_OX, 2);
+    Serial.print("ox: "); Serial.print(CALIB_OX_LSM9, 2);
     Serial.print("  oy: "); Serial.print(CALIB_OY, 2);
     Serial.println("  oz: "); Serial.println(CALIB_OZ, 2);
     Serial.print("mx: "); Serial.print(CALIB_MX, 2);
@@ -5920,7 +5887,7 @@ void Read_Incli()
     accel.getEvent(&event);
 
     // Aplicar offsets (constantes) y acumular para promedio
-    sum_x += event.acceleration.x - CALIB_OX;
+    sum_x += event.acceleration.x - CALIB_OX_ADXL;
     sum_y += event.acceleration.y - CALIB_OY;
     sum_z += event.acceleration.z - CALIB_OZ;
     sample_count++;
@@ -5942,7 +5909,7 @@ void Read_Incli()
     if (imu.accelAvailable()) imu.readAccel();
     if (imu.magAvailable()) imu.readMag();
 
-    sum_ax += (imu.calcAccel(imu.ax) * 9.80665) - CALIB_OX;
+    sum_ax += (imu.calcAccel(imu.ax) * 9.80665) - CALIB_OX_LSM9;
     sum_ay += (imu.calcAccel(imu.ay) * 9.80665) - CALIB_OY;
     sum_az += (imu.calcAccel(imu.az) * 9.80665) - CALIB_OZ;
     sum_mx += imu.calcMag(imu.mx) - CALIB_MX;
@@ -6720,8 +6687,22 @@ void ReadHyT()
 ////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
-//  7. Device Info
+//  7. Delay & Device Info
 ////////////////////////////////////////////////////////////////////////////////
+
+// Función de reemplazo para delay() que mantiene vivo el sistema
+void smartDelay(unsigned long ms) {
+  unsigned long startTime = millis();
+  // Bucle que se ejecuta durante el tiempo solicitado
+  while (millis() - startTime < ms) {
+    // 2. MANTENER VIVO EL WIFI Y EL WATCHDOG (Crucial para ESP8266):
+    // Evita el reinicio por Watchdog Timer (WDT) y mantiene el stack de red
+    yield();
+    // 3. CEDER CONTROL AL SISTEMA OPERATIVO (Crucial para ESP32):
+    // Permite que FreeRTOS cambie de tarea y maneje el WiFi de fondo
+    delay(1);
+  }
+}
 
 void Print_Config()
 { // print AireCiudadano device settings
@@ -7831,35 +7812,6 @@ void Write_EEPROM()
   else
   {
     Serial.println(F("Config data could not be written to flash"));
-  }
-
-#endif
-}
-
-void Wipe_EEPROM()
-{ // Wipe AireCiudadano device persistent info to reset config data
-
-#if ESP8266
-  boolean result = EEPROM.wipe();
-  if (result)
-  {
-    Serial.println(F("All EEPROM data wiped"));
-  }
-  else
-  {
-    Serial.println(F("EEPROM data could not be wiped from flash store"));
-  }
-
-#else
-
-  boolean result = preferences.clear();
-  if (result)
-  {
-    Serial.println(F("All EEPROM data wiped"));
-  }
-  else
-  {
-    Serial.println(F("EEPROM data could not be wiped from flash store"));
   }
 
 #endif
@@ -9044,21 +8996,6 @@ void showWelcome()
   u8g2.sendBuffer();
 }
 
-void welcomeAddMessage(String msg)
-{
-  u8g2.setFont(u8g2_font_4x6_tf);
-  u8g2.drawStr(0, lastDrawedLine, msg.c_str());
-  lastDrawedLine = lastDrawedLine + 7;
-  u8g2.sendBuffer();
-}
-
-void AddMessage(String msg)
-{
-  u8g2.setFont(u8g2_font_4x6_tf);
-  u8g2.drawStr(7, lastDrawedLine, msg.c_str());
-  u8g2.sendBuffer();
-}
-
 void displayCenterBig(String msg)
 {
 #if !CO2sensor
@@ -9099,15 +9036,6 @@ void displayCenterBig(String msg)
 void displayBottomLine(String msg)
 {
   u8g2.setFont(u8g2_font_4x6_tf);
-  u8g2.print(msg);
-}
-
-void displayEmoticonLabel(int cursor, String msg)
-{
-  u8g2.setFont(u8g2_font_unifont_t_emoticons);
-  u8g2.drawGlyph(76, 12, cursor);
-  u8g2.setFont(u8g2_font_4x6_tf);
-  u8g2.setCursor(77, 17);
   u8g2.print(msg);
 }
 
